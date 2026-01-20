@@ -737,22 +737,23 @@ registrationForm.addEventListener('submit', async (e) => {
     showLoading(true);
 
     // Prepare form data with BOTH type and customType fields
-    const formData = {
-        name: document.getElementById('name').value.trim(),
-        type: institutionType,  // Either 'School', 'College', 'University', or 'Other'
-        customType: customType, // Empty string if not "Other", otherwise the custom value
-        address: JSON.stringify({
-            state: document.getElementById('state').value,
-            district: document.getElementById('district').value,
-            city: document.getElementById('city').value.trim() || '',
-            location: document.getElementById('location').value.trim() || ''
-        }),
-        contacts: JSON.stringify({
-            email: document.getElementById('email').value.trim(),
-            mobile1: mobile1Input.value,
-            mobile2: mobile2 || ''
-        })
-    };
+    // Prepare form data with BOTH type and customType fields
+const formData = {
+    name: document.getElementById('name').value.trim(),
+    type: institutionType,  
+    customType: customType, 
+    address: {                          // ✅ FIXED - No JSON.stringify
+        state: document.getElementById('state').value,
+        district: document.getElementById('district').value,
+        city: document.getElementById('city').value.trim() || '',
+        location: document.getElementById('location').value.trim() || ''
+    },
+    contacts: {                         // ✅ FIXED - No JSON.stringify
+        email: document.getElementById('email').value.trim(),
+        mobile1: mobile1Input.value,
+        mobile2: mobile2 || ''
+    }
+};
 
     console.log('Sending registration data:', formData); // For debugging
 
