@@ -765,20 +765,29 @@ const formData = {
 
         const data = await response.json();
 
-        if (data.success) {
-            institutionCode = data.institutionCode;
-            document.getElementById('otpEmail').textContent = document.getElementById('email').value;
-            showSuccess(data.message);
-            updateStep(2);
-        } else {
-            showError(data.message || 'Registration failed');
-        }
-    } catch (error) {
-        showError('Network error. Please try again.');
-        console.error('Registration error:', error);
-    } finally {
-        showLoading(false);
+        if (!data.success) {
+      showError(data.message);
+      return;
     }
+
+    // ✅ FIX: correct path
+    institutionCode = data.data.institutionCode;
+
+    // ✅ persist safely
+    localStorage.setItem("pendingInstitutionCode", institutionCode);
+
+    console.log("Saved institutionCode:", institutionCode);
+
+    document.getElementById("otpEmail").textContent = formData.contacts.email;
+    showSuccess(data.message);
+    updateStep(2);
+
+  } catch (err) {
+    console.error(err);
+    showError("Registration failed. Try again.");
+  } finally {
+    showLoading(false);
+  }
 });
 
 
