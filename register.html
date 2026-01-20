@@ -551,6 +551,384 @@
         </div>
     </div>
 
-    <script src="js/config-v2.js"></script>
+    <script>
+        // API Configuration
+        const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
+
+        // State-District Mapping
+        const stateDistrictMap = {
+            'Uttarakhand': [
+                'Almora', 'Bageshwar', 'Chamoli', 'Champawat', 'Dehradun',
+                'Haridwar', 'Nainital', 'Pauri Garhwal', 'Pithoragarh',
+                'Rudraprayag', 'Tehri Garhwal', 'Udham Singh Nagar', 'Uttarkashi'
+            ],
+            'Uttar Pradesh': [
+                'Agra', 'Aligarh', 'Allahabad', 'Ambedkar Nagar', 'Amethi',
+                'Amroha', 'Auraiya', 'Ayodhya', 'Azamgarh', 'Baghpat',
+                'Bahraich', 'Ballia', 'Balrampur', 'Banda', 'Barabanki',
+                'Bareilly', 'Basti', 'Bhadohi', 'Bijnor', 'Budaun',
+                'Bulandshahr', 'Chandauli', 'Chitrakoot', 'Deoria', 'Etah',
+                'Etawah', 'Farrukhabad', 'Fatehpur', 'Firozabad', 'Gautam Buddha Nagar',
+                'Ghaziabad', 'Ghazipur', 'Gonda', 'Gorakhpur', 'Hamirpur',
+                'Hapur', 'Hardoi', 'Hathras', 'Jalaun', 'Jaunpur',
+                'Jhansi', 'Kannauj', 'Kanpur Dehat', 'Kanpur Nagar', 'Kasganj',
+                'Kaushambi', 'Kushinagar', 'Lakhimpur Kheri', 'Lalitpur', 'Lucknow',
+                'Maharajganj', 'Mahoba', 'Mainpuri', 'Mathura', 'Mau',
+                'Meerut', 'Mirzapur', 'Moradabad', 'Muzaffarnagar', 'Pilibhit',
+                'Pratapgarh', 'Prayagraj', 'Raebareli', 'Rampur', 'Saharanpur',
+                'Sambhal', 'Sant Kabir Nagar', 'Shahjahanpur', 'Shamli', 'Shravasti',
+                'Siddharthnagar', 'Sitapur', 'Sonbhadra', 'Sultanpur', 'Unnao', 'Varanasi'
+            ]
+        };
+
+        // Global variable to store institution code
+        let institutionCode = '';
+
+        // DOM Elements
+        const registrationForm = document.getElementById('registrationForm');
+        const otpFormDiv = document.getElementById('otpForm');
+        const passwordFormDiv = document.getElementById('passwordForm');
+        const stateSelect = document.getElementById('state');
+        const districtSelect = document.getElementById('district');
+        const typeSelect = document.getElementById('type');
+        const otherTypeContainer = document.getElementById('otherTypeContainer');
+        const otherTypeInput = document.getElementById('otherType');
+        const mobile1Input = document.getElementById('mobile1');
+        const mobile2Input = document.getElementById('mobile2');
+        const mobile1Hint = document.getElementById('mobile1-hint');
+        const mobile2Hint = document.getElementById('mobile2-hint');
+
+        // Institution Type Change Handler
+        typeSelect.addEventListener('change', function() {
+            if (this.value === 'Other') {
+                otherTypeContainer.classList.remove('hidden');
+                otherTypeInput.required = true;
+            } else {
+                otherTypeContainer.classList.add('hidden');
+                otherTypeInput.required = false;
+                otherTypeInput.value = '';
+            }
+        });
+
+        // State Change Handler
+        stateSelect.addEventListener('change', function() {
+            const selectedState = this.value;
+            districtSelect.innerHTML = '<option value="">Select District</option>';
+            
+            if (selectedState && stateDistrictMap[selectedState]) {
+                districtSelect.disabled = false;
+                stateDistrictMap[selectedState].forEach(district => {
+                    const option = document.createElement('option');
+                    option.value = district;
+                    option.textContent = district;
+                    districtSelect.appendChild(option);
+                });
+            } else {
+                districtSelect.disabled = true;
+                districtSelect.innerHTML = '<option value="">First select a state</option>';
+            }
+        });
+
+        // Phone Validation Function
+        function validatePhone(input, hintElement) {
+            const value = input.value.replace(/\D/g, '');
+            input.value = value;
+
+            if (value.length === 10) {
+                input.classList.remove('phone-invalid');
+                input.classList.add('phone-valid');
+                hintElement.textContent = '✓ Valid 10 digit number';
+                hintElement.classList.remove('invalid');
+                hintElement.classList.add('valid');
+                return true;
+            } else if (value.length > 0) {
+                input.classList.remove('phone-valid');
+                input.classList.add('phone-invalid');
+                hintElement.textContent = `✗ ${value.length}/10 digits`;
+                hintElement.classList.remove('valid');
+                hintElement.classList.add('invalid');
+                return false;
+            } else {
+                input.classList.remove('phone-valid', 'phone-invalid');
+                hintElement.textContent = 'Enter 10 digits';
+                hintElement.classList.remove('valid', 'invalid');
+                return false;
+            }
+        }
+
+        // Phone Input Listeners
+        mobile1Input.addEventListener('input', function() {
+            validatePhone(this, mobile1Hint);
+        });
+
+        mobile2Input.addEventListener('input', function() {
+            validatePhone(this, mobile2Hint);
+        });
+
+        // Utility Functions
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.classList.remove('hidden');
+            setTimeout(() => successDiv.classList.add('hidden'), 5000);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        function updateStep(step) {
+            for (let i = 1; i <= 3; i++) {
+                const stepIndicator = document.getElementById(`step${i}-indicator`);
+                stepIndicator.classList.remove('active', 'completed');
+                
+                if (i < step) {
+                    stepIndicator.classList.add('completed');
+                } else if (i === step) {
+                    stepIndicator.classList.add('active');
+                }
+            }
+
+            registrationForm.classList.toggle('hidden', step !== 1);
+            otpFormDiv.classList.toggle('hidden', step !== 2);
+            passwordFormDiv.classList.toggle('hidden', step !== 3);
+        }
+
+registrationForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Validate mobile numbers
+    const mobile1Valid = validatePhone(mobile1Input, mobile1Hint);
+    if (!mobile1Valid) {
+        showError('Please enter a valid 10-digit primary mobile number');
+        return;
+    }
+
+    const mobile2 = mobile2Input.value.trim();
+    if (mobile2 && mobile2.length !== 10) {
+        showError('Secondary mobile number must be 10 digits');
+        return;
+    }
+
+    // Get institution type and custom type
+    const selectedType = typeSelect.value;
+    let institutionType = selectedType;
+    let customType = '';
+
+    // If "Other" is selected, validate and use custom type
+    if (selectedType === 'Other') {
+        const otherTypeValue = otherTypeInput.value.trim();
+        if (!otherTypeValue) {
+            showError('Please specify the institution type');
+            otherTypeInput.focus();
+            return;
+        }
+        institutionType = 'Other';
+        customType = otherTypeValue;
+    }
+
+    showLoading(true);
+
+    // Prepare form data with BOTH type and customType fields
+const formData = {
+    name: document.getElementById('name').value.trim(),
+    type: institutionType,  
+    customType: customType, 
+    address: {                          // ✅ FIXED - No JSON.stringify
+        state: document.getElementById('state').value,
+        district: document.getElementById('district').value,
+        city: document.getElementById('city').value.trim() || '',
+        location: document.getElementById('location').value.trim() || ''
+    },
+    contacts: {                         // ✅ FIXED - No JSON.stringify
+        email: document.getElementById('email').value.trim(),
+        mobile1: mobile1Input.value,
+        mobile2: mobile2 || ''
+    }
+};
+
+    console.log('Sending registration data:', formData); // For debugging
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+      showError(data.message);
+      return;
+    }
+
+    // ✅ FIX: correct path
+    institutionCode = data.data.institutionCode;
+
+    // ✅ persist safely
+    localStorage.setItem("pendingInstitutionCode", institutionCode);
+
+    console.log("Saved institutionCode:", institutionCode);
+
+    document.getElementById("otpEmail").textContent = formData.contacts.email;
+    showSuccess(data.message);
+    updateStep(2);
+
+  } catch (err) {
+    console.error(err);
+    showError("Registration failed. Try again.");
+  } finally {
+    showLoading(false);
+  }
+});
+
+
+
+// Step 2: Verify OTP (THIS IS MISSING!)
+document.getElementById('verifyOtpBtn').addEventListener('click', async () => {
+    const otp = document.getElementById('otp').value.trim();
+
+    if (!otp || otp.length !== 6) {
+        showError('Please enter a valid 6-digit OTP');
+        return;
+    }
+
+    showLoading(true);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ institutionCode, otp })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showSuccess(data.message);
+            document.getElementById('displayInstitutionCode').textContent = institutionCode;
+            updateStep(3);
+        } else {
+            showError(data.message || 'Invalid OTP');
+        }
+    } catch (error) {
+        showError('Network error. Please try again.');
+        console.error('OTP verification error:', error);
+    } finally {
+        showLoading(false);
+    }
+});
+
+        // Resend OTP
+        document.getElementById('resendOtpBtn').addEventListener('click', async () => {
+            showLoading(true);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ institutionCode })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess('OTP resent successfully!');
+                } else {
+                    showError(data.message || 'Failed to resend OTP');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Step 3: Set Password
+        document.getElementById('setPasswordBtn').addEventListener('click', async () => {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (password.length < 8) {
+                showError('Password must be at least 8 characters');
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                showError('Passwords do not match');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/set-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ institutionCode, password, confirmPassword })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess('Registration complete! Redirecting to login...');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
+                } else {
+                    showError(data.message || 'Failed to set password');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+                console.error('Set password error:', error);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Allow only numbers in OTP field
+        document.getElementById('otp').addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '');
+        });
+
+        // Copy Institution Code
+        document.getElementById('copyCodeBtn').addEventListener('click', function() {
+            const code = document.getElementById('displayInstitutionCode').textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                this.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Copied!
+                `;
+                this.classList.add('copied');
+                
+                showSuccess('Institution code copied to clipboard!');
+                
+                setTimeout(() => {
+                    this.innerHTML = `
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                    `;
+                    this.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                showError('Failed to copy. Please write it down manually.');
+                console.error('Copy failed:', err);
+            });
+        });
+    </script>
 </body>
 </html>
