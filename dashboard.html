@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Institution Dashboard - IMS by Team H2O">
+    <meta name="description" content="Institution Dashboard - IMS by Team H²o">
     <title>Dashboard | Institution Management System</title>
     
     <!-- Google Fonts -->
@@ -74,18 +74,89 @@
             padding: 0 var(--space-6);
         }
 
-        /* Messages - Hidden by default */
+        /* Messages - Centered Overlay */
         #loading,
         #error-message,
         #success-message {
-            display: none !important;
-            margin: var(--space-6) 0;
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10001;
+            padding: var(--space-8) var(--space-10);
+            border-radius: var(--radius-2xl);
+            font-weight: 600;
+            font-size: var(--text-lg);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            min-width: 300px;
+            max-width: 500px;
+            text-align: center;
+            animation: messageSlideIn 0.3s ease-out;
         }
 
-        #loading.show,
-        #error-message.show,
-        #success-message.show {
-            display: block !important;
+        /* Message Overlay Background */
+        .message-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            backdrop-filter: blur(4px);
+        }
+
+        .message-overlay.show {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        #loading.show { 
+            display: block !important; 
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            color: #92400e; 
+            border: 3px solid #f59e0b;
+        }
+        
+        #error-message.show { 
+            display: block !important; 
+            background: linear-gradient(135deg, #fee2e2, #fecaca);
+            color: #991b1b; 
+            border: 3px solid #dc2626;
+        }
+        
+        #success-message.show { 
+            display: block !important; 
+            background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+            color: #065f46; 
+            border: 3px solid #10b981;
+        }
+
+        /* Message Icons */
+        #loading::before {
+            content: '⏳';
+            display: block;
+            font-size: 48px;
+            margin-bottom: var(--space-4);
+            animation: spin 2s linear infinite;
+        }
+
+        #success-message::before {
+            content: '✅';
+            display: block;
+            font-size: 48px;
+            margin-bottom: var(--space-4);
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        #error-message::before {
+            content: '❌';
+            display: block;
+            font-size: 48px;
+            margin-bottom: var(--space-4);
+            animation: shake 0.5s ease-out;
         }
 
         /* Profile Section */
@@ -400,12 +471,56 @@
             #profile-details {
                 grid-template-columns: 1fr;
             }
+
+            /* Messages on mobile */
+            #loading,
+            #error-message,
+            #success-message {
+                min-width: 280px;
+                max-width: 90%;
+                padding: var(--space-6);
+                font-size: var(--text-base);
+            }
         }
 
         @media (max-width: 480px) {
             #stats-grid {
                 grid-template-columns: 1fr;
             }
+        }
+
+        /* Animations */
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes scaleIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
 
         /* Loading Animation */
@@ -428,6 +543,14 @@
 </head>
 <body>
     <div id="dashboard-container">
+        <!-- Message Overlay Background -->
+        <div class="message-overlay" id="message-overlay"></div>
+
+        <!-- Messages (Centered Overlay) -->
+        <div id="loading">Loading...</div>
+        <div id="error-message"></div>
+        <div id="success-message"></div>
+
         <!-- Header -->
         <div id="header">
             <h1>📊 Institution Dashboard</h1>
@@ -435,11 +558,6 @@
         </div>
 
         <div class="container">
-            <!-- Messages (Hidden by default) -->
-            <div id="loading" style="display:none;">⏳ Loading dashboard...</div>
-            <div id="error-message" style="display:none;"></div>
-            <div id="success-message" style="display:none;"></div>
-
             <!-- Institution Profile Section -->
             <div id="profile-section">
                 <h2>🏫 Institution Profile</h2>
@@ -533,7 +651,7 @@
                             <h3>📋 PART 1</h3>
                             <p>Basic Information</p>
                         </div>
-                        <small>Designations, Classes, Staff, Subjects, Students, Hierarchy</small>
+                        <small>Designations, Classes, Staff, Subjects, Students, Hierarchy, etc.</small>
                     </button>
 
                     <button onclick="goToPart2()">
@@ -541,7 +659,7 @@
                             <h3>🔗 PART 2</h3>
                             <p>Mapping & Assignments</p>
                         </div>
-                        <small>Assign Staff to Classes, Subjects to Classes, Teachers to Subjects</small>
+                        <small>Assign Staff to Classes, Subjects to Classes, Teachers to Subjects, etc.</small>
                     </button>
 
                     <button onclick="goToPart3()">
@@ -549,14 +667,14 @@
                             <h3>🔑 PART 3</h3>
                             <p>Login Credentials</p>
                         </div>
-                        <small>Create and manage staff login credentials</small>
+                        <small>Create and manage staff login credentials, etc.</small>
                     </button>
                 </div>
             </div>
 
             <!-- Footer -->
             <div class="powered-by">
-                <p>Powered by <strong>Team H2O</strong></p>
+                <p>Powered by <strong>Team H²o</strong></p>
                 <p style="font-size: 0.75rem; opacity: 0.8;">Institution Management System</p>
             </div>
         </div>

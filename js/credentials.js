@@ -1,4 +1,4 @@
-// credentials.js - MATCHING YOUR HTML IDs
+// credentials.js - WITH OVERLAY LOADING FUNCTIONALITY
 
 let staffData = [];
 let classesData = [];
@@ -58,7 +58,8 @@ function checkRequiredElements() {
         'credentials-table': 'Credentials table',
         'loading': 'Loading indicator',
         'error-message': 'Error message',
-        'success-message': 'Success message'
+        'success-message': 'Success message',
+        'message-overlay': 'Message overlay'
     };
     
     let missingElements = [];
@@ -115,6 +116,18 @@ function setupEventListeners() {
     } else {
         console.error('❌ All classes checkbox not found');
     }
+    
+    // Access level radio buttons - show/hide additional access section
+    const accessLevelRadios = document.querySelectorAll('input[name="access-level"]');
+    accessLevelRadios.forEach(radio => {
+        radio.addEventListener('change', function(e) {
+            const additionalAccessSection = document.getElementById('additional-access-section');
+            if (additionalAccessSection) {
+                // Show additional access section for all access levels
+                additionalAccessSection.style.display = e.target.value ? 'block' : 'none';
+            }
+        });
+    });
 }
 
 // ===============================
@@ -373,6 +386,12 @@ async function handleCreateCredentials(e) {
             document.getElementById('create-credentials-form').reset();
             document.getElementById('loginid-display').textContent = 'Select a staff member first';
             
+            // Hide additional access section
+            const additionalAccessSection = document.getElementById('additional-access-section');
+            if (additionalAccessSection) {
+                additionalAccessSection.style.display = 'none';
+            }
+            
             // Uncheck all class checkboxes
             document.querySelectorAll('input[name="specific-class"]').forEach(cb => {
                 cb.checked = false;
@@ -408,8 +427,9 @@ function displayCredentials() {
     if (credentialsData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 20px; color: #666;">
-                    No credentials created yet
+                <td colspan="7" class="empty-state">
+                    <p>📭 No credentials created yet</p>
+                    <small>Create your first staff credential above</small>
                 </td>
             </tr>
         `;
@@ -421,39 +441,52 @@ function displayCredentials() {
     credentialsData.forEach(cred => {
         const row = tbody.insertRow();
         
+        // Access info
         let accessInfo = 'None';
         if (cred.additionalAccess?.canAccessAllClasses) {
-            accessInfo = '<strong>All Classes</strong>';
+            accessInfo = '<span class="status-badge status-active">All Classes</span>';
         } else if (cred.additionalAccess?.specificClasses?.length > 0) {
-            accessInfo = `${cred.additionalAccess.specificClasses.length} classes`;
+            accessInfo = `<span class="status-badge" style="background: var(--info-100); color: var(--info-700);">${cred.additionalAccess.specificClasses.length} classes</span>`;
         }
         
+        // Last login
         const lastLogin = cred.lastLogin ? 
             new Date(cred.lastLogin).toLocaleString() : 
-            '<em>Never</em>';
+            '<em style="color: var(--gray-400);">Never</em>';
         
-        const statusText = cred.isActive ? 
-            '<span style="color: #28a745; font-weight: bold;">● Active</span>' : 
-            '<span style="color: #dc3545; font-weight: bold;">● Inactive</span>';
+        // Status badge
+        const statusBadge = cred.isActive ? 
+            '<span class="status-badge status-active">Active</span>' : 
+            '<span class="status-badge status-inactive">Inactive</span>';
+        
+        // Access level badge
+        let accessBadge = '';
+        if (cred.accessLevel === 'teacher') {
+            accessBadge = '<span class="access-badge access-teacher">👨‍🏫 Teacher</span>';
+        } else if (cred.accessLevel === 'coordinator') {
+            accessBadge = '<span class="access-badge access-coordinator">📋 Coordinator</span>';
+        } else if (cred.accessLevel === 'admin') {
+            accessBadge = '<span class="access-badge access-admin">🔐 Admin</span>';
+        }
         
         row.innerHTML = `
-            <td>${cred.staff?.name || '-'}</td>
-            <td><code>${cred.loginId || '-'}</code></td>
-            <td><strong>${cred.accessLevel || '-'}</strong></td>
+            <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
+            <td><strong>${cred.staff?.name || '-'}</strong></td>
+            <td>${accessBadge}</td>
             <td>${accessInfo}</td>
-            <td>${statusText}</td>
+            <td>${statusBadge}</td>
             <td>${lastLogin}</td>
             <td style="white-space: nowrap;">
                 <button onclick="updateCredential('${cred._id}')" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px;">
+                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; font-size: 12px;">
                     ✏️ Update
                 </button>
                 <button onclick="toggleCredentialStatus('${cred._id}', ${!cred.isActive})" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: ${cred.isActive ? '#ffc107' : '#28a745'}; color: white; border: none; border-radius: 3px;">
-                    ${cred.isActive ? '⏸️ Deactivate' : '▶️ Activate'}
+                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: ${cred.isActive ? '#ffc107' : '#28a745'}; color: white; border: none; border-radius: 3px; font-size: 12px;">
+                    ${cred.isActive ? '⏸️ Disable' : '▶️ Enable'}
                 </button>
                 <button onclick="deleteCredential('${cred._id}')" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 3px;">
+                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 3px; font-size: 12px;">
                     🗑️ Delete
                 </button>
             </td>
@@ -484,7 +517,7 @@ async function updateCredential(id) {
     }
     
     try {
-        showLoading('Updating...');
+        showLoading('Updating password...');
         
         const response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + id, {
             password: newPassword
@@ -511,13 +544,13 @@ async function toggleCredentialStatus(id, newStatus) {
     const cred = credentialsData.find(c => c._id === id);
     if (!cred) return;
     
-    const action = newStatus ? 'activate' : 'deactivate';
+    const action = newStatus ? 'enable' : 'disable';
     const staffName = cred.staff?.name || 'this staff member';
     
     if (!confirm(`${action.toUpperCase()} credentials for ${staffName}?`)) return;
     
     try {
-        showLoading(`${action}ing...`);
+        showLoading(`${action === 'enable' ? 'Enabling' : 'Disabling'} credentials...`);
         
         const response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + id, {
             isActive: newStatus
@@ -526,7 +559,7 @@ async function toggleCredentialStatus(id, newStatus) {
         hideLoading();
         
         if (response.success) {
-            showSuccess(`Credential ${action}d!`);
+            showSuccess(`Credential ${action}d successfully!`);
             await loadCredentialsData();
         } else {
             showError(response.message);
@@ -549,14 +582,14 @@ async function deleteCredential(id) {
     if (!confirm(`⚠️ DELETE credentials for ${staffName}?\n\nThis cannot be undone.`)) return;
     
     try {
-        showLoading('Deleting...');
+        showLoading('Deleting credential...');
         
         const response = await apiDelete(API_ENDPOINTS.CREDENTIALS + '/' + id, true);
         
         hideLoading();
         
         if (response.success) {
-            showSuccess('Credential deleted!');
+            showSuccess('Credential deleted successfully!');
             await loadCredentialsData();
         } else {
             showError(response.message);
@@ -568,20 +601,32 @@ async function deleteCredential(id) {
 }
 
 // ===============================
-// UI HELPERS
+// UI HELPERS - WITH OVERLAY
 // ===============================
 function showLoading(message = 'Loading...') {
     const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
     if (loading) {
-        loading.textContent = '⏳ ' + message;
-        loading.style.display = 'block';
+        loading.textContent = message;
+        loading.classList.add('show');
+    }
+    
+    if (overlay) {
+        overlay.classList.add('show');
     }
 }
 
 function hideLoading() {
     const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
     if (loading) {
-        loading.style.display = 'none';
+        loading.classList.remove('show');
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('show');
     }
 }
 
@@ -590,12 +635,21 @@ function showError(message) {
     hideMessages();
     
     const errorDiv = document.getElementById('error-message');
+    const overlay = document.getElementById('message-overlay');
+    
     if (errorDiv) {
-        errorDiv.textContent = '❌ ' + message;
+        errorDiv.textContent = message;
         errorDiv.classList.add('show');
+        
+        if (overlay) {
+            overlay.classList.add('show');
+        }
         
         setTimeout(() => {
             errorDiv.classList.remove('show');
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
         }, 5000);
     } else {
         alert('Error: ' + message);
@@ -607,13 +661,22 @@ function showSuccess(message) {
     hideMessages();
     
     const successDiv = document.getElementById('success-message');
+    const overlay = document.getElementById('message-overlay');
+    
     if (successDiv) {
-        successDiv.textContent = '✅ ' + message;
+        successDiv.textContent = message;
         successDiv.classList.add('show');
+        
+        if (overlay) {
+            overlay.classList.add('show');
+        }
         
         setTimeout(() => {
             successDiv.classList.remove('show');
-        }, 5000);
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+        }, 3000);
     } else {
         alert(message);
     }
@@ -622,19 +685,23 @@ function showSuccess(message) {
 function hideMessages() {
     const errorDiv = document.getElementById('error-message');
     const successDiv = document.getElementById('success-message');
+    const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
     
     if (errorDiv) errorDiv.classList.remove('show');
     if (successDiv) successDiv.classList.remove('show');
+    if (loading) loading.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
 }
 
 // ===============================
 // LOGOUT
 // ===============================
 function logout() {
-    if (confirm('Logout?')) {
+    if (confirm('Are you sure you want to logout?')) {
         localStorage.clear();
         window.location.href = 'login.html';
     }
 }
 
-console.log('✅ credentials.js loaded');
+console.log('✅ credentials.js loaded successfully!');

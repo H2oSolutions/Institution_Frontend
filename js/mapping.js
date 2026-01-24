@@ -8,6 +8,170 @@ let staffClassMappings = [];
 let classSubjectMappings = [];
 let teacherSubjectMappings = [];
 
+// ===================================
+// MESSAGE FUNCTIONS (Loading, Success, Error)
+// ===================================
+
+function showLoading(message = 'Loading...') {
+    console.log('🔄 showLoading called:', message);
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error-message');
+    const successEl = document.getElementById('success-message');
+    const overlay = document.getElementById('message-overlay');
+    
+    // Hide error and success
+    if (errorEl) {
+        errorEl.classList.remove('show');
+        errorEl.style.display = 'none';
+    }
+    if (successEl) {
+        successEl.classList.remove('show');
+        successEl.style.display = 'none';
+    }
+    
+    // Show overlay
+    if (overlay) {
+        overlay.classList.add('show');
+    }
+    
+    // Show loading
+    if (loadingEl) {
+        loadingEl.textContent = message;
+        loadingEl.style.display = 'block';
+        loadingEl.classList.add('show');
+        console.log('✅ Loading shown:', message);
+    } else {
+        console.error('❌ Loading element not found!');
+    }
+}
+
+function hideLoading() {
+    console.log('🔄 hideLoading called');
+    const loadingEl = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
+    if (loadingEl) {
+        loadingEl.classList.remove('show');
+        loadingEl.style.display = 'none';
+        console.log('✅ Loading hidden');
+    }
+    
+    // Hide overlay if no messages are showing
+    const errorEl = document.getElementById('error-message');
+    const successEl = document.getElementById('success-message');
+    const anyMessageShowing = (errorEl && errorEl.classList.contains('show')) || 
+                              (successEl && successEl.classList.contains('show'));
+    
+    if (overlay && !anyMessageShowing) {
+        overlay.classList.remove('show');
+    }
+}
+
+function showSuccess(message) {
+    console.log('✅ showSuccess called:', message);
+    const successEl = document.getElementById('success-message');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error-message');
+    const overlay = document.getElementById('message-overlay');
+    
+    // Hide loading and error
+    if (loadingEl) {
+        loadingEl.classList.remove('show');
+        loadingEl.style.display = 'none';
+    }
+    if (errorEl) {
+        errorEl.classList.remove('show');
+        errorEl.style.display = 'none';
+    }
+    
+    // Show overlay
+    if (overlay) {
+        overlay.classList.add('show');
+    }
+    
+    // Show success
+    if (successEl) {
+        successEl.textContent = message;
+        successEl.style.display = 'block';
+        successEl.classList.add('show');
+        console.log('✅ Success shown:', message);
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            successEl.classList.remove('show');
+            successEl.style.display = 'none';
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+            console.log('✅ Success auto-hidden');
+        }, 5000);
+    } else {
+        console.error('❌ Success element not found!');
+    }
+}
+
+function showError(message) {
+    console.log('❌ showError called:', message);
+    const errorEl = document.getElementById('error-message');
+    const loadingEl = document.getElementById('loading');
+    const successEl = document.getElementById('success-message');
+    const overlay = document.getElementById('message-overlay');
+    
+    // Hide loading and success
+    if (loadingEl) {
+        loadingEl.classList.remove('show');
+        loadingEl.style.display = 'none';
+    }
+    if (successEl) {
+        successEl.classList.remove('show');
+        successEl.style.display = 'none';
+    }
+    
+    // Show overlay
+    if (overlay) {
+        overlay.classList.add('show');
+    }
+    
+    // Show error
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        errorEl.classList.add('show');
+        console.log('❌ Error shown:', message);
+        
+        // Auto-hide after 7 seconds
+        setTimeout(() => {
+            errorEl.classList.remove('show');
+            errorEl.style.display = 'none';
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+            console.log('❌ Error auto-hidden');
+        }, 7000);
+    } else {
+        console.error('❌ Error element not found!');
+    }
+}
+
+// Helper function from basic-info.js
+function populateDropdown(selectElement, data, valueKey, textKey) {
+    if (!selectElement) return;
+    
+    // Clear existing options except the first one
+    selectElement.innerHTML = '<option value="">-- Select --</option>';
+    
+    data.forEach(item => {
+        const option = document.createElement('option');
+        option.value = typeof valueKey === 'function' ? valueKey(item) : item[valueKey];
+        option.textContent = typeof textKey === 'function' ? textKey(item) : item[textKey];
+        selectElement.appendChild(option);
+    });
+}
+
+// ===================================
+// INITIALIZATION
+// ===================================
+
 document.addEventListener('DOMContentLoaded', function() {
     if (!checkAuth()) return;
     
@@ -28,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadAllData() {
     try {
-        showLoading('Loading data...');
+        showLoading('Loading mapping data...');
         
         // Load all required data
         const [staff, classes, subjects, designations, mappings] = await Promise.all([
@@ -122,6 +286,11 @@ async function handleAssignStaffToClasses(e) {
     const selectedClasses = Array.from(document.querySelectorAll('input[name="sc-class"]:checked'))
         .map(cb => cb.value);
     
+    if (selectedClasses.length === 0) {
+        showError('Please select at least one class');
+        return;
+    }
+    
     try {
         showLoading('Assigning staff to classes...');
         
@@ -134,8 +303,9 @@ async function handleAssignStaffToClasses(e) {
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message);
+            showSuccess(response.message || 'Staff assigned to classes successfully!');
             document.getElementById('assign-staff-class-form').reset();
+            document.getElementById('sc-all-classes').checked = false;
             loadAllData();
         }
     } catch (error) {
@@ -146,7 +316,14 @@ async function handleAssignStaffToClasses(e) {
 
 function displayStaffClassMappings() {
     const tbody = document.querySelector('#staff-class-table tbody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
+    
+    if (staffClassMappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">No staff assignments yet. Use the form above to assign staff.</td></tr>';
+        return;
+    }
     
     staffClassMappings.forEach(mapping => {
         const row = tbody.insertRow();
@@ -165,12 +342,27 @@ function displayStaffClassMappings() {
 }
 
 async function editStaffClassMapping(id) {
-    alert('Please use the form above to update staff assignments');
+    showError('Please use the form above to update staff assignments');
 }
 
 async function deleteStaffClassMapping(id) {
     if (!confirm('Remove this staff assignment?')) return;
-    alert('Delete mapping feature - please reassign with empty classes for now');
+    
+    try {
+        showLoading('Removing staff assignment...');
+        
+        const response = await apiDelete(API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + id, true);
+        
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(response.message || 'Staff assignment removed successfully!');
+            loadAllData();
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
 }
 
 // ===================================
@@ -227,7 +419,7 @@ async function handleAssignSubjectsToClass(e) {
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message);
+            showSuccess(response.message || 'Subjects assigned to class successfully!');
             document.getElementById('assign-class-subject-form').reset();
             document.getElementById('cs-all-subjects').checked = false;
             loadAllData();
@@ -240,7 +432,14 @@ async function handleAssignSubjectsToClass(e) {
 
 function displayClassSubjectMappings() {
     const tbody = document.querySelector('#class-subject-table tbody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
+    
+    if (classSubjectMappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No subject assignments yet. Use the form above to assign subjects to classes.</td></tr>';
+        return;
+    }
     
     classSubjectMappings.forEach(mapping => {
         const row = tbody.insertRow();
@@ -257,7 +456,7 @@ function displayClassSubjectMappings() {
 }
 
 async function editClassSubjectMapping(classId) {
-    alert('Please use the form above to update class subject assignments');
+    showError('Please use the form above to update class subject assignments');
 }
 
 // ===================================
@@ -278,7 +477,7 @@ async function handleTeacherClassSelection() {
     const classId = document.getElementById('ts-class').value;
     
     if (!classId) {
-        document.getElementById('ts-subjects-container').style.display = 'none';
+        document.getElementById('ts-subjects-container').classList.remove('show');
         return;
     }
     
@@ -287,7 +486,7 @@ async function handleTeacherClassSelection() {
     
     if (!classMapping || !classMapping.subjectIds || classMapping.subjectIds.length === 0) {
         showError('No subjects assigned to this class yet. Please assign subjects first in Section 2.');
-        document.getElementById('ts-subjects-container').style.display = 'none';
+        document.getElementById('ts-subjects-container').classList.remove('show');
         return;
     }
     
@@ -305,7 +504,7 @@ async function handleTeacherClassSelection() {
         container.appendChild(document.createElement('br'));
     });
     
-    document.getElementById('ts-subjects-container').style.display = 'block';
+    document.getElementById('ts-subjects-container').classList.add('show');
 }
 
 async function handleAssignTeacherToSubjects(e) {
@@ -335,9 +534,9 @@ async function handleAssignTeacherToSubjects(e) {
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message);
+            showSuccess(response.message || 'Teacher assigned to subjects successfully!');
             document.getElementById('assign-teacher-subject-form').reset();
-            document.getElementById('ts-subjects-container').style.display = 'none';
+            document.getElementById('ts-subjects-container').classList.remove('show');
             loadAllData();
         }
     } catch (error) {
@@ -348,7 +547,14 @@ async function handleAssignTeacherToSubjects(e) {
 
 function displayTeacherSubjectMappings() {
     const tbody = document.querySelector('#teacher-subject-table tbody');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
+    
+    if (teacherSubjectMappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">No teacher assignments yet. Use the form above to assign teachers to subjects.</td></tr>';
+        return;
+    }
     
     teacherSubjectMappings.forEach(mapping => {
         const row = tbody.insertRow();
@@ -367,12 +573,27 @@ function displayTeacherSubjectMappings() {
 }
 
 async function editTeacherSubjectMapping(id) {
-    alert('Please use the form above to update teacher subject assignments');
+    showError('Please use the form above to update teacher subject assignments');
 }
 
 async function deleteTeacherSubjectMapping(id) {
     if (!confirm('Remove this teacher assignment?')) return;
-    alert('Delete mapping feature - please reassign for now');
+    
+    try {
+        showLoading('Removing teacher assignment...');
+        
+        const response = await apiDelete(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + id, true);
+        
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(response.message || 'Teacher assignment removed successfully!');
+            loadAllData();
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
 }
 
 // ===================================
@@ -384,3 +605,5 @@ function displayAllMappings() {
     displayClassSubjectMappings();
     displayTeacherSubjectMappings();
 }
+
+console.log('✅ mapping.js loaded successfully');

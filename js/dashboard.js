@@ -1,4 +1,4 @@
-// dashboard.js - ENHANCED WITH ANIMATIONS & BETTER UX
+// dashboard.js - WITH CENTERED OVERLAY LOADING
 
 // ===============================
 // INITIALIZATION
@@ -305,54 +305,98 @@ function goToPart3() {
 }
 
 // ===============================
-// ENHANCED MESSAGE FUNCTIONS
+// UI HELPERS - WITH OVERLAY
 // ===============================
 
 function showLoading(message = 'Loading...') {
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-        loadingDiv.textContent = '⏳ ' + message;
-        loadingDiv.style.display = 'block';
-        loadingDiv.classList.add('show');
+    const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
+    if (loading) {
+        loading.textContent = message;
+        loading.classList.add('show');
+    }
+    
+    if (overlay) {
+        overlay.classList.add('show');
     }
 }
 
 function hideLoading() {
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-        loadingDiv.style.display = 'none';
-        loadingDiv.classList.remove('show');
+    const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
+    if (loading) {
+        loading.classList.remove('show');
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('show');
     }
 }
 
 function showError(message) {
+    console.error('❌', message);
+    hideMessages();
+    
     const errorDiv = document.getElementById('error-message');
+    const overlay = document.getElementById('message-overlay');
+    
     if (errorDiv) {
-        errorDiv.textContent = '❌ ' + message;
-        errorDiv.style.display = 'block';
+        errorDiv.textContent = message;
         errorDiv.classList.add('show');
-        errorDiv.style.animation = 'slideInRight 0.4s ease-out';
+        
+        if (overlay) {
+            overlay.classList.add('show');
+        }
         
         setTimeout(() => {
-            errorDiv.style.display = 'none';
             errorDiv.classList.remove('show');
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
         }, 5000);
+    } else {
+        alert('Error: ' + message);
     }
 }
 
 function showSuccess(message) {
+    console.log('✅', message);
+    hideMessages();
+    
     const successDiv = document.getElementById('success-message');
+    const overlay = document.getElementById('message-overlay');
+    
     if (successDiv) {
-        successDiv.textContent = '✅ ' + message;
-        successDiv.style.display = 'block';
+        successDiv.textContent = message;
         successDiv.classList.add('show');
-        successDiv.style.animation = 'slideInRight 0.4s ease-out';
+        
+        if (overlay) {
+            overlay.classList.add('show');
+        }
         
         setTimeout(() => {
-            successDiv.style.display = 'none';
             successDiv.classList.remove('show');
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
         }, 3000);
+    } else {
+        alert(message);
     }
+}
+
+function hideMessages() {
+    const errorDiv = document.getElementById('error-message');
+    const successDiv = document.getElementById('success-message');
+    const loading = document.getElementById('loading');
+    const overlay = document.getElementById('message-overlay');
+    
+    if (errorDiv) errorDiv.classList.remove('show');
+    if (successDiv) successDiv.classList.remove('show');
+    if (loading) loading.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
 }
 
 // ===============================
