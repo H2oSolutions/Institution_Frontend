@@ -34,7 +34,7 @@ const API_ENDPOINTS = {
     
     // Students
     STUDENTS: '/students',
-    STUDENTS_BULK: '/students/bulk-upload',
+    STUDENTS_BULK_UPLOAD: '/students/bulk-upload',  // ✅ FIXED: Changed from STUDENTS_BULK
     
     // Hierarchy
     HIERARCHY: '/hierarchy',

@@ -181,103 +181,87 @@ function showError(message) {
 // UPLOAD RESULTS MODAL FUNCTIONS
 // ===================================
 
-function showUploadResultsModal(results) {
-    console.log('📊 Showing upload results modal:', results);
+// function showUploadResultsModal(results) {
+//     console.log('📊 Showing upload results modal:', results);
     
-    const modal = document.getElementById('upload-results-modal');
-    const statsContainer = document.getElementById('upload-stats-container');
-    const errorsContainer = document.getElementById('upload-errors-container');
-    const errorsList = document.getElementById('errors-list');
+//     const modal = document.getElementById('upload-results-modal');
+//     const statsContainer = document.getElementById('upload-stats-container');
+//     const errorsContainer = document.getElementById('upload-errors-container');
+//     const errorsList = document.getElementById('errors-list');
     
-    if (!modal || !statsContainer) {
-        console.error('Upload results modal elements not found');
-        return;
-    }
+//     if (!modal || !statsContainer) {
+//         console.error('❌ Upload results modal elements not found');
+//         return;
+//     }
     
-    // Ensure results object has all required properties
-    const safeResults = {
-        total: results.total || 0,
-        successful: results.successful || 0,
-        failed: results.failed || 0,
-        totalInClass: results.totalInClass || 0,
-        errors: results.errors || []
-    };
+//     // Ensure results object has all required properties
+//     const safeResults = {
+//         total: results.total || 0,
+//         successful: results.successful || 0,
+//         failed: results.failed || 0,
+//         totalInClass: results.totalInClass || 0,
+//         errors: results.errors || []
+//     };
     
-    // Build stats HTML
-    let statsHTML = '';
+//     console.log('📊 Safe results:', safeResults);
     
-    // Total processed
-    if (safeResults.total !== undefined) {
-        statsHTML += `
-            <div class="stat-card total">
-                <div class="stat-number">${safeResults.total}</div>
-                <div class="stat-label">Total Processed</div>
-            </div>
-        `;
-    }
+//     // Build stats HTML
+//     let statsHTML = `
+//         <div class="stat-card total">
+//             <div class="stat-number">${safeResults.total}</div>
+//             <div class="stat-label">Total Processed</div>
+//         </div>
+//         <div class="stat-card success">
+//             <div class="stat-number">${safeResults.successful}</div>
+//             <div class="stat-label">Successfully Added</div>
+//         </div>
+//         <div class="stat-card failed">
+//             <div class="stat-number">${safeResults.failed}</div>
+//             <div class="stat-label">Failed/Duplicates</div>
+//         </div>
+//         <div class="stat-card class-total">
+//             <div class="stat-number">${safeResults.totalInClass}</div>
+//             <div class="stat-label">Total in Class Now</div>
+//         </div>
+//     `;
     
-    // Successfully added
-    if (safeResults.successful !== undefined) {
-        statsHTML += `
-            <div class="stat-card success">
-                <div class="stat-number">${safeResults.successful}</div>
-                <div class="stat-label">Successfully Added</div>
-            </div>
-        `;
-    }
+//     statsContainer.innerHTML = statsHTML;
     
-    // Failed
-    if (safeResults.failed !== undefined) {
-        statsHTML += `
-            <div class="stat-card failed">
-                <div class="stat-number">${safeResults.failed}</div>
-                <div class="stat-label">Failed</div>
-            </div>
-        `;
-    }
+//     // Show errors if any
+//     if (safeResults.errors && Array.isArray(safeResults.errors) && safeResults.errors.length > 0) {
+//         errorsContainer.style.display = 'block';
+//         errorsList.innerHTML = safeResults.errors.map(err => {
+//             const message = err.message || err.error || err;
+//             const row = err.row || 'N/A';
+//             return `
+//                 <div class="error-item">
+//                     <strong>Row ${row}:</strong> ${message}
+//                 </div>
+//             `;
+//         }).join('');
+//     } else {
+//         errorsContainer.style.display = 'none';
+//     }
     
-    // Total students in class now
-    if (safeResults.totalInClass !== undefined) {
-        statsHTML += `
-            <div class="stat-card class-total">
-                <div class="stat-number">${safeResults.totalInClass}</div>
-                <div class="stat-label">Total in Class Now</div>
-            </div>
-        `;
-    }
-    
-    statsContainer.innerHTML = statsHTML;
-    
-    // Show errors if any
-    if (safeResults.errors && Array.isArray(safeResults.errors) && safeResults.errors.length > 0) {
-        errorsContainer.style.display = 'block';
-        errorsList.innerHTML = safeResults.errors.map(err => `
-            <div class="error-item">
-                <strong>Row ${err.row || 'N/A'}:</strong> ${err.message || err}
-            </div>
-        `).join('');
-    } else {
-        errorsContainer.style.display = 'none';
-    }
-    
-    // Show modal
-    modal.classList.add('show');
-}
+//     // Show modal
+//     modal.classList.add('show');
+//     console.log('✅ Upload results modal displayed');
+// }
 
-function closeUploadModal() {
-    const modal = document.getElementById('upload-results-modal');
-    if (modal) {
-        modal.classList.remove('show');
-    }
-}
+// function closeUploadModal() {
+//     const modal = document.getElementById('upload-results-modal');
+//     if (modal) {
+//         modal.classList.remove('show');
+//     }
+// }
 
-// Close modal when clicking outside
-document.addEventListener('click', function(e) {
-    const modal = document.getElementById('upload-results-modal');
-    if (e.target === modal) {
-        closeUploadModal();
-    }
-});
+// // Close modal when clicking outside
+// document.addEventListener('click', function(e) {
+//     const modal = document.getElementById('upload-results-modal');
+//     if (e.target === modal) {
+//         closeUploadModal();
+//     }
+// });
 
 // ===================================
 // CLASS STATISTICS FUNCTIONS
@@ -1090,64 +1074,102 @@ async function handleAddStudent(e) {
     }
 }
 
-async function handleBulkUpload(e) {
+async function handleAddStudent(e) {
     e.preventDefault();
-    console.log('Bulk uploading students...');
+    console.log('Adding student...');
     
-    const classId = document.getElementById('bulk-class-select').value;
-    const fileInput = document.getElementById('student-file');
-    const file = fileInput.files[0];
+    const nameInput = document.getElementById('student-name');
+    const fatherInput = document.getElementById('student-father');
+    const classInput = document.getElementById('student-class');
+    const mobileInput = document.getElementById('student-mobile');
     
-    if (!classId) {
-        showError('Please select a class');
+    if (!nameInput || !fatherInput || !classInput || !mobileInput) {
+        showError('Form error: Required fields not found');
         return;
     }
     
-    if (!file) {
-        showError('Please select a file');
+    const name = nameInput.value.trim();
+    const fatherName = fatherInput.value.trim();
+    const classId = classInput.value;
+    const mobileNo = mobileInput.value.trim();
+    
+    if (!name || !fatherName || !classId || !mobileNo) {
+        showError('Please fill all required fields');
+        return;
+    }
+    
+    if (!validateMobile(mobileNo)) {
+        showError('Please enter a valid 10-digit mobile number starting with 6-9');
         return;
     }
     
     try {
-        showLoading('Uploading students...');
+        showLoading('Adding student...');
         
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('classId', classId);
-        
-        const response = await apiPostFormData(API_ENDPOINTS.STUDENTS_BULK_UPLOAD, formData, true);
+        const response = await apiPost(API_ENDPOINTS.STUDENTS, {
+            name: name,
+            fatherName: fatherName,
+            classId: classId,
+            mobileNo: mobileNo
+        }, true);
         
         hideLoading();
         
         if (response.success) {
-            const stats = response.stats || {};
-            
             // Get updated class info
             const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
-            const totalInClass = classResponse.success ? classResponse.data.studentCount : 0;
+            const totalInClass = classResponse.success ? classResponse.data.studentCount : 1;
             
             // Show upload results modal
             showUploadResultsModal({
-                total: stats.total || 0,
-                successful: stats.successful || 0,
-                failed: stats.failed || 0,
+                total: 1,
+                successful: 1,
+                failed: 0,
                 totalInClass: totalInClass,
-                errors: stats.errors || []
+                errors: []
             });
             
-            document.getElementById('bulk-upload-form').reset();
+            // Reset form
+            const form = document.getElementById('add-student-form');
+            form.reset();
+            const studentMobileInput = document.getElementById('student-mobile');
+            if (studentMobileInput) {
+                studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
+            }
             
             // Reload data
             await loadStudents();
             await loadClasses();
             await loadClassStatistics();
+        } else if (response.isDuplicate) {
+            // Handle duplicate student
+            showUploadResultsModal({
+                total: 1,
+                successful: 0,
+                failed: 1,
+                totalInClass: 0,
+                errors: [{ row: 1, message: response.message }]
+            });
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Bulk upload error:', error);
-        showError(error.message);
+        console.error('❌ Add student error:', error);
+        
+        // Check if it's a duplicate error (409 status)
+        if (error.message.includes('Duplicate') || error.message.includes('409')) {
+            showUploadResultsModal({
+                total: 1,
+                successful: 0,
+                failed: 1,
+                totalInClass: 0,
+                errors: [{ row: 1, message: error.message }]
+            });
+        } else {
+            showError(error.message);
+        }
     }
 }
+
 
 async function searchStudents() {
     const searchTerm = document.getElementById('search-student').value.trim();
@@ -1531,10 +1553,12 @@ function getClassOptions(selectedClass) {
 
 // Close edit modal when clicking outside
 document.addEventListener('click', function(e) {
-    const editModal = document.getElementById('edit-modal');
-    if (e.target === editModal) {
-        closeEditModal();
+    const modal = document.getElementById('upload-results-modal');
+    if (e.target === modal) {
+        // Only close if clicking directly on overlay, not the content
+        closeUploadModal();
     }
 });
+
 
 console.log('✅ basic-info.js loaded successfully');
