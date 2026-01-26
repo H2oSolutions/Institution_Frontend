@@ -12,6 +12,8 @@ const API_ENDPOINTS = {
     SET_PASSWORD: '/auth/set-password',
     INSTITUTION_LOGIN: '/auth/institution/login',
     STAFF_LOGIN: '/auth/staff/login',
+    FORGOT_PASSWORD: '/auth/forgot-password',      
+    RESET_PASSWORD: '/auth/reset-password',  
     
     // Dashboard
     DASHBOARD_STATS: '/dashboard/stats',
