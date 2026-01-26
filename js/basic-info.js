@@ -6,6 +6,7 @@ let classesData = [];
 let staffData = [];
 let subjectsData = [];
 let studentsData = [];
+let classStatistics = [];
 
 // ===================================
 // UTILITY FUNCTIONS (ADD AT THE TOP)
@@ -177,6 +178,147 @@ function showError(message) {
 }
 
 // ===================================
+// UPLOAD RESULTS MODAL FUNCTIONS
+// ===================================
+
+function showUploadResultsModal(results) {
+    console.log('📊 Showing upload results modal:', results);
+    
+    const modal = document.getElementById('upload-results-modal');
+    const statsContainer = document.getElementById('upload-stats-container');
+    const errorsContainer = document.getElementById('upload-errors-container');
+    const errorsList = document.getElementById('errors-list');
+    
+    if (!modal || !statsContainer) {
+        console.error('Upload results modal elements not found');
+        return;
+    }
+    
+    // Build stats HTML
+    let statsHTML = '';
+    
+    // Total processed
+    if (results.total !== undefined) {
+        statsHTML += `
+            <div class="stat-card total">
+                <div class="stat-number">${results.total}</div>
+                <div class="stat-label">Total Processed</div>
+            </div>
+        `;
+    }
+    
+    // Successfully added
+    if (results.successful !== undefined) {
+        statsHTML += `
+            <div class="stat-card success">
+                <div class="stat-number">${results.successful}</div>
+                <div class="stat-label">Successfully Added</div>
+            </div>
+        `;
+    }
+    
+    // Failed
+    if (results.failed !== undefined) {
+        statsHTML += `
+            <div class="stat-card failed">
+                <div class="stat-number">${results.failed}</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        `;
+    }
+    
+    // Total students in class now
+    if (results.totalInClass !== undefined) {
+        statsHTML += `
+            <div class="stat-card class-total">
+                <div class="stat-number">${results.totalInClass}</div>
+                <div class="stat-label">Total in Class Now</div>
+            </div>
+        `;
+    }
+    
+    statsContainer.innerHTML = statsHTML;
+    
+    // Show errors if any
+    if (results.errors && results.errors.length > 0) {
+        errorsContainer.style.display = 'block';
+        errorsList.innerHTML = results.errors.map(err => `
+            <div class="error-item">
+                <strong>Row ${err.row || 'N/A'}:</strong> ${err.message || err}
+            </div>
+        `).join('');
+    } else {
+        errorsContainer.style.display = 'none';
+    }
+    
+    // Show modal
+    modal.classList.add('show');
+}
+
+function closeUploadModal() {
+    const modal = document.getElementById('upload-results-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('upload-results-modal');
+    if (e.target === modal) {
+        closeUploadModal();
+    }
+});
+
+// ===================================
+// CLASS STATISTICS FUNCTIONS
+// ===================================
+
+async function loadClassStatistics() {
+    try {
+        console.log('📊 Loading class statistics...');
+        
+        // Get classes with student counts
+        const classesResponse = await apiGet(API_ENDPOINTS.CLASSES, true);
+        
+        if (classesResponse.success) {
+            classStatistics = classesResponse.data;
+            displayClassStatistics();
+        }
+    } catch (error) {
+        console.error('❌ Failed to load class statistics:', error);
+    }
+}
+
+function displayClassStatistics() {
+    const totalClassesEl = document.getElementById('total-classes-count');
+    const totalStudentsEl = document.getElementById('total-students-count');
+    const classListEl = document.getElementById('class-list');
+    
+    if (!totalClassesEl || !totalStudentsEl || !classListEl) return;
+    
+    // Calculate totals
+    const totalClasses = classStatistics.length;
+    const totalStudents = classStatistics.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
+    
+    totalClassesEl.textContent = totalClasses;
+    totalStudentsEl.textContent = totalStudents;
+    
+    // Display class list
+    if (classStatistics.length === 0) {
+        classListEl.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: var(--space-4);">No classes available</p>';
+        return;
+    }
+    
+    classListEl.innerHTML = classStatistics.map(cls => `
+        <div class="class-list-item">
+            <span class="class-name">${cls.nickname || cls.className}</span>
+            <span class="class-student-count">${cls.studentCount || 0} students</span>
+        </div>
+    `).join('');
+}
+
+// ===================================
 // INITIALIZATION
 // ===================================
 
@@ -206,6 +348,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const addSubjectForm = document.getElementById('add-subject-form');
     const addStudentForm = document.getElementById('add-student-form');
     const bulkUploadForm = document.getElementById('bulk-upload-form');
+    const hierarchyForm = document.getElementById('hierarchy-form');
     
     if (addDesForm) addDesForm.addEventListener('submit', handleAddDesignation);
     if (addClassForm) addClassForm.addEventListener('submit', handleAddClass);
@@ -213,6 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addSubjectForm) addSubjectForm.addEventListener('submit', handleAddSubject);
     if (addStudentForm) addStudentForm.addEventListener('submit', handleAddStudent);
     if (bulkUploadForm) bulkUploadForm.addEventListener('submit', handleBulkUpload);
+    if (hierarchyForm) hierarchyForm.addEventListener('submit', handleSaveHierarchy);
     
     // Phone validation for staff and student mobile inputs
     const staffMobile = document.getElementById('staff-mobile');
@@ -261,6 +405,11 @@ function showSection(sectionName) {
     if (tab) tab.style.fontWeight = 'bold';
     
     currentSection = sectionName;
+    
+    // Load class statistics when showing students section
+    if (sectionName === 'students') {
+        loadClassStatistics();
+    }
 }
 
 // ===================================
@@ -293,7 +442,7 @@ function displayDesignations() {
     tbody.innerHTML = '';
     
     if (designationsData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">No designations found. Add one above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No designations found. Add one above.</td></tr>';
         return;
     }
     
@@ -301,7 +450,6 @@ function displayDesignations() {
         const row = tbody.insertRow();
         row.innerHTML = `
             <td>${des.name}</td>
-            <td>${des.level || '-'}</td>
             <td>${des.staffCount || 0}</td>
             <td>
                 <button onclick="editDesignation('${des._id}')">Edit</button>
@@ -323,7 +471,6 @@ async function handleAddDesignation(e) {
     console.log('Adding designation...');
     
     const name = document.getElementById('des-name').value.trim();
-    const level = document.getElementById('des-level').value;
     
     if (!name) {
         showError('Please enter a designation name');
@@ -347,8 +494,7 @@ async function handleAddDesignation(e) {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                name: name,
-                level: level ? parseInt(level) : null
+                name: name
             })
         });
         
@@ -411,6 +557,12 @@ async function loadClasses() {
             classesData = response.data;
             console.log('✅ Classes loaded:', classesData.length);
             displayClasses();
+            
+            // Also update class statistics if on students section
+            if (currentSection === 'students') {
+                classStatistics = classesData;
+                displayClassStatistics();
+            }
         }
     } catch (error) {
         hideLoading();
@@ -591,24 +743,13 @@ function displayStaff() {
 
 async function handleAddStaff(e) {
     e.preventDefault();
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔄 ADD STAFF FUNCTION CALLED');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Adding staff...');
     
-    // Step 1: Get form values
-    console.log('📝 Step 1: Getting form values...');
     const nameInput = document.getElementById('staff-name');
     const mobileInput = document.getElementById('staff-mobile');
     const designationInput = document.getElementById('staff-designation');
     
-    console.log('Form elements found:', {
-        nameInput: !!nameInput,
-        mobileInput: !!mobileInput,
-        designationInput: !!designationInput
-    });
-    
     if (!nameInput || !mobileInput || !designationInput) {
-        console.error('❌ Form elements not found!');
         showError('Form error: Required fields not found');
         return;
     }
@@ -617,191 +758,75 @@ async function handleAddStaff(e) {
     const mobileNo = mobileInput.value.trim();
     const designationId = designationInput.value;
     
-    console.log('📋 Form Data:', {
-        name: name,
-        nameLength: name.length,
-        mobileNo: mobileNo,
-        mobileLength: mobileNo.length,
-        designationId: designationId
-    });
-    
-    // Step 2: Validate inputs
-    console.log('✅ Step 2: Validating inputs...');
-    
     if (!name) {
-        console.error('❌ Validation failed: Name is empty');
         showError('Please enter staff name');
         return;
     }
-    console.log('✅ Name validation passed');
     
     if (!mobileNo) {
-        console.error('❌ Validation failed: Mobile is empty');
         showError('Please enter mobile number');
         return;
     }
-    console.log('✅ Mobile not empty');
     
     if (!validateMobile(mobileNo)) {
-        console.error('❌ Validation failed: Invalid mobile format');
-        console.log('Mobile number:', mobileNo);
-        console.log('Mobile regex test:', /^[6-9]\d{9}$/.test(mobileNo));
         showError('Please enter a valid 10-digit mobile number starting with 6-9');
         return;
     }
-    console.log('✅ Mobile format validation passed');
     
     if (!designationId) {
-        console.error('❌ Validation failed: No designation selected');
         showError('Please select a designation');
         return;
     }
-    console.log('✅ Designation validation passed');
     
-    // Step 3: Get token
-    console.log('🔑 Step 3: Getting authentication token...');
     const token = localStorage.getItem('token');
-    
     if (!token) {
-        console.error('❌ No token found in localStorage');
         showError('Please login again');
         setTimeout(() => {
             window.location.href = 'login.html';
         }, 2000);
         return;
     }
-    console.log('✅ Token found:', token.substring(0, 20) + '...');
     
-    // Step 4: Prepare request
-    console.log('📦 Step 4: Preparing API request...');
-    
-    const url = API_BASE_URL + API_ENDPOINTS.STAFF;
-    console.log('🌐 API_BASE_URL:', API_BASE_URL);
-    console.log('🌐 API_ENDPOINTS.STAFF:', API_ENDPOINTS.STAFF);
-    console.log('🌐 Full URL:', url);
-    
-    const requestBody = {
-        name: name,
-        mobileNo: mobileNo,
-        designationId: designationId
-    };
-    console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-    
-    const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
-    console.log('📤 Request headers:', {
-        'Content-Type': headers['Content-Type'],
-        'Authorization': headers['Authorization'].substring(0, 30) + '...'
-    });
-    
-    // Step 5: Make API call
     try {
-        console.log('🚀 Step 5: Making API call...');
         showLoading('Adding staff...');
         
-        console.log('⏳ Sending fetch request...');
-        const startTime = Date.now();
-        
-        const response = await fetch(url, {
+        const response = await fetch(API_BASE_URL + API_ENDPOINTS.STAFF, {
             method: 'POST',
-            headers: headers,
-            body: JSON.stringify(requestBody)
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                name: name,
+                mobileNo: mobileNo,
+                designationId: designationId
+            })
         });
         
-        const endTime = Date.now();
-        const duration = endTime - startTime;
-        
-        console.log('📥 Response received in', duration, 'ms');
-        console.log('📥 Response status:', response.status);
-        console.log('📥 Response statusText:', response.statusText);
-        console.log('📥 Response ok:', response.ok);
-        console.log('📥 Response type:', response.type);
-        console.log('📥 Response headers:');
-        response.headers.forEach((value, key) => {
-            console.log(`   ${key}: ${value}`);
-        });
-        
-        // Step 6: Parse response
-        console.log('📖 Step 6: Parsing response...');
-        
-        let responseText;
-        try {
-            responseText = await response.text();
-            console.log('📥 Raw response text:', responseText);
-        } catch (textError) {
-            console.error('❌ Failed to get response text:', textError);
-            hideLoading();
-            showError('Failed to read server response');
-            return;
-        }
-        
-        let data;
-        try {
-            data = JSON.parse(responseText);
-            console.log('📥 Parsed JSON:', JSON.stringify(data, null, 2));
-        } catch (parseError) {
-            console.error('❌ Failed to parse JSON:', parseError);
-            console.error('Response text was:', responseText);
-            hideLoading();
-            showError('Server returned invalid response');
-            return;
-        }
+        const data = await response.json();
         
         hideLoading();
         
-        // Step 7: Handle response
-        console.log('🎯 Step 7: Handling response...');
-        
         if (response.ok && data.success) {
-            console.log('✅ SUCCESS!');
-            console.log('✅ Message:', data.message);
-            console.log('✅ Data:', data.data);
-            
             showSuccess(data.message || 'Staff added successfully!');
             
-            console.log('🔄 Resetting form...');
             const form = document.getElementById('add-staff-form');
             form.reset();
-            // Remove phone validation classes
             const staffMobileInput = document.getElementById('staff-mobile');
             if (staffMobileInput) {
                 staffMobileInput.classList.remove('phone-valid', 'phone-invalid');
             }
             
-            console.log('🔄 Reloading staff list...');
             await loadStaff();
-            
-            console.log('✅ All done!');
         } else {
-            console.error('❌ Request failed');
-            console.error('Status:', response.status);
-            console.error('Success flag:', data.success);
-            console.error('Message:', data.message);
-            console.error('Full response:', data);
-            
             showError(data.message || `Failed to add staff (Status: ${response.status})`);
         }
         
     } catch (error) {
         hideLoading();
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('❌❌❌ CRITICAL ERROR ❌❌❌');
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('Error type:', error.constructor.name);
-        console.error('Error name:', error.name);
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
-        console.error('Full error object:', error);
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        
+        console.error('❌ Error:', error);
         showError('Network error: ' + error.message);
     }
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🏁 END OF ADD STAFF FUNCTION');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
 async function editStaff(id) {
@@ -1021,15 +1046,32 @@ async function handleAddStudent(e) {
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message || 'Student added successfully');
+            // Get updated class info
+            const selectedClass = classesData.find(c => c._id === classId);
+            
+            // Fetch updated class data to get current student count
+            const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
+            const totalInClass = classResponse.success ? classResponse.data.studentCount : (selectedClass?.studentCount || 0) + 1;
+            
+            // Show upload results modal
+            showUploadResultsModal({
+                total: 1,
+                successful: 1,
+                failed: 0,
+                totalInClass: totalInClass
+            });
+            
             const form = document.getElementById('add-student-form');
             form.reset();
-            // Remove phone validation classes
             const studentMobileInput = document.getElementById('student-mobile');
             if (studentMobileInput) {
                 studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
             }
-            loadStudents();
+            
+            // Reload data
+            await loadStudents();
+            await loadClasses();
+            await loadClassStatistics();
         }
     } catch (error) {
         hideLoading();
@@ -1069,13 +1111,26 @@ async function handleBulkUpload(e) {
         
         if (response.success) {
             const stats = response.stats || {};
-            showSuccess(`Upload complete!\nSuccessful: ${stats.successful || 0}\nFailed: ${stats.failed || 0}`);
-            document.getElementById('bulk-upload-form').reset();
-            loadStudents();
             
-            if (stats.errors && stats.errors.length > 0) {
-                console.error('Upload errors:', stats.errors);
-            }
+            // Get updated class info
+            const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
+            const totalInClass = classResponse.success ? classResponse.data.studentCount : 0;
+            
+            // Show upload results modal
+            showUploadResultsModal({
+                total: stats.total || 0,
+                successful: stats.successful || 0,
+                failed: stats.failed || 0,
+                totalInClass: totalInClass,
+                errors: stats.errors || []
+            });
+            
+            document.getElementById('bulk-upload-form').reset();
+            
+            // Reload data
+            await loadStudents();
+            await loadClasses();
+            await loadClassStatistics();
         }
     } catch (error) {
         hideLoading();
@@ -1128,7 +1183,9 @@ async function deleteStudent(id) {
         
         if (response.success) {
             showSuccess(response.message);
-            loadStudents();
+            await loadStudents();
+            await loadClasses();
+            await loadClassStatistics();
         }
     } catch (error) {
         hideLoading();
@@ -1147,8 +1204,8 @@ async function loadHierarchy() {
         const response = await apiGet(API_ENDPOINTS.HIERARCHY, true);
         
         hideLoading();
-        if (response.success && response.data && response.data.levels) {
-            displayCurrentHierarchy(response.data.levels);
+        if (response.success && response.data) {
+            displayCurrentHierarchy(response.data.numLevels);
         } else {
             hideLoading();
         }
@@ -1158,73 +1215,55 @@ async function loadHierarchy() {
     }
 }
 
-function generateHierarchyLevels() {
+async function handleSaveHierarchy(e) {
+    e.preventDefault();
+    console.log('Saving hierarchy...');
+    
     const numLevels = parseInt(document.getElementById('num-levels').value);
-    const container = document.getElementById('hierarchy-levels-container');
     
-    container.innerHTML = '<h3>Define Level Names:</h3>';
-    
-    for (let i = 1; i <= numLevels; i++) {
-        const div = document.createElement('div');
-        div.innerHTML = `
-            <label for="level-${i}">Level ${i} Name: *</label>
-            <input type="text" id="level-${i}" required>
-        `;
-        container.appendChild(div);
-    }
-    
-    document.getElementById('save-hierarchy-btn').style.display = 'block';
-}
-
-async function saveHierarchy() {
-    const numLevels = parseInt(document.getElementById('num-levels').value);
-    const levels = [];
-    
-    for (let i = 1; i <= numLevels; i++) {
-        const name = document.getElementById('level-' + i).value.trim();
-        if (!name) {
-            showError('Please fill all level names');
-            return;
-        }
-        levels.push({
-            levelNumber: i,
-            name: name
-        });
+    if (!numLevels) {
+        showError('Please select number of levels');
+        return;
     }
     
     try {
         showLoading('Saving hierarchy...');
         
         const response = await apiPost(API_ENDPOINTS.HIERARCHY, {
-            levels: levels
+            numLevels: numLevels
         }, true);
         
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message);
-            displayCurrentHierarchy(levels);
+            showSuccess(response.message || 'Hierarchy saved successfully');
+            displayCurrentHierarchy(numLevels);
         }
     } catch (error) {
         hideLoading();
+        console.error('❌ Save hierarchy error:', error);
         showError(error.message);
     }
 }
 
-function displayCurrentHierarchy(levels) {
+function displayCurrentHierarchy(numLevels) {
     const container = document.getElementById('current-hierarchy');
     if (!container) return;
     
-    if (!levels || levels.length === 0) {
+    if (!numLevels || numLevels === 0) {
         container.innerHTML = '<p>No hierarchy defined yet.</p>';
         return;
     }
     
-    container.innerHTML = '<ul>';
-    levels.forEach(level => {
-        container.innerHTML += `<li>Level ${level.levelNumber}: ${level.name}</li>`;
-    });
-    container.innerHTML += '</ul>';
+    let hierarchyHTML = '<ul style="list-style-type: none; padding-left: 0;">';
+    for (let i = 1; i <= numLevels; i++) {
+        hierarchyHTML += `<li style="padding: 10px; margin-bottom: 8px; background: white; border-left: 4px solid var(--primary-500); border-radius: 8px;">
+            <strong>Level ${i}</strong>
+        </li>`;
+    }
+    hierarchyHTML += '</ul>';
+    
+    container.innerHTML = hierarchyHTML;
 }
 
 // ===================================
@@ -1263,10 +1302,6 @@ function openEditModal(type, id, data) {
                 <div class="edit-modal-field">
                     <label>Designation Name *</label>
                     <input type="text" id="edit-des-name" value="${data.name || ''}" required>
-                </div>
-                <div class="edit-modal-field">
-                    <label>Level (1-10)</label>
-                    <input type="number" id="edit-des-level" min="1" max="10" value="${data.level || ''}">
                 </div>
             `;
             break;
@@ -1376,8 +1411,7 @@ async function saveEdit() {
         switch(currentEditType) {
             case 'designation':
                 updatedData = {
-                    name: document.getElementById('edit-des-name').value,
-                    level: document.getElementById('edit-des-level').value ? parseInt(document.getElementById('edit-des-level').value) : null
+                    name: document.getElementById('edit-des-name').value
                 };
                 showLoading('Updating designation...');
                 response = await apiPut(API_ENDPOINTS.DESIGNATIONS + '/' + currentEditId, updatedData, true);
@@ -1398,7 +1432,8 @@ async function saveEdit() {
                 hideLoading();
                 if (response.success) {
                     showSuccess(response.message);
-                    loadClasses();
+                    await loadClasses();
+                    await loadClassStatistics();
                 }
                 break;
                 
@@ -1452,7 +1487,9 @@ async function saveEdit() {
                 hideLoading();
                 if (response.success) {
                     showSuccess(response.message);
-                    loadStudents();
+                    await loadStudents();
+                    await loadClasses();
+                    await loadClassStatistics();
                 }
                 break;
         }
@@ -1482,10 +1519,10 @@ function getClassOptions(selectedClass) {
     return options;
 }
 
-// Close modal when clicking outside
+// Close edit modal when clicking outside
 document.addEventListener('click', function(e) {
-    const modal = document.getElementById('edit-modal');
-    if (e.target === modal) {
+    const editModal = document.getElementById('edit-modal');
+    if (e.target === editModal) {
         closeEditModal();
     }
 });

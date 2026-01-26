@@ -1,284 +1,336 @@
-// js/students-bulk.js
-// Bulk student upload functionality
+// students-bulk.js - Bulk Upload Students with Excel
 
-// Download Student Template
+// Download Excel Template
 function downloadStudentTemplate() {
-    try {
-        const wb = XLSX.utils.book_new();
-        const wsData = [
-            ['Name', 'Father Name', 'Mobile No'],
-            ['John Doe', 'Robert Doe', '9876543210'],
-            ['Jane Smith', 'Michael Smith', '9876543211'],
-            ['Alex Johnson', 'David Johnson', '9876543212']
-        ];
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        
-        // Set column widths
-        ws['!cols'] = [
-            { wch: 20 },
-            { wch: 20 },
-            { wch: 15 }
-        ];
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Students');
-        XLSX.writeFile(wb, 'Student_Upload_Template.xlsx');
-
-        showSuccess('📥 Template downloaded successfully!');
-    } catch (error) {
-        console.error('Download error:', error);
-        showError('Failed to download template');
-    }
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Create template data
+    const templateData = [
+        ['Name', 'Father Name', 'Mobile No'],
+        ['John Doe', 'Robert Doe', '9876543210'],
+        ['Jane Smith', 'Michael Smith', '9876543211'],
+        ['Alex Johnson', 'David Johnson', '9876543212']
+    ];
+    
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 15 }
+    ];
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    
+    // Generate and download file
+    XLSX.writeFile(wb, 'Student_Upload_Template.xlsx');
+    
+    console.log('✅ Template downloaded');
 }
 
-// Phone Validation for Individual Student Form
-document.addEventListener('DOMContentLoaded', function() {
-    const mobileInput = document.getElementById('student-mobile');
-    
-    if (mobileInput) {
-        mobileInput.addEventListener('input', function() {
-            const hint = this.nextElementSibling;
-            const value = this.value.replace(/\D/g, '');
-            this.value = value;
-            
-            if (value.length === 10) {
-                this.style.borderColor = '#10B981';
-                this.style.backgroundColor = '#f0fdf4';
-                if (hint) {
-                    hint.textContent = '✓ Valid 10 digit number';
-                    hint.style.color = '#10B981';
-                    hint.style.fontWeight = '600';
-                }
-            } else if (value.length > 0) {
-                this.style.borderColor = '#EF4444';
-                this.style.backgroundColor = '#fef2f2';
-                if (hint) {
-                    hint.textContent = `✗ ${value.length}/10 digits`;
-                    hint.style.color = '#EF4444';
-                    hint.style.fontWeight = '600';
-                }
-            } else {
-                this.style.borderColor = '#e0e0e0';
-                this.style.backgroundColor = 'white';
-                if (hint) {
-                    hint.textContent = 'Enter 10 digits';
-                    hint.style.color = '#666';
-                    hint.style.fontWeight = 'normal';
-                }
+// Parse Excel File
+async function parseExcelFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                // Get first sheet
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                
+                // Convert to JSON
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { 
+                    header: 1,
+                    defval: '' // Default value for empty cells
+                });
+                
+                console.log('📊 Parsed Excel data:', jsonData);
+                
+                resolve(jsonData);
+            } catch (error) {
+                console.error('❌ Parse error:', error);
+                reject(error);
             }
-        });
-    }
-});
+        };
+        
+        reader.onerror = function(error) {
+            console.error('❌ File read error:', error);
+            reject(error);
+        };
+        
+        reader.readAsArrayBuffer(file);
+    });
+}
 
-// Bulk Upload Form Handler
-document.getElementById('bulk-upload-form').addEventListener('submit', async (e) => {
+// Validate Student Data
+function validateStudentData(row, rowIndex) {
+    const errors = [];
+    
+    // Ensure row has values
+    if (!row || row.length === 0) {
+        return { valid: false, errors: ['Empty row'] };
+    }
+    
+    const name = row[0] ? String(row[0]).trim() : '';
+    const fatherName = row[1] ? String(row[1]).trim() : '';
+    const mobileNo = row[2] ? String(row[2]).trim() : '';
+    
+    // Validate Name
+    if (!name || name.length === 0) {
+        errors.push('Name is required');
+    }
+    
+    // Validate Father Name
+    if (!fatherName || fatherName.length === 0) {
+        errors.push('Father name is required');
+    }
+    
+    // Validate Mobile
+    if (!mobileNo || mobileNo.length === 0) {
+        errors.push('Mobile number is required');
+    } else {
+        // Clean mobile number
+        const cleanedMobile = mobileNo.replace(/\D/g, '');
+        if (cleanedMobile.length !== 10) {
+            errors.push('Mobile must be 10 digits');
+        } else if (!/^[6-9]/.test(cleanedMobile)) {
+            errors.push('Mobile must start with 6-9');
+        }
+    }
+    
+    return {
+        valid: errors.length === 0,
+        errors: errors,
+        data: {
+            name: name,
+            fatherName: fatherName,
+            mobileNo: mobileNo.replace(/\D/g, '')
+        }
+    };
+}
+
+// Process and Upload Students
+async function processAndUploadStudents(excelData, classId) {
+    const results = {
+        total: 0,
+        successful: 0,
+        failed: 0,
+        errors: []
+    };
+    
+    // Skip header row (index 0)
+    const dataRows = excelData.slice(1);
+    
+    console.log(`📊 Processing ${dataRows.length} rows...`);
+    
+    for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const rowNumber = i + 2; // +2 because: +1 for array index, +1 for header row
+        
+        // Skip completely empty rows
+        const hasData = row.some(cell => cell && String(cell).trim().length > 0);
+        if (!hasData) {
+            console.log(`⏭️ Skipping empty row ${rowNumber}`);
+            continue;
+        }
+        
+        results.total++;
+        
+        // Validate data
+        const validation = validateStudentData(row, rowNumber);
+        
+        if (!validation.valid) {
+            results.failed++;
+            results.errors.push({
+                row: rowNumber,
+                errors: validation.errors
+            });
+            console.error(`❌ Row ${rowNumber} validation failed:`, validation.errors);
+            continue;
+        }
+        
+        // Try to upload
+        try {
+            const studentData = {
+                name: validation.data.name,
+                fatherName: validation.data.fatherName,
+                classId: classId,
+                mobileNo: validation.data.mobileNo
+            };
+            
+            console.log(`📤 Uploading student from row ${rowNumber}:`, studentData);
+            
+            const response = await apiPost(API_ENDPOINTS.STUDENTS, studentData, true);
+            
+            if (response.success) {
+                results.successful++;
+                console.log(`✅ Row ${rowNumber} uploaded successfully`);
+            } else {
+                results.failed++;
+                results.errors.push({
+                    row: rowNumber,
+                    errors: [response.message || 'Upload failed']
+                });
+                console.error(`❌ Row ${rowNumber} upload failed:`, response.message);
+            }
+            
+        } catch (error) {
+            results.failed++;
+            results.errors.push({
+                row: rowNumber,
+                errors: [error.message]
+            });
+            console.error(`❌ Row ${rowNumber} error:`, error);
+        }
+    }
+    
+    return results;
+}
+
+// Handle Bulk Upload Form Submission
+async function handleBulkUpload(e) {
     e.preventDefault();
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 BULK UPLOAD STARTED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     const classId = document.getElementById('bulk-class-select').value;
     const fileInput = document.getElementById('student-file');
     const file = fileInput.files[0];
     
-    if (!file) {
-        showError('Please select a file');
-        return;
-    }
-    
+    // Validation
     if (!classId) {
         showError('Please select a class');
         return;
     }
     
-    // File size check (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-        showError('File size must be less than 10MB');
+    if (!file) {
+        showError('Please select an Excel file');
         return;
     }
     
-    const formData = new FormData();
-    formData.append('classId', classId);
-    formData.append('file', file);
-    
-    showLoading(true);
+    // Check file type
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+        showError('Please upload only Excel files (.xlsx or .xls)');
+        return;
+    }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/students/bulk-upload`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: formData
-        });
+        // Show loading
+        showLoading('Reading Excel file...');
         
-        const data = await response.json();
+        // Parse Excel
+        const excelData = await parseExcelFile(file);
         
-        if (data.success) {
-            const resultsDiv = document.getElementById('upload-results');
-            const statsDiv = document.getElementById('upload-stats');
-            
-            resultsDiv.style.display = 'block';
-            resultsDiv.style.background = '#f0fdf4';
-            resultsDiv.style.border = '1px solid #86efac';
-            
-            let statsHTML = `
-                <p style="color:#10B981; font-weight:600;">✅ Upload Successful!</p>
-                <ul style="margin:10px 0; padding-left:20px;">
-                    <li><strong>Total Processed:</strong> ${data.stats.totalProcessed}</li>
-                    <li><strong>Successfully Added:</strong> ${data.stats.successful}</li>
-                    <li><strong>Failed/Duplicates:</strong> ${data.stats.failed}</li>
-                </ul>
-            `;
-            
-            if (data.stats.failed > 0) {
-                statsHTML += `<p style="color:#f59e0b; margin-top:10px;"><strong>Note:</strong> ${data.stats.failed} students were not added (possibly duplicates or validation errors)</p>`;
-            }
-            
-            statsDiv.innerHTML = statsHTML;
-            
-            // Reset form
-            document.getElementById('bulk-upload-form').reset();
-            
-            // Reload students list
-            if (typeof loadAllStudents === 'function') {
-                setTimeout(() => loadAllStudents(), 1000);
-            }
-            
-            showSuccess(`🎉 Successfully uploaded ${data.stats.successful} students!`);
-            
-            // Hide results after 10 seconds
-            setTimeout(() => {
-                resultsDiv.style.display = 'none';
-            }, 10000);
-            
-        } else {
-            const resultsDiv = document.getElementById('upload-results');
-            const statsDiv = document.getElementById('upload-stats');
-            
-            resultsDiv.style.display = 'block';
-            resultsDiv.style.background = '#fef2f2';
-            resultsDiv.style.border = '1px solid #fca5a5';
-            
-            statsDiv.innerHTML = `
-                <p style="color:#EF4444; font-weight:600;">❌ Upload Failed</p>
-                <p style="margin:10px 0;">${data.message || 'Please check your file and try again'}</p>
-            `;
-            
-            showError(data.message || 'Upload failed');
+        if (!excelData || excelData.length <= 1) {
+            hideLoading();
+            showError('Excel file is empty or has no data rows');
+            return;
         }
+        
+        // Update loading message
+        showLoading(`Processing ${excelData.length - 1} students...`);
+        
+        // Process and upload
+        const results = await processAndUploadStudents(excelData, classId);
+        
+        hideLoading();
+        
+        // Show results in modal
+        showUploadResultsModal(results);
+        
+        // Reset form
+        document.getElementById('bulk-upload-form').reset();
+        
+        // Reload students list
+        if (results.successful > 0) {
+            loadStudents();
+        }
+        
     } catch (error) {
-        console.error('Upload error:', error);
-        showError('Network error: ' + error.message);
-    } finally {
-        showLoading(false);
+        hideLoading();
+        console.error('💥 Bulk upload error:', error);
+        showError('Upload failed: ' + error.message);
     }
-});
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 BULK UPLOAD COMPLETED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+}
 
-// Load classes for dropdowns
-async function loadClassesForStudents() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/classes`, {
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.data) {
-            const bulkSelect = document.getElementById('bulk-class-select');
-            const individualSelect = document.getElementById('student-class');
-            
-            [bulkSelect, individualSelect].forEach(select => {
-                if (select) {
-                    select.innerHTML = '<option value="">Choose a class...</option>';
-                    data.data.forEach(cls => {
-                        const option = document.createElement('option');
-                        option.value = cls._id;
-                        option.textContent = cls.className + (cls.nickname ? ` (${cls.nickname})` : '');
-                        select.appendChild(option);
-                    });
-                }
-            });
-        }
-    } catch (error) {
-        console.error('Load classes error:', error);
+// Show Upload Results Modal
+function showUploadResultsModal(results) {
+    // Create modal HTML
+    const modalHTML = `
+        <div id="upload-results-modal" class="upload-modal-overlay">
+            <div class="upload-modal-content">
+                <div class="upload-modal-header">
+                    <h3>📊 Upload Results</h3>
+                </div>
+                
+                <div class="upload-modal-body">
+                    <div class="upload-stats">
+                        <div class="stat-card total">
+                            <div class="stat-number">${results.total}</div>
+                            <div class="stat-label">Total Processed</div>
+                        </div>
+                        
+                        <div class="stat-card success">
+                            <div class="stat-number">${results.successful}</div>
+                            <div class="stat-label">Successfully Added</div>
+                        </div>
+                        
+                        <div class="stat-card failed">
+                            <div class="stat-number">${results.failed}</div>
+                            <div class="stat-label">Failed</div>
+                        </div>
+                    </div>
+                    
+                    ${results.errors.length > 0 ? `
+                        <div class="upload-errors">
+                            <h4>❌ Errors:</h4>
+                            <div class="errors-list">
+                                ${results.errors.map(err => `
+                                    <div class="error-item">
+                                        <strong>Row ${err.row}:</strong> ${err.errors.join(', ')}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="upload-modal-footer">
+                    <button class="btn-primary" onclick="closeUploadResultsModal()">OK</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('upload-results-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+// Close Upload Results Modal
+function closeUploadResultsModal() {
+    const modal = document.getElementById('upload-results-modal');
+    if (modal) {
+        modal.remove();
     }
 }
 
-// Initialize students section
-function initStudentsSection() {
-    console.log('Initializing students section...');
-    loadClassesForStudents();
-    if (typeof loadAllStudents === 'function') {
-        loadAllStudents();
-    }
-}
-
-// Helper function to show loading
-function showLoading(show) {
-    const loading = document.getElementById('loading');
-    if (loading) {
-        loading.style.display = show ? 'block' : 'none';
-    }
-}
-
-// Helper function to show success message
-function showSuccess(message) {
-    const successDiv = document.getElementById('success-message');
-    if (successDiv) {
-        successDiv.textContent = message;
-        successDiv.style.display = 'block';
-        successDiv.style.padding = '15px';
-        successDiv.style.background = '#f0fdf4';
-        successDiv.style.border = '1px solid #86efac';
-        successDiv.style.borderRadius = '8px';
-        successDiv.style.marginBottom = '20px';
-        setTimeout(() => {
-            successDiv.style.display = 'none';
-        }, 5000);
-    }
-}
-
-// Helper function to show error message
-function showError(message) {
-    const errorDiv = document.getElementById('error-message');
-    if (errorDiv) {
-        errorDiv.textContent = message;
-        errorDiv.style.display = 'block';
-        errorDiv.style.padding = '15px';
-        errorDiv.style.background = '#fef2f2';
-        errorDiv.style.border = '1px solid #fca5a5';
-        errorDiv.style.borderRadius = '8px';
-        errorDiv.style.marginBottom = '20px';
-        setTimeout(() => {
-            errorDiv.style.display = 'none';
-        }, 5000);
-    }
-}
-
-// Override or enhance showSection function
-(function() {
-    const originalShowSection = window.showSection;
-    window.showSection = function(sectionName) {
-        // Call original if it exists
-        if (originalShowSection && typeof originalShowSection === 'function') {
-            originalShowSection(sectionName);
-        } else {
-            // Fallback: hide all sections and show selected one
-            const sections = document.querySelectorAll('.section');
-            sections.forEach(section => {
-                section.style.display = 'none';
-            });
-            
-            const targetSection = document.getElementById('section-' + sectionName);
-            if (targetSection) {
-                targetSection.style.display = 'block';
-            }
-        }
-        
-        // If students section, initialize it
-        if (sectionName === 'students') {
-            setTimeout(() => initStudentsSection(), 100);
-        }
-    };
-})();
-
-console.log('✅ Students bulk upload script loaded');
+console.log('✅ students-bulk.js loaded successfully');
