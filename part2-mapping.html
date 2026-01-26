@@ -166,6 +166,194 @@
             animation: shake 0.5s ease-out;
         }
 
+        /* ===================================
+           EDIT MODAL STYLES
+           =================================== */
+        
+        #edit-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 10002;
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        #edit-modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .edit-modal-content {
+            background: var(--white);
+            border-radius: var(--radius-3xl);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            animation: slideUp 0.4s ease-out;
+        }
+
+        .edit-modal-header {
+            background: var(--gradient-primary);
+            color: var(--white);
+            padding: var(--space-6) var(--space-8);
+            border-radius: var(--radius-3xl) var(--radius-3xl) 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .edit-modal-header h2 {
+            margin: 0;
+            font-size: var(--text-2xl);
+            font-weight: 700;
+        }
+
+        .edit-modal-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: var(--white);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: var(--text-xl);
+            font-weight: 700;
+            cursor: pointer;
+            transition: all var(--duration-200) var(--ease-out);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .edit-modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+
+        .edit-modal-body {
+            padding: var(--space-8);
+        }
+
+        .edit-form-group {
+            margin-bottom: var(--space-6);
+        }
+
+        .edit-form-group label {
+            display: block;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: var(--space-2);
+            font-size: var(--text-sm);
+            text-transform: uppercase;
+            letter-spacing: var(--tracking-wide);
+        }
+
+        .edit-form-group select,
+        .edit-form-group input[type="text"] {
+            width: 100%;
+            padding: var(--space-4) var(--space-6);
+            font-size: var(--text-base);
+            font-family: inherit;
+            color: var(--gray-900);
+            background: var(--white);
+            border: 2px solid var(--gray-300);
+            border-radius: var(--radius-lg);
+            transition: all var(--duration-200) var(--ease-out);
+        }
+
+        .edit-form-group select:focus,
+        .edit-form-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-600);
+            box-shadow: 0 0 0 4px var(--primary-100);
+        }
+
+        .edit-form-group .disabled-input {
+            background: var(--gray-100);
+            color: var(--gray-600);
+            cursor: not-allowed;
+        }
+
+        .edit-checkbox-container {
+            background: var(--gray-50);
+            padding: var(--space-6);
+            border-radius: var(--radius-xl);
+            border: 2px solid var(--gray-300);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .edit-checkbox-container label {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-3) var(--space-4);
+            margin-bottom: var(--space-2);
+            border-radius: var(--radius-md);
+            transition: all var(--duration-150) var(--ease-out);
+            text-transform: none;
+            font-weight: 500;
+            letter-spacing: normal;
+            cursor: pointer;
+        }
+
+        .edit-checkbox-container label:hover {
+            background: var(--primary-50);
+            color: var(--primary-700);
+        }
+
+        .edit-checkbox-container input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--primary-600);
+        }
+
+        .edit-modal-footer {
+            padding: var(--space-6) var(--space-8);
+            border-top: 2px solid var(--gray-200);
+            display: flex;
+            gap: var(--space-4);
+            justify-content: flex-end;
+        }
+
+        .edit-modal-footer button {
+            padding: var(--space-4) var(--space-8);
+            font-weight: 600;
+            border-radius: var(--radius-xl);
+            font-size: var(--text-base);
+            cursor: pointer;
+            transition: all var(--duration-200) var(--ease-out);
+            border: 2px solid transparent;
+        }
+
+        .edit-modal-cancel {
+            background: var(--gray-200);
+            color: var(--gray-700);
+        }
+
+        .edit-modal-cancel:hover {
+            background: var(--gray-300);
+        }
+
+        .edit-modal-save {
+            background: var(--gradient-primary);
+            color: var(--white);
+            box-shadow: var(--shadow-md);
+        }
+
+        .edit-modal-save:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
         /* Section Tabs - Enhanced */
         #section-tabs {
             display: flex;
@@ -501,7 +689,6 @@
                 padding: var(--space-6);
             }
 
-            /* Messages on mobile */
             #loading,
             #error-message,
             #success-message {
@@ -509,6 +696,11 @@
                 max-width: 90%;
                 padding: var(--space-6);
                 font-size: var(--text-base);
+            }
+
+            .edit-modal-content {
+                width: 95%;
+                max-height: 90vh;
             }
         }
 
@@ -557,6 +749,17 @@
             75% { transform: translateX(10px); }
         }
 
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Conditional Display Helper */
         #ts-subjects-container {
             display: none;
@@ -578,6 +781,23 @@
         <div id="loading">Loading...</div>
         <div id="error-message"></div>
         <div id="success-message"></div>
+
+        <!-- Edit Modal -->
+        <div id="edit-modal">
+            <div class="edit-modal-content">
+                <div class="edit-modal-header">
+                    <h2 id="edit-modal-title">Edit Assignment</h2>
+                    <button class="edit-modal-close" onclick="closeEditModal()">×</button>
+                </div>
+                <div class="edit-modal-body" id="edit-modal-body">
+                    <!-- Dynamic content will be inserted here -->
+                </div>
+                <div class="edit-modal-footer">
+                    <button class="edit-modal-cancel" onclick="closeEditModal()">Cancel</button>
+                    <button class="edit-modal-save" id="edit-modal-save">Save Changes</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Header -->
         <div id="header">

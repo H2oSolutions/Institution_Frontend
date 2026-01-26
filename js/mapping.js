@@ -1,4 +1,4 @@
-// mapping.js - Part 2: Mapping Logic
+// mapping.js - COMPLETE WITH EDIT MODALS & CLASS NICKNAME DISPLAY
 
 let staffData = [];
 let classesData = [];
@@ -8,8 +8,24 @@ let staffClassMappings = [];
 let classSubjectMappings = [];
 let teacherSubjectMappings = [];
 
+// Current edit state
+let currentEditMode = null;
+let currentEditId = null;
+let currentEditData = null;
+
 // ===================================
-// MESSAGE FUNCTIONS (Loading, Success, Error)
+// HELPER: FORMAT CLASS NAME WITH NICKNAME
+// ===================================
+function formatClassName(classObj) {
+    if (!classObj) return '-';
+    if (classObj.nickname && classObj.nickname.trim()) {
+        return `${classObj.className} (${classObj.nickname})`;
+    }
+    return classObj.className;
+}
+
+// ===================================
+// MESSAGE FUNCTIONS
 // ===================================
 
 function showLoading(message = 'Loading...') {
@@ -19,7 +35,6 @@ function showLoading(message = 'Loading...') {
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide error and success
     if (errorEl) {
         errorEl.classList.remove('show');
         errorEl.style.display = 'none';
@@ -29,34 +44,26 @@ function showLoading(message = 'Loading...') {
         successEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show loading
     if (loadingEl) {
         loadingEl.textContent = message;
         loadingEl.style.display = 'block';
         loadingEl.classList.add('show');
-        console.log('✅ Loading shown:', message);
-    } else {
-        console.error('❌ Loading element not found!');
     }
 }
 
 function hideLoading() {
-    console.log('🔄 hideLoading called');
     const loadingEl = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
     
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
-        console.log('✅ Loading hidden');
     }
     
-    // Hide overlay if no messages are showing
     const errorEl = document.getElementById('error-message');
     const successEl = document.getElementById('success-message');
     const anyMessageShowing = (errorEl && errorEl.classList.contains('show')) || 
@@ -68,13 +75,11 @@ function hideLoading() {
 }
 
 function showSuccess(message) {
-    console.log('✅ showSuccess called:', message);
     const successEl = document.getElementById('success-message');
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide loading and error
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
@@ -84,40 +89,31 @@ function showSuccess(message) {
         errorEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show success
     if (successEl) {
         successEl.textContent = message;
         successEl.style.display = 'block';
         successEl.classList.add('show');
-        console.log('✅ Success shown:', message);
         
-        // Auto-hide after 5 seconds
         setTimeout(() => {
             successEl.classList.remove('show');
             successEl.style.display = 'none';
             if (overlay) {
                 overlay.classList.remove('show');
             }
-            console.log('✅ Success auto-hidden');
         }, 5000);
-    } else {
-        console.error('❌ Success element not found!');
     }
 }
 
 function showError(message) {
-    console.log('❌ showError called:', message);
     const errorEl = document.getElementById('error-message');
     const loadingEl = document.getElementById('loading');
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide loading and success
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
@@ -127,37 +123,28 @@ function showError(message) {
         successEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show error
     if (errorEl) {
         errorEl.textContent = message;
         errorEl.style.display = 'block';
         errorEl.classList.add('show');
-        console.log('❌ Error shown:', message);
         
-        // Auto-hide after 7 seconds
         setTimeout(() => {
             errorEl.classList.remove('show');
             errorEl.style.display = 'none';
             if (overlay) {
                 overlay.classList.remove('show');
             }
-            console.log('❌ Error auto-hidden');
         }, 7000);
-    } else {
-        console.error('❌ Error element not found!');
     }
 }
 
-// Helper function from basic-info.js
 function populateDropdown(selectElement, data, valueKey, textKey) {
     if (!selectElement) return;
     
-    // Clear existing options except the first one
     selectElement.innerHTML = '<option value="">-- Select --</option>';
     
     data.forEach(item => {
@@ -169,32 +156,308 @@ function populateDropdown(selectElement, data, valueKey, textKey) {
 }
 
 // ===================================
+// EDIT MODAL FUNCTIONS
+// ===================================
+
+function openEditModal(mode, id, data) {
+    currentEditMode = mode;
+    currentEditId = id;
+    currentEditData = data;
+    
+    const modal = document.getElementById('edit-modal');
+    const modalTitle = document.getElementById('edit-modal-title');
+    const modalBody = document.getElementById('edit-modal-body');
+    
+    const titles = {
+        'staff-class': '✏️ Edit Staff Assignment',
+        'class-subject': '✏️ Edit Class Subjects',
+        'teacher-subject': '✏️ Edit Teacher Assignment'
+    };
+    modalTitle.textContent = titles[mode] || 'Edit Assignment';
+    
+    if (mode === 'staff-class') {
+        modalBody.innerHTML = generateStaffClassEditForm(data);
+        setupStaffClassEditForm(data);
+    } else if (mode === 'class-subject') {
+        modalBody.innerHTML = generateClassSubjectEditForm(data);
+        setupClassSubjectEditForm(data);
+    } else if (mode === 'teacher-subject') {
+        modalBody.innerHTML = generateTeacherSubjectEditForm(data);
+        setupTeacherSubjectEditForm(data);
+    }
+    
+    modal.classList.add('show');
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-modal');
+    modal.classList.remove('show');
+    currentEditMode = null;
+    currentEditId = null;
+    currentEditData = null;
+}
+
+function generateStaffClassEditForm(data) {
+    return `
+        <div class="edit-form-group">
+            <label>Staff Name</label>
+            <input type="text" value="${data.staffId?.name || '-'}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label for="edit-designation">Designation *</label>
+            <select id="edit-designation" required>
+                <option value="">-- Select Designation --</option>
+            </select>
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Assigned Classes *</label>
+            <div class="edit-checkbox-container" id="edit-classes-container">
+                <!-- Classes will be inserted here -->
+            </div>
+        </div>
+    `;
+}
+
+function setupStaffClassEditForm(data) {
+    const desSelect = document.getElementById('edit-designation');
+    populateDropdown(desSelect, designationsData, '_id', 'name');
+    desSelect.value = data.designationId?._id || '';
+    
+    const container = document.getElementById('edit-classes-container');
+    const assignedClassIds = data.assignedClasses.map(c => c._id);
+    
+    container.innerHTML = '';
+    classesData.forEach(cls => {
+        const isChecked = assignedClassIds.includes(cls._id);
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="edit-class" value="${cls._id}" ${isChecked ? 'checked' : ''}>
+            ${formatClassName(cls)}
+        `;
+        container.appendChild(label);
+    });
+}
+
+function generateClassSubjectEditForm(data) {
+    return `
+        <div class="edit-form-group">
+            <label>Class</label>
+            <input type="text" value="${formatClassName(data.classId)}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Assigned Subjects *</label>
+            <div class="edit-checkbox-container" id="edit-subjects-container">
+                <!-- Subjects will be inserted here -->
+            </div>
+        </div>
+    `;
+}
+
+function setupClassSubjectEditForm(data) {
+    const container = document.getElementById('edit-subjects-container');
+    const assignedSubjectIds = data.subjectIds.map(s => s._id);
+    
+    container.innerHTML = '';
+    subjectsData.forEach(subject => {
+        const isChecked = assignedSubjectIds.includes(subject._id);
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="edit-subject" value="${subject._id}" ${isChecked ? 'checked' : ''}>
+            ${subject.subjectName}
+        `;
+        container.appendChild(label);
+    });
+}
+
+function generateTeacherSubjectEditForm(data) {
+    return `
+        <div class="edit-form-group">
+            <label>Teacher Name</label>
+            <input type="text" value="${data.teacherId?.name || '-'}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Class</label>
+            <input type="text" value="${formatClassName(data.classId)}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Assigned Subjects *</label>
+            <div class="edit-checkbox-container" id="edit-subjects-container">
+                <!-- Subjects will be inserted here -->
+            </div>
+        </div>
+    `;
+}
+
+function setupTeacherSubjectEditForm(data) {
+    const classMapping = classSubjectMappings.find(m => m.classId._id === data.classId._id);
+    
+    if (!classMapping || !classMapping.subjectIds) {
+        showError('No subjects found for this class');
+        return;
+    }
+    
+    const container = document.getElementById('edit-subjects-container');
+    const assignedSubjectIds = data.subjectIds.map(s => s._id);
+    
+    container.innerHTML = '';
+    classMapping.subjectIds.forEach(subject => {
+        const isChecked = assignedSubjectIds.includes(subject._id);
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="edit-subject" value="${subject._id}" ${isChecked ? 'checked' : ''}>
+            ${subject.subjectName}
+        `;
+        container.appendChild(label);
+    });
+}
+
+async function saveEditModal() {
+    if (!currentEditMode || !currentEditId) return;
+    
+    try {
+        if (currentEditMode === 'staff-class') {
+            await saveStaffClassEdit();
+        } else if (currentEditMode === 'class-subject') {
+            await saveClassSubjectEdit();
+        } else if (currentEditMode === 'teacher-subject') {
+            await saveTeacherSubjectEdit();
+        }
+    } catch (error) {
+        console.error('Save edit error:', error);
+        showError(error.message);
+    }
+}
+
+async function saveStaffClassEdit() {
+    const designationId = document.getElementById('edit-designation').value;
+    const selectedClasses = Array.from(document.querySelectorAll('input[name="edit-class"]:checked'))
+        .map(cb => cb.value);
+    
+    if (!designationId) {
+        showError('Please select a designation');
+        return;
+    }
+    
+    if (selectedClasses.length === 0) {
+        showError('Please select at least one class');
+        return;
+    }
+    
+    showLoading('Updating staff assignment...');
+    
+    const response = await apiPut(
+        API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + currentEditId,
+        {
+            designationId: designationId,
+            assignedClasses: selectedClasses
+        },
+        true
+    );
+    
+    hideLoading();
+    
+    if (response.success) {
+        showSuccess(response.message || 'Staff assignment updated successfully!');
+        closeEditModal();
+        loadAllData();
+    }
+}
+
+async function saveClassSubjectEdit() {
+    const selectedSubjects = Array.from(document.querySelectorAll('input[name="edit-subject"]:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedSubjects.length === 0) {
+        showError('Please select at least one subject');
+        return;
+    }
+    
+    showLoading('Updating class subjects...');
+    
+    // Use POST endpoint as class-subject uses upsert pattern
+    const response = await apiPost(
+        API_ENDPOINTS.CLASS_SUBJECT_MAPPING,
+        {
+            classId: currentEditData.classId._id,
+            subjectIds: selectedSubjects
+        },
+        true
+    );
+    
+    hideLoading();
+    
+    if (response.success) {
+        showSuccess(response.message || 'Class subjects updated successfully!');
+        closeEditModal();
+        loadAllData();
+    }
+}
+
+async function saveTeacherSubjectEdit() {
+    const selectedSubjects = Array.from(document.querySelectorAll('input[name="edit-subject"]:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedSubjects.length === 0) {
+        showError('Please select at least one subject');
+        return;
+    }
+    
+    showLoading('Updating teacher assignment...');
+    
+    const response = await apiPut(
+        API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + currentEditId,
+        {
+            subjectIds: selectedSubjects
+        },
+        true
+    );
+    
+    hideLoading();
+    
+    if (response.success) {
+        showSuccess(response.message || 'Teacher assignment updated successfully!');
+        closeEditModal();
+        loadAllData();
+    }
+}
+
+// ===================================
 // INITIALIZATION
 // ===================================
 
 document.addEventListener('DOMContentLoaded', function() {
     if (!checkAuth()) return;
     
-    // Load all data
     loadAllData();
-    
-    // Show first section
     showMappingSection('staff-class');
     
-    // Setup form handlers
     document.getElementById('assign-staff-class-form').addEventListener('submit', handleAssignStaffToClasses);
     document.getElementById('assign-class-subject-form').addEventListener('submit', handleAssignSubjectsToClass);
     document.getElementById('assign-teacher-subject-form').addEventListener('submit', handleAssignTeacherToSubjects);
-    
-    // Setup class selection for teacher-subject form
     document.getElementById('ts-class').addEventListener('change', handleTeacherClassSelection);
+    
+    const saveBtn = document.getElementById('edit-modal-save');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveEditModal);
+    }
+    
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('edit-modal');
+        if (e.target === modal) {
+            closeEditModal();
+        }
+    });
 });
 
 async function loadAllData() {
     try {
         showLoading('Loading mapping data...');
         
-        // Load all required data
         const [staff, classes, subjects, designations, mappings] = await Promise.all([
             apiGet(API_ENDPOINTS.STAFF, true),
             apiGet(API_ENDPOINTS.CLASSES, true),
@@ -216,11 +479,9 @@ async function loadAllData() {
         
         hideLoading();
         
-        // Populate dropdowns and display data
         setupStaffClassSection();
         setupClassSubjectSection();
         setupTeacherSubjectSection();
-        
         displayAllMappings();
         
     } catch (error) {
@@ -230,15 +491,12 @@ async function loadAllData() {
 }
 
 function showMappingSection(sectionName) {
-    // Hide all sections
     const sections = document.querySelectorAll('.mapping-section');
     sections.forEach(s => s.style.display = 'none');
     
-    // Remove active style from all tabs
     const tabs = document.querySelectorAll('#section-tabs button');
     tabs.forEach(t => t.style.fontWeight = 'normal');
     
-    // Show selected section
     document.getElementById('section-' + sectionName).style.display = 'block';
     document.getElementById('tab-' + sectionName).style.fontWeight = 'bold';
 }
@@ -248,15 +506,12 @@ function showMappingSection(sectionName) {
 // ===================================
 
 function setupStaffClassSection() {
-    // Populate staff dropdown
     const staffSelect = document.getElementById('sc-staff-name');
     populateDropdown(staffSelect, staffData, '_id', 'name');
     
-    // Populate designation dropdown
     const desSelect = document.getElementById('sc-designation');
     populateDropdown(desSelect, designationsData, '_id', 'name');
     
-    // Create class checkboxes
     const classesContainer = document.getElementById('sc-classes-checkboxes');
     classesContainer.innerHTML = '';
     
@@ -264,7 +519,7 @@ function setupStaffClassSection() {
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="sc-class" value="${cls._id}">
-            ${cls.nickname || cls.className}
+            ${formatClassName(cls)}
         `;
         classesContainer.appendChild(label);
         classesContainer.appendChild(document.createElement('br'));
@@ -281,8 +536,6 @@ async function handleAssignStaffToClasses(e) {
     
     const staffId = document.getElementById('sc-staff-name').value;
     const designationId = document.getElementById('sc-designation').value;
-    
-    // Get selected classes
     const selectedClasses = Array.from(document.querySelectorAll('input[name="sc-class"]:checked'))
         .map(cb => cb.value);
     
@@ -327,7 +580,7 @@ function displayStaffClassMappings() {
     
     staffClassMappings.forEach(mapping => {
         const row = tbody.insertRow();
-        const classes = mapping.assignedClasses.map(c => c.className).join(', ') || 'None';
+        const classes = mapping.assignedClasses.map(c => formatClassName(c)).join(', ') || 'None';
         
         row.innerHTML = `
             <td>${mapping.staffId?.name || '-'}</td>
@@ -342,7 +595,10 @@ function displayStaffClassMappings() {
 }
 
 async function editStaffClassMapping(id) {
-    showError('Please use the form above to update staff assignments');
+    const mapping = staffClassMappings.find(m => m._id === id);
+    if (mapping) {
+        openEditModal('staff-class', id, mapping);
+    }
 }
 
 async function deleteStaffClassMapping(id) {
@@ -370,11 +626,9 @@ async function deleteStaffClassMapping(id) {
 // ===================================
 
 function setupClassSubjectSection() {
-    // Populate class dropdown
     const classSelect = document.getElementById('cs-class');
-    populateDropdown(classSelect, classesData, '_id', data => data.nickname || data.className);
+    populateDropdown(classSelect, classesData, '_id', formatClassName);
     
-    // Create subject checkboxes
     const subjectsContainer = document.getElementById('cs-subjects-checkboxes');
     subjectsContainer.innerHTML = '';
     
@@ -398,8 +652,6 @@ async function handleAssignSubjectsToClass(e) {
     e.preventDefault();
     
     const classId = document.getElementById('cs-class').value;
-    
-    // Get selected subjects
     const selectedSubjects = Array.from(document.querySelectorAll('input[name="cs-subject"]:checked'))
         .map(cb => cb.value);
     
@@ -446,7 +698,7 @@ function displayClassSubjectMappings() {
         const subjects = mapping.subjectIds.map(s => s.subjectName).join(', ') || 'None';
         
         row.innerHTML = `
-            <td>${mapping.classId?.className || '-'} ${mapping.classId?.nickname ? '(' + mapping.classId.nickname + ')' : ''}</td>
+            <td>${formatClassName(mapping.classId)}</td>
             <td>${subjects}</td>
             <td>
                 <button onclick="editClassSubjectMapping('${mapping.classId._id}')">Edit</button>
@@ -456,7 +708,10 @@ function displayClassSubjectMappings() {
 }
 
 async function editClassSubjectMapping(classId) {
-    showError('Please use the form above to update class subject assignments');
+    const mapping = classSubjectMappings.find(m => m.classId._id === classId);
+    if (mapping) {
+        openEditModal('class-subject', mapping._id, mapping);
+    }
 }
 
 // ===================================
@@ -464,13 +719,11 @@ async function editClassSubjectMapping(classId) {
 // ===================================
 
 function setupTeacherSubjectSection() {
-    // Populate teacher dropdown (only staff members)
     const teacherSelect = document.getElementById('ts-teacher');
     populateDropdown(teacherSelect, staffData, '_id', 'name');
     
-    // Populate class dropdown
     const classSelect = document.getElementById('ts-class');
-    populateDropdown(classSelect, classesData, '_id', data => data.nickname || data.className);
+    populateDropdown(classSelect, classesData, '_id', formatClassName);
 }
 
 async function handleTeacherClassSelection() {
@@ -481,7 +734,6 @@ async function handleTeacherClassSelection() {
         return;
     }
     
-    // Find subjects assigned to this class
     const classMapping = classSubjectMappings.find(m => m.classId._id === classId);
     
     if (!classMapping || !classMapping.subjectIds || classMapping.subjectIds.length === 0) {
@@ -490,7 +742,6 @@ async function handleTeacherClassSelection() {
         return;
     }
     
-    // Show subjects as checkboxes
     const container = document.getElementById('ts-subjects-checkboxes');
     container.innerHTML = '';
     
@@ -512,8 +763,6 @@ async function handleAssignTeacherToSubjects(e) {
     
     const teacherId = document.getElementById('ts-teacher').value;
     const classId = document.getElementById('ts-class').value;
-    
-    // Get selected subjects
     const selectedSubjects = Array.from(document.querySelectorAll('input[name="ts-subject"]:checked'))
         .map(cb => cb.value);
     
@@ -562,7 +811,7 @@ function displayTeacherSubjectMappings() {
         
         row.innerHTML = `
             <td>${mapping.teacherId?.name || '-'}</td>
-            <td>${mapping.classId?.className || '-'} ${mapping.classId?.nickname ? '(' + mapping.classId.nickname + ')' : ''}</td>
+            <td>${formatClassName(mapping.classId)}</td>
             <td>${subjects}</td>
             <td>
                 <button onclick="editTeacherSubjectMapping('${mapping._id}')">Edit</button>
@@ -573,7 +822,10 @@ function displayTeacherSubjectMappings() {
 }
 
 async function editTeacherSubjectMapping(id) {
-    showError('Please use the form above to update teacher subject assignments');
+    const mapping = teacherSubjectMappings.find(m => m._id === id);
+    if (mapping) {
+        openEditModal('teacher-subject', id, mapping);
+    }
 }
 
 async function deleteTeacherSubjectMapping(id) {
