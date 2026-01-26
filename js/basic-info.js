@@ -194,44 +194,53 @@ function showUploadResultsModal(results) {
         return;
     }
     
+    // Ensure results object has all required properties
+    const safeResults = {
+        total: results.total || 0,
+        successful: results.successful || 0,
+        failed: results.failed || 0,
+        totalInClass: results.totalInClass || 0,
+        errors: results.errors || []
+    };
+    
     // Build stats HTML
     let statsHTML = '';
     
     // Total processed
-    if (results.total !== undefined) {
+    if (safeResults.total !== undefined) {
         statsHTML += `
             <div class="stat-card total">
-                <div class="stat-number">${results.total}</div>
+                <div class="stat-number">${safeResults.total}</div>
                 <div class="stat-label">Total Processed</div>
             </div>
         `;
     }
     
     // Successfully added
-    if (results.successful !== undefined) {
+    if (safeResults.successful !== undefined) {
         statsHTML += `
             <div class="stat-card success">
-                <div class="stat-number">${results.successful}</div>
+                <div class="stat-number">${safeResults.successful}</div>
                 <div class="stat-label">Successfully Added</div>
             </div>
         `;
     }
     
     // Failed
-    if (results.failed !== undefined) {
+    if (safeResults.failed !== undefined) {
         statsHTML += `
             <div class="stat-card failed">
-                <div class="stat-number">${results.failed}</div>
+                <div class="stat-number">${safeResults.failed}</div>
                 <div class="stat-label">Failed</div>
             </div>
         `;
     }
     
     // Total students in class now
-    if (results.totalInClass !== undefined) {
+    if (safeResults.totalInClass !== undefined) {
         statsHTML += `
             <div class="stat-card class-total">
-                <div class="stat-number">${results.totalInClass}</div>
+                <div class="stat-number">${safeResults.totalInClass}</div>
                 <div class="stat-label">Total in Class Now</div>
             </div>
         `;
@@ -240,9 +249,9 @@ function showUploadResultsModal(results) {
     statsContainer.innerHTML = statsHTML;
     
     // Show errors if any
-    if (results.errors && results.errors.length > 0) {
+    if (safeResults.errors && Array.isArray(safeResults.errors) && safeResults.errors.length > 0) {
         errorsContainer.style.display = 'block';
-        errorsList.innerHTML = results.errors.map(err => `
+        errorsList.innerHTML = safeResults.errors.map(err => `
             <div class="error-item">
                 <strong>Row ${err.row || 'N/A'}:</strong> ${err.message || err}
             </div>
@@ -1058,7 +1067,8 @@ async function handleAddStudent(e) {
                 total: 1,
                 successful: 1,
                 failed: 0,
-                totalInClass: totalInClass
+                totalInClass: totalInClass,
+                errors: []
             });
             
             const form = document.getElementById('add-student-form');
