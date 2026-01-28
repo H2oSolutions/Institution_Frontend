@@ -1,4 +1,4 @@
-// staff-dashboard.js - FIXED VERSION
+// staff-dashboard.js - WORKS WITHOUT LOGIN CHANGES
 
 // ===============================
 // INITIALIZATION
@@ -44,7 +44,7 @@ async function loadStaffDashboard() {
     try {
         showLoading('Loading your dashboard...');
         
-        // Fetch staff profile
+        // Fetch staff profile - THIS HAS EVERYTHING WE NEED
         const profileResponse = await apiGet(API_ENDPOINTS.STAFF_PROFILE, true);
         
         console.log('📊 Staff Profile API Response:', profileResponse);
@@ -59,11 +59,13 @@ async function loadStaffDashboard() {
             throw new Error('No data received from server');
         }
         
+        console.log('✅ Profile data received:', data);
+        
+        // 🔥 SMART: Extract and save institutionCode if missing
+        ensureInstitutionCode(data);
+        
         // Display profile
         displayStaffProfile(data);
-        
-        // Fetch assignments
-        await loadStaffAssignments();
         
         hideLoading();
         
@@ -77,266 +79,225 @@ async function loadStaffDashboard() {
 }
 
 // ===============================
-// DISPLAY STAFF PROFILE - FIXED
+// ENSURE INSTITUTION CODE
+// ===============================
+
+function ensureInstitutionCode(data) {
+    let institutionCode = localStorage.getItem('institutionCode');
+    
+    // If not in localStorage, try to get from profile data
+    if (!institutionCode) {
+        console.log('⚠️ Institution code not in localStorage - extracting from profile...');
+        
+        // Try multiple possible paths in the response
+        institutionCode = data.institutionId ||
+                         data.institution?.institutionCode ||
+                         data.institutionCode ||
+                         data.credential?.institutionId ||
+                         data.staff?.institutionId;
+        
+        if (institutionCode) {
+            localStorage.setItem('institutionCode', institutionCode);
+            console.log('✅ Institution code saved from profile:', institutionCode);
+        } else {
+            console.warn('⚠️ Could not find institution code in profile response');
+        }
+    } else {
+        console.log('✅ Institution code already in localStorage:', institutionCode);
+    }
+    
+    // Also ensure access level is saved
+    let accessLevel = localStorage.getItem('accessLevel');
+    if (!accessLevel) {
+        accessLevel = data.accessLevel ||
+                     data.credential?.accessLevel ||
+                     data.staff?.accessLevel ||
+                     'teacher'; // fallback
+        
+        localStorage.setItem('accessLevel', accessLevel);
+        console.log('✅ Access level saved:', accessLevel);
+    }
+}
+
+// ===============================
+// DISPLAY STAFF PROFILE
 // ===============================
 
 function displayStaffProfile(data) {
     console.log('📋 Displaying staff profile:', data);
     
-    // Update welcome banner
+    // Update welcome banner - Staff name
     const nameDisplay = document.getElementById('staff-name-display');
-    if (nameDisplay && data.staff) {
-        nameDisplay.textContent = data.staff.name || 'Staff Member';
+    if (nameDisplay) {
+        const staffName = data.name || 'Staff Member';
+        nameDisplay.textContent = staffName;
     }
     
-    // ✅ FIX: Get institution code from credential
+    // Institution code - get from localStorage (we just ensured it exists)
     const instCodeDisplay = document.getElementById('inst-code-display');
     if (instCodeDisplay) {
-        // Try to get from credential first, then localStorage
-        const institutionCode = data.credential?.institutionId || 
-                               localStorage.getItem('institutionCode') || 
-                               'N/A';
+        const institutionCode = localStorage.getItem('institutionCode') || 'N/A';
         instCodeDisplay.textContent = institutionCode;
     }
     
-    // Update institution name (placeholder for now)
+    // Institution name
     const instNameDisplay = document.getElementById('inst-name-display');
     if (instNameDisplay) {
-        instNameDisplay.textContent = 'Your Institution';
+        const instName = data.institution?.name || 
+                        data.institutionName || 
+                        'Your Institution';
+        instNameDisplay.textContent = instName;
     }
     
-    // Profile details - Staff info
-    if (data.staff) {
-        safeDisplay('staff-name', data.staff.name);
-        
-        // ✅ FIX: Use mobileNo instead of mobile
-        safeDisplay('staff-mobile', data.staff.mobileNo || data.staff.mobile);
-        
-        safeDisplay('staff-designation', data.staff.designation?.name || 'Not Assigned');
+    // Profile details - Direct from data
+    safeDisplay('staff-name', data.name);
+    safeDisplay('staff-mobile', data.mobileNo || data.mobile);
+    safeDisplay('staff-loginid', localStorage.getItem('loginId') || data.loginId || 'N/A');
+    safeDisplay('staff-designation', data.designation || data.designationName || 'Not Assigned');
+    
+    // Access Level badge
+    const accessElement = document.getElementById('staff-access-level');
+    if (accessElement) {
+        const accessLevel = localStorage.getItem('accessLevel') || 
+                           data.accessLevel ||
+                           'teacher';
+        const badge = document.createElement('span');
+        badge.className = `access-badge access-${accessLevel}`;
+        badge.textContent = accessLevel.toUpperCase();
+        accessElement.innerHTML = '';
+        accessElement.appendChild(badge);
     }
     
-    // Profile details - Credential info
-    if (data.credential) {
-        safeDisplay('staff-loginid', data.credential.loginId);
-        
-        // Access Level with badge
-        const accessElement = document.getElementById('staff-access-level');
-        if (accessElement && data.credential.accessLevel) {
-            const accessLevel = data.credential.accessLevel;
-            const badge = document.createElement('span');
-            badge.className = `access-badge access-${accessLevel}`;
-            badge.textContent = accessLevel.toUpperCase();
-            accessElement.innerHTML = '';
-            accessElement.appendChild(badge);
-        }
-        
-        // Status with badge
-        const statusElement = document.getElementById('staff-status');
-        if (statusElement) {
-            const isActive = data.credential.isActive;
-            const badge = document.createElement('span');
-            badge.className = `status-badge ${isActive ? 'status-active' : 'status-inactive'}`;
-            badge.textContent = isActive ? 'ACTIVE' : 'INACTIVE';
-            statusElement.innerHTML = '';
-            statusElement.appendChild(badge);
-        }
-        
-        // Display permissions
-        displayPermissions(data.credential);
+    // Status badge
+    const statusElement = document.getElementById('staff-status');
+    if (statusElement) {
+        const isActive = data.isActive !== false; // assume active if not specified
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${isActive ? 'status-active' : 'status-inactive'}`;
+        badge.textContent = isActive ? 'ACTIVE' : 'INACTIVE';
+        statusElement.innerHTML = '';
+        statusElement.appendChild(badge);
     }
+    
+    // Display assigned classes and subjects from assignedClasses array
+    if (data.assignedClasses && Array.isArray(data.assignedClasses)) {
+        console.log('📚 Processing assigned classes:', data.assignedClasses);
+        displayAssignedClassesAndSubjects(data.assignedClasses);
+    } else {
+        console.log('ℹ️ No assigned classes in response');
+        displayAssignedClassesAndSubjects([]);
+    }
+    
+    // Display permissions
+    const accessLevel = localStorage.getItem('accessLevel') || 'teacher';
+    displayPermissions(accessLevel);
 }
 
 // ===============================
-// LOAD STAFF ASSIGNMENTS - FIXED
+// DISPLAY CLASSES AND SUBJECTS
 // ===============================
 
-async function loadStaffAssignments() {
-    try {
-        const response = await apiGet(API_ENDPOINTS.STAFF_ASSIGNMENTS, true);
-        
-        console.log('📚 Staff Assignments API Response:', response);
-        
-        if (!response.success) {
-            console.warn('Failed to load assignments:', response.message);
-            return;
+function displayAssignedClassesAndSubjects(assignedClasses) {
+    console.log('📚 Displaying classes and subjects:', assignedClasses);
+    
+    const classesContainer = document.getElementById('classes-list');
+    const subjectsSection = document.getElementById('subjects-section');
+    const subjectsContainer = document.getElementById('subjects-list');
+    
+    // Handle empty data
+    if (!assignedClasses || assignedClasses.length === 0) {
+        if (classesContainer) {
+            classesContainer.innerHTML = `
+                <div class="empty-state">
+                    <p>📭 No classes assigned yet</p>
+                    <small>Classes will appear here once assigned by admin</small>
+                </div>
+            `;
         }
-        
-        const data = response.data;
-        
-        // ✅ FIX: Better null checking for assigned classes
-        if (data && data.classMapping) {
-            // Extract class names from assignedClasses array
-            let classNames = [];
-            
-            if (data.classMapping.assignedClasses && Array.isArray(data.classMapping.assignedClasses)) {
-                classNames = data.classMapping.assignedClasses.map(cls => {
-                    // Handle both string and object formats
-                    if (typeof cls === 'string') {
-                        return cls;
-                    } else if (cls && cls.className) {
-                        return cls.nickname || cls.className;
-                    }
-                    return null;
-                }).filter(name => name !== null);
-            }
-            
-            console.log('✅ Processed class names:', classNames);
-            displayAssignedClasses(classNames);
-        } else {
-            console.log('ℹ️ No class mapping data');
-            displayAssignedClasses([]);
+        if (subjectsSection) {
+            subjectsSection.style.display = 'none';
         }
-        
-        // ✅ FIX: Better null checking for subject mappings
-        if (data && data.subjectMappings && Array.isArray(data.subjectMappings)) {
-            displayTeachingSubjects(data.subjectMappings);
-        } else {
-            console.log('ℹ️ No subject mappings');
-            displayTeachingSubjects([]);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error loading assignments:', error);
-        // Don't show error to user, just display empty states
-        displayAssignedClasses([]);
-        displayTeachingSubjects([]);
-    }
-}
-
-// ===============================
-// DISPLAY ASSIGNED CLASSES - FIXED
-// ===============================
-
-function displayAssignedClasses(classNames) {
-    const container = document.getElementById('classes-list');
-    if (!container) {
-        console.error('❌ Classes list container not found');
         return;
     }
     
-    console.log('📚 Displaying classes:', classNames);
-    
-    // Handle empty or invalid data
-    if (!classNames || !Array.isArray(classNames) || classNames.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <p>📭 No classes assigned yet</p>
-                <small>Classes will appear here once assigned by admin</small>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = '';
-    
-    classNames.forEach((className, index) => {
-        const card = document.createElement('div');
-        card.className = 'class-card';
-        card.style.animationDelay = `${index * 0.1}s`;
-        card.style.animation = 'fadeInUp 0.6s ease-out';
+    // ✅ Display Classes
+    if (classesContainer) {
+        classesContainer.innerHTML = '';
         
-        card.innerHTML = `
-            <h4>${sanitizeHTML(className)}</h4>
-            <p>Assigned Class</p>
-        `;
-        
-        container.appendChild(card);
-    });
-    
-    console.log(`✅ Displayed ${classNames.length} classes`);
-}
-
-// ===============================
-// DISPLAY TEACHING SUBJECTS - FIXED
-// ===============================
-
-function displayTeachingSubjects(subjectMappings) {
-    const section = document.getElementById('subjects-section');
-    const container = document.getElementById('subjects-list');
-    
-    if (!section || !container) {
-        console.error('❌ Subjects section not found');
-        return;
-    }
-    
-    console.log('📖 Displaying subjects:', subjectMappings);
-    
-    // ✅ FIX: Better validation
-    if (!subjectMappings || !Array.isArray(subjectMappings) || subjectMappings.length === 0) {
-        section.style.display = 'none';
-        console.log('ℹ️ No subjects to display');
-        return;
-    }
-    
-    // Show section
-    section.style.display = 'block';
-    container.innerHTML = '';
-    
-    // Group subjects by class
-    const subjectsByClass = {};
-    
-    subjectMappings.forEach(mapping => {
-        if (!mapping) return;
-        
-        const className = mapping.classId?.className || 
-                         mapping.class?.className || 
-                         mapping.class?.name || 
-                         'Unknown Class';
-        
-        if (!subjectsByClass[className]) {
-            subjectsByClass[className] = [];
-        }
-        
-        // Handle subjects array
-        const subjects = mapping.subjectIds || mapping.subjects || [];
-        
-        subjects.forEach(subject => {
-            if (!subject) return;
+        assignedClasses.forEach((classData, index) => {
+            const className = classData.nickname || classData.className || 'Unknown Class';
             
-            const subjectName = subject.subjectName || subject.name;
+            const card = document.createElement('div');
+            card.className = 'class-card';
+            card.style.animationDelay = `${index * 0.1}s`;
+            card.style.animation = 'fadeInUp 0.6s ease-out';
             
-            if (subjectName && !subjectsByClass[className].includes(subjectName)) {
-                subjectsByClass[className].push(subjectName);
-            }
+            card.innerHTML = `
+                <h4>${sanitizeHTML(className)}</h4>
+                <p>Assigned Class</p>
+            `;
+            
+            classesContainer.appendChild(card);
         });
+        
+        console.log(`✅ Displayed ${assignedClasses.length} classes`);
+    }
+    
+    // ✅ Display Subjects (if any class has subjects)
+    const allSubjects = [];
+    
+    assignedClasses.forEach(classData => {
+        const className = classData.nickname || classData.className || 'Unknown Class';
+        
+        if (classData.subjects && Array.isArray(classData.subjects) && classData.subjects.length > 0) {
+            classData.subjects.forEach(subject => {
+                allSubjects.push({
+                    className: className,
+                    subjectName: subject.subjectName || subject.name
+                });
+            });
+        }
     });
     
-    // Display subjects
-    let index = 0;
-    for (const [className, subjects] of Object.entries(subjectsByClass)) {
-        subjects.forEach(subject => {
+    if (allSubjects.length > 0 && subjectsSection && subjectsContainer) {
+        subjectsSection.style.display = 'block';
+        subjectsContainer.innerHTML = '';
+        
+        allSubjects.forEach((item, index) => {
             const card = document.createElement('div');
             card.className = 'subject-card';
             card.style.animationDelay = `${index * 0.1}s`;
             card.style.animation = 'fadeInUp 0.6s ease-out';
             
             card.innerHTML = `
-                <h4>${sanitizeHTML(subject)}</h4>
-                <p>in ${sanitizeHTML(className)}</p>
+                <h4>${sanitizeHTML(item.subjectName)}</h4>
+                <p>in ${sanitizeHTML(item.className)}</p>
             `;
             
-            container.appendChild(card);
-            index++;
+            subjectsContainer.appendChild(card);
         });
+        
+        console.log(`✅ Displayed ${allSubjects.length} subjects`);
+    } else {
+        if (subjectsSection) {
+            subjectsSection.style.display = 'none';
+        }
+        console.log('ℹ️ No subjects to display');
     }
-    
-    console.log(`✅ Displayed subjects from ${Object.keys(subjectsByClass).length} classes`);
 }
 
 // ===============================
 // DISPLAY PERMISSIONS
 // ===============================
 
-function displayPermissions(credential) {
+function displayPermissions(accessLevel) {
     const container = document.getElementById('permissions-list');
     if (!container) return;
     
     container.innerHTML = '';
     
-    const accessLevel = credential.accessLevel;
-    const canAccessAllClasses = credential.additionalAccess?.canAccessAllClasses || false;
+    console.log('🔑 Access Level:', accessLevel);
     
-    // Define permissions based on access level
     let permissions = [];
     
     if (accessLevel === 'teacher') {
@@ -366,14 +327,6 @@ function displayPermissions(credential) {
         ];
     }
     
-    // Add class access permission
-    if (canAccessAllClasses) {
-        permissions.push({ icon: '🌐', text: 'Access to ALL classes' });
-    } else {
-        permissions.push({ icon: '🎯', text: 'Access to assigned classes only' });
-    }
-    
-    // Create permission items
     permissions.forEach((perm, index) => {
         const item = document.createElement('div');
         item.className = 'permission-item';
@@ -417,6 +370,7 @@ function logout() {
         localStorage.removeItem('userType');
         localStorage.removeItem('loginId');
         localStorage.removeItem('institutionCode');
+        localStorage.removeItem('accessLevel');
         window.location.href = 'index.html';
     }
 }
@@ -426,17 +380,22 @@ function logout() {
 // ===============================
 
 function showLoading(message = 'Loading...') {
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-        loadingDiv.textContent = '⏳ ' + message;
-        loadingDiv.classList.add('show');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.querySelector('#loading-overlay .loading-text');
+    
+    if (loadingOverlay) {
+        loadingOverlay.classList.add('show');
+    }
+    
+    if (loadingText) {
+        loadingText.textContent = '⏳ ' + message;
     }
 }
 
 function hideLoading() {
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-        loadingDiv.classList.remove('show');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('show');
     }
 }
 
@@ -483,4 +442,4 @@ function sanitizeHTML(str) {
 
 window.logout = logout;
 
-console.log('✅ Staff-Dashboard.js loaded successfully');
+console.log('✅ Staff-Dashboard.js loaded successfully (DASHBOARD-ONLY FIX - No login changes needed)');

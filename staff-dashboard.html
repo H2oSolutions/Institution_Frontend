@@ -74,18 +74,129 @@
             padding: 0 var(--space-6);
         }
 
+        /* ===================================
+           FIXED: CENTERED LOADING OVERLAY
+           =================================== */
+        #loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #loading-overlay.show {
+            display: flex !important;
+        }
+
+        #loading {
+            background: white;
+            padding: 2rem 3rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: fadeInScale 0.3s ease-out;
+        }
+
+        #loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        #loading .loading-text {
+            font-size: 1.1rem;
+            color: #333;
+            font-weight: 600;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
         /* Messages */
-        #loading,
         #error-message,
         #success-message {
             display: none !important;
             margin: var(--space-6) 0;
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            font-weight: 600;
         }
 
-        #loading.show,
+        #error-message {
+            background: #fee;
+            color: #c33;
+            border: 2px solid #fcc;
+        }
+
+        #success-message {
+            background: #efe;
+            color: #3c3;
+            border: 2px solid #cfc;
+        }
+
         #error-message.show,
         #success-message.show {
             display: block !important;
+        }
+
+        /* Debug Panel - Remove in production */
+        #debug-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 10000;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            display: none;
+        }
+
+        #debug-panel.show {
+            display: block;
+        }
+
+        #debug-panel h4 {
+            margin: 0 0 10px 0;
+            color: #3498db;
+            font-size: 14px;
+        }
+
+        #debug-panel pre {
+            background: #1a252f;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 5px 0;
         }
 
         /* Welcome Banner */
@@ -579,14 +690,27 @@
         </div>
 
         <div class="container">
+            <!-- FIXED: Centered Loading Overlay -->
+            <div id="loading-overlay">
+                <div id="loading">
+                    <div class="spinner"></div>
+                    <div class="loading-text">⏳ Loading dashboard...</div>
+                </div>
+            </div>
+
             <!-- Messages -->
-            <div id="loading" style="display:none;">⏳ Loading dashboard...</div>
-            <div id="error-message" style="display:none;"></div>
-            <div id="success-message" style="display:none;"></div>
+            <div id="error-message"></div>
+            <div id="success-message"></div>
+
+            <!-- Debug Panel (Remove in production) -->
+            <div id="debug-panel">
+                <h4>🔍 Debug Console</h4>
+                <div id="debug-content"></div>
+            </div>
 
             <!-- Welcome Banner -->
             <div class="welcome-banner animate-in">
-                <h2>Welcome, <span id="staff-name-display">Staff Member</span>!</h2>
+                <h2>Welcome, <span id="staff-name-display">Loading...</span>!</h2>
                 <p>Access your classes, subjects, and manage your teaching activities</p>
             </div>
 
@@ -603,27 +727,27 @@
                 <div id="profile-details">
                     <p>
                         <strong>Staff Name:</strong>
-                        <span id="staff-name">-</span>
+                        <span id="staff-name">Loading...</span>
                     </p>
                     <p>
                         <strong>Mobile Number:</strong>
-                        <span id="staff-mobile">-</span>
+                        <span id="staff-mobile">Loading...</span>
                     </p>
                     <p>
                         <strong>Login ID:</strong>
-                        <span id="staff-loginid">-</span>
+                        <span id="staff-loginid">Loading...</span>
                     </p>
                     <p>
                         <strong>Designation:</strong>
-                        <span id="staff-designation">-</span>
+                        <span id="staff-designation">Loading...</span>
                     </p>
                     <p>
                         <strong>Access Level:</strong>
-                        <span id="staff-access-level">-</span>
+                        <span id="staff-access-level">Loading...</span>
                     </p>
                     <p>
                         <strong>Status:</strong>
-                        <span id="staff-status">-</span>
+                        <span id="staff-status">Loading...</span>
                     </p>
                 </div>
             </div>
@@ -633,8 +757,7 @@
                 <h3>📚 Your Assigned Classes</h3>
                 <div id="classes-list" class="class-grid">
                     <div class="empty-state">
-                        <p>📭 No classes assigned yet</p>
-                        <small>Classes will appear here once assigned by admin</small>
+                        <p>📭 Loading classes...</p>
                     </div>
                 </div>
             </div>
@@ -644,8 +767,7 @@
                 <h3>📖 Subjects You Teach</h3>
                 <div id="subjects-list" class="subject-grid">
                     <div class="empty-state">
-                        <p>📭 No subjects assigned yet</p>
-                        <small>Subjects will appear here once assigned by admin</small>
+                        <p>📭 Loading subjects...</p>
                     </div>
                 </div>
             </div>
