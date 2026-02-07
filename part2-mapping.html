@@ -811,6 +811,9 @@
         <div class="container">
             <!-- Section Navigation -->
             <div id="section-tabs">
+                <button onclick="showMappingSection('level-designation')" id="tab-level-designation">
+                    🎯 Levels → Designations
+                </button>
                 <button onclick="showMappingSection('staff-class')" id="tab-staff-class">
                     1️⃣ Staff → Classes
                 </button>
@@ -820,6 +823,60 @@
                 <button onclick="showMappingSection('teacher-subject')" id="tab-teacher-subject">
                     3️⃣ Teachers → Subjects
                 </button>
+            </div>
+
+            <!-- 0. ASSIGN LEVELS TO DESIGNATIONS -->
+            <div id="section-level-designation" class="mapping-section" style="display:none;">
+                <h2>🎯 Assign Levels to Designations</h2>
+                <p>Map hierarchy levels to designations. Same level can be assigned to multiple designations.</p>
+
+                <!-- Visual Indicator -->
+                <div class="mapping-visual">
+                    <div class="mapping-item">📊 Level</div>
+                    <div class="mapping-arrow">→</div>
+                    <div class="mapping-item">🏆 Designations</div>
+                </div>
+
+                <h3>➕ Assign Level to Designations</h3>
+                <form id="assign-level-designation-form">
+                    <div>
+                        <label for="ld-level">Select Level *</label>
+                        <select id="ld-level" required>
+                            <option value="">-- Select Level --</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label>Assign to Designations *</label>
+                        <div class="info-box">
+                            <strong>💡 Tip:</strong>
+                            Select "All Designations" or choose specific designations for this level. Same level can be mapped to multiple designations.
+                        </div>
+                        <div class="checkbox-container">
+                            <label class="select-all-checkbox">
+                                <input type="checkbox" id="ld-all-designations" onchange="toggleAllDesignations(this)">
+                                ✅ All Designations
+                            </label>
+                            <div id="ld-designations-checkboxes"></div>
+                        </div>
+                    </div>
+
+                    <button type="submit">Assign Level to Designations</button>
+                </form>
+
+                <h3>📊 Current Level-Designation Mappings</h3>
+                <div class="table-wrapper">
+                    <table id="level-designation-table">
+                        <thead>
+                            <tr>
+                                <th>Level</th>
+                                <th>Assigned Designations</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- 1. ASSIGN STAFF TO CLASSES -->

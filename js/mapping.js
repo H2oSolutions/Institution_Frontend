@@ -1,12 +1,14 @@
-// mapping.js - COMPLETE WITH EDIT MODALS & CLASS NICKNAME DISPLAY
+// mapping.js - FIXED VERSION WITH PROPER HIERARCHY/LEVELS HANDLING
 
 let staffData = [];
 let classesData = [];
 let subjectsData = [];
 let designationsData = [];
+let levelsData = [];
 let staffClassMappings = [];
 let classSubjectMappings = [];
 let teacherSubjectMappings = [];
+let levelDesignationMappings = [];
 
 // Current edit state
 let currentEditMode = null;
@@ -21,7 +23,26 @@ function formatClassName(classObj) {
     if (classObj.nickname && classObj.nickname.trim()) {
         return `${classObj.className} (${classObj.nickname})`;
     }
-    return classObj.className;
+    return classObj.className || '-';
+}
+
+// ===================================
+// HELPER: SAFE PROPERTY ACCESS
+// ===================================
+function safeGet(obj, path, defaultValue = '-') {
+    if (!obj) return defaultValue;
+    
+    const keys = path.split('.');
+    let current = obj;
+    
+    for (const key of keys) {
+        if (current === null || current === undefined) {
+            return defaultValue;
+        }
+        current = current[key];
+    }
+    
+    return current !== null && current !== undefined ? current : defaultValue;
 }
 
 // ===================================
@@ -143,10 +164,13 @@ function showError(message) {
 }
 
 function populateDropdown(selectElement, data, valueKey, textKey) {
-    if (!selectElement) return;
-    
+    if (!selectElement || !Array.isArray(data)) {
+        console.warn('populateDropdown skipped, invalid data:', data);
+        return;
+    }
+
     selectElement.innerHTML = '<option value="">-- Select --</option>';
-    
+
     data.forEach(item => {
         const option = document.createElement('option');
         option.value = typeof valueKey === 'function' ? valueKey(item) : item[valueKey];
@@ -154,6 +178,7 @@ function populateDropdown(selectElement, data, valueKey, textKey) {
         selectElement.appendChild(option);
     });
 }
+
 
 // ===================================
 // EDIT MODAL FUNCTIONS
@@ -169,13 +194,17 @@ function openEditModal(mode, id, data) {
     const modalBody = document.getElementById('edit-modal-body');
     
     const titles = {
+        'level-designation': '✏️ Edit Level-Designation Assignment',
         'staff-class': '✏️ Edit Staff Assignment',
         'class-subject': '✏️ Edit Class Subjects',
         'teacher-subject': '✏️ Edit Teacher Assignment'
     };
     modalTitle.textContent = titles[mode] || 'Edit Assignment';
     
-    if (mode === 'staff-class') {
+    if (mode === 'level-designation') {
+        modalBody.innerHTML = generateLevelDesignationEditForm(data);
+        setupLevelDesignationEditForm(data);
+    } else if (mode === 'staff-class') {
         modalBody.innerHTML = generateStaffClassEditForm(data);
         setupStaffClassEditForm(data);
     } else if (mode === 'class-subject') {
@@ -197,11 +226,53 @@ function closeEditModal() {
     currentEditData = null;
 }
 
+// ===================================
+// LEVEL-DESIGNATION EDIT MODAL
+// ===================================
+
+function generateLevelDesignationEditForm(data) {
+    const levelName = safeGet(data, 'levelId.levelName', '-');
+    
+    return `
+        <div class="edit-form-group">
+            <label>Level</label>
+            <input type="text" value="${levelName}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Assigned Designations *</label>
+            <div class="edit-checkbox-container" id="edit-designations-container">
+                <!-- Designations will be inserted here -->
+            </div>
+        </div>
+    `;
+}
+
+function setupLevelDesignationEditForm(data) {
+    const container = document.getElementById('edit-designations-container');
+    const assignedDesignationIds = (data.designationIds || []).map(d => d?._id).filter(Boolean);
+    
+    container.innerHTML = '';
+    designationsData.forEach(designation => {
+        if (!designation || !designation._id) return;
+        
+        const isChecked = assignedDesignationIds.includes(designation._id);
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="edit-designation" value="${designation._id}" ${isChecked ? 'checked' : ''}>
+            ${designation.name || 'Unnamed'}
+        `;
+        container.appendChild(label);
+    });
+}
+
 function generateStaffClassEditForm(data) {
+    const staffName = safeGet(data, 'staffId.name', '-');
+    
     return `
         <div class="edit-form-group">
             <label>Staff Name</label>
-            <input type="text" value="${data.staffId?.name || '-'}" disabled class="disabled-input">
+            <input type="text" value="${staffName}" disabled class="disabled-input">
         </div>
         
         <div class="edit-form-group">
@@ -223,13 +294,17 @@ function generateStaffClassEditForm(data) {
 function setupStaffClassEditForm(data) {
     const desSelect = document.getElementById('edit-designation');
     populateDropdown(desSelect, designationsData, '_id', 'name');
-    desSelect.value = data.designationId?._id || '';
+    
+    const designationId = safeGet(data, 'designationId._id', '');
+    desSelect.value = designationId;
     
     const container = document.getElementById('edit-classes-container');
-    const assignedClassIds = data.assignedClasses.map(c => c._id);
+    const assignedClassIds = (data.assignedClasses || []).map(c => c?._id).filter(Boolean);
     
     container.innerHTML = '';
     classesData.forEach(cls => {
+        if (!cls || !cls._id) return;
+        
         const isChecked = assignedClassIds.includes(cls._id);
         const label = document.createElement('label');
         label.innerHTML = `
@@ -241,10 +316,12 @@ function setupStaffClassEditForm(data) {
 }
 
 function generateClassSubjectEditForm(data) {
+    const className = formatClassName(data.classId);
+    
     return `
         <div class="edit-form-group">
             <label>Class</label>
-            <input type="text" value="${formatClassName(data.classId)}" disabled class="disabled-input">
+            <input type="text" value="${className}" disabled class="disabled-input">
         </div>
         
         <div class="edit-form-group">
@@ -258,30 +335,35 @@ function generateClassSubjectEditForm(data) {
 
 function setupClassSubjectEditForm(data) {
     const container = document.getElementById('edit-subjects-container');
-    const assignedSubjectIds = data.subjectIds.map(s => s._id);
+    const assignedSubjectIds = (data.subjectIds || []).map(s => s?._id).filter(Boolean);
     
     container.innerHTML = '';
     subjectsData.forEach(subject => {
+        if (!subject || !subject._id) return;
+        
         const isChecked = assignedSubjectIds.includes(subject._id);
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="edit-subject" value="${subject._id}" ${isChecked ? 'checked' : ''}>
-            ${subject.subjectName}
+            ${subject.subjectName || 'Unnamed'}
         `;
         container.appendChild(label);
     });
 }
 
 function generateTeacherSubjectEditForm(data) {
+    const teacherName = safeGet(data, 'teacherId.name', '-');
+    const className = formatClassName(data.classId);
+    
     return `
         <div class="edit-form-group">
             <label>Teacher Name</label>
-            <input type="text" value="${data.teacherId?.name || '-'}" disabled class="disabled-input">
+            <input type="text" value="${teacherName}" disabled class="disabled-input">
         </div>
         
         <div class="edit-form-group">
             <label>Class</label>
-            <input type="text" value="${formatClassName(data.classId)}" disabled class="disabled-input">
+            <input type="text" value="${className}" disabled class="disabled-input">
         </div>
         
         <div class="edit-form-group">
@@ -294,23 +376,31 @@ function generateTeacherSubjectEditForm(data) {
 }
 
 function setupTeacherSubjectEditForm(data) {
-    const classMapping = classSubjectMappings.find(m => m.classId._id === data.classId._id);
+    const classId = safeGet(data, 'classId._id');
+    if (!classId) {
+        showError('Invalid class data');
+        return;
+    }
     
-    if (!classMapping || !classMapping.subjectIds) {
+    const classMapping = classSubjectMappings.find(m => m.classId?._id === classId);
+    
+    if (!classMapping || !classMapping.subjectIds || classMapping.subjectIds.length === 0) {
         showError('No subjects found for this class');
         return;
     }
     
     const container = document.getElementById('edit-subjects-container');
-    const assignedSubjectIds = data.subjectIds.map(s => s._id);
+    const assignedSubjectIds = (data.subjectIds || []).map(s => s?._id).filter(Boolean);
     
     container.innerHTML = '';
     classMapping.subjectIds.forEach(subject => {
+        if (!subject || !subject._id) return;
+        
         const isChecked = assignedSubjectIds.includes(subject._id);
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="edit-subject" value="${subject._id}" ${isChecked ? 'checked' : ''}>
-            ${subject.subjectName}
+            ${subject.subjectName || 'Unnamed'}
         `;
         container.appendChild(label);
     });
@@ -320,7 +410,9 @@ async function saveEditModal() {
     if (!currentEditMode || !currentEditId) return;
     
     try {
-        if (currentEditMode === 'staff-class') {
+        if (currentEditMode === 'level-designation') {
+            await saveLevelDesignationEdit();
+        } else if (currentEditMode === 'staff-class') {
             await saveStaffClassEdit();
         } else if (currentEditMode === 'class-subject') {
             await saveClassSubjectEdit();
@@ -330,6 +422,42 @@ async function saveEditModal() {
     } catch (error) {
         console.error('Save edit error:', error);
         showError(error.message);
+    }
+}
+
+async function saveLevelDesignationEdit() {
+    const selectedDesignations = Array.from(document.querySelectorAll('input[name="edit-designation"]:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedDesignations.length === 0) {
+        showError('Please select at least one designation');
+        return;
+    }
+    
+    showLoading('Updating level-designation mapping...');
+    
+    const levelId = safeGet(currentEditData, 'levelId._id');
+    if (!levelId) {
+        hideLoading();
+        showError('Invalid level data');
+        return;
+    }
+    
+    const response = await apiPost(
+        API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING,
+        {
+            levelId: levelId,
+            designationIds: selectedDesignations
+        },
+        true
+    );
+    
+    hideLoading();
+    
+    if (response.success) {
+        showSuccess(response.message || 'Level-designation mapping updated successfully!');
+        closeEditModal();
+        loadAllData();
     }
 }
 
@@ -379,11 +507,17 @@ async function saveClassSubjectEdit() {
     
     showLoading('Updating class subjects...');
     
-    // Use POST endpoint as class-subject uses upsert pattern
+    const classId = safeGet(currentEditData, 'classId._id');
+    if (!classId) {
+        hideLoading();
+        showError('Invalid class data');
+        return;
+    }
+    
     const response = await apiPost(
         API_ENDPOINTS.CLASS_SUBJECT_MAPPING,
         {
-            classId: currentEditData.classId._id,
+            classId: classId,
             subjectIds: selectedSubjects
         },
         true
@@ -434,8 +568,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!checkAuth()) return;
     
     loadAllData();
-    showMappingSection('staff-class');
+    showMappingSection('level-designation');
     
+    document.getElementById('assign-level-designation-form').addEventListener('submit', handleAssignLevelToDesignations);
     document.getElementById('assign-staff-class-form').addEventListener('submit', handleAssignStaffToClasses);
     document.getElementById('assign-class-subject-form').addEventListener('submit', handleAssignSubjectsToClass);
     document.getElementById('assign-teacher-subject-form').addEventListener('submit', handleAssignTeacherToSubjects);
@@ -458,36 +593,134 @@ async function loadAllData() {
     try {
         showLoading('Loading mapping data...');
         
-        const [staff, classes, subjects, designations, mappings] = await Promise.all([
+        const [staff, classes, subjects, designations, hierarchyData, mappings] = await Promise.all([
             apiGet(API_ENDPOINTS.STAFF, true),
             apiGet(API_ENDPOINTS.CLASSES, true),
             apiGet(API_ENDPOINTS.SUBJECTS, true),
             apiGet(API_ENDPOINTS.DESIGNATIONS, true),
+            apiGet(API_ENDPOINTS.HIERARCHY, true),
             apiGet(API_ENDPOINTS.ALL_MAPPINGS, true)
         ]);
         
-        staffData = staff.data;
-        classesData = classes.data;
-        subjectsData = subjects.data;
-        designationsData = designations.data;
+        // FIXED: Properly extract data arrays
+        staffData = extractDataArray(staff, 'staff');
+        classesData = extractDataArray(classes, 'classes');
+        subjectsData = extractDataArray(subjects, 'subjects');
+        designationsData = extractDataArray(designations, 'designations');
         
-        if (mappings.success) {
+        // FIXED: Special handling for hierarchy/levels data
+        levelsData = extractLevelsData(hierarchyData);
+        
+        console.log('📊 Loaded data:', {
+            staff: staffData.length,
+            classes: classesData.length,
+            subjects: subjectsData.length,
+            designations: designationsData.length,
+            levels: levelsData.length
+        });
+        
+        console.log('🔍 Levels data structure:', levelsData);
+        
+        if (mappings.success && mappings.data) {
             staffClassMappings = mappings.data.staffToClass || [];
             classSubjectMappings = mappings.data.classToSubject || [];
             teacherSubjectMappings = mappings.data.teacherToSubject || [];
+            levelDesignationMappings = mappings.data.levelToDesignation || [];
+            
+            console.log('📊 Loaded mappings:', {
+                staffClass: staffClassMappings.length,
+                classSubject: classSubjectMappings.length,
+                teacherSubject: teacherSubjectMappings.length,
+                levelDesignation: levelDesignationMappings.length
+            });
         }
         
         hideLoading();
         
+        setupLevelDesignationSection();
         setupStaffClassSection();
         setupClassSubjectSection();
         setupTeacherSubjectSection();
         displayAllMappings();
         
     } catch (error) {
+        console.error('❌ Load data error:', error);
         hideLoading();
         showError('Failed to load data: ' + error.message);
     }
+}
+
+// FIXED: Special function to extract levels from hierarchy response
+function extractLevelsData(hierarchyResponse) {
+    console.log('🔍 Raw hierarchy response:', hierarchyResponse);
+    
+    if (!hierarchyResponse) {
+        console.warn('⚠️ Hierarchy response is null/undefined');
+        return [];
+    }
+    
+    // Get numLevels from response
+    let numLevels = 0;
+    
+    if (hierarchyResponse.data) {
+        numLevels = hierarchyResponse.data.numLevels || 0;
+    }
+    
+    console.log(`📊 NumLevels found: ${numLevels}`);
+    
+    // ALWAYS generate levels from numLevels (ignore the levels array in response)
+    // This is because the backend levels array is unreliable
+    if (numLevels > 0) {
+        console.log(`✅ Generating ${numLevels} level objects from numLevels`);
+        
+        const levels = [];
+        for (let i = 1; i <= numLevels; i++) {
+            levels.push({
+                _id: `level-${i}`,
+                levelName: `Level ${i}`,
+                levelNumber: i
+            });
+        }
+        
+        console.log('✅ Generated levels:', levels);
+        return levels;
+    }
+    
+    console.warn('⚠️ No valid numLevels found in hierarchy response');
+    return [];
+}
+
+// Helper function to extract data array from API response
+function extractDataArray(response, fallbackKey) {
+    if (!response) return [];
+    
+    // If response.data is already an array
+    if (Array.isArray(response.data)) {
+        return response.data;
+    }
+    
+    // If response.data is an object with nested arrays
+    if (response.data && typeof response.data === 'object') {
+        // Try the fallback key first
+        if (fallbackKey && Array.isArray(response.data[fallbackKey])) {
+            return response.data[fallbackKey];
+        }
+        
+        // Try common property names
+        const possibleKeys = ['staff', 'classes', 'subjects', 'designations', 'levels', 'hierarchy'];
+        for (const key of possibleKeys) {
+            if (Array.isArray(response.data[key])) {
+                return response.data[key];
+            }
+        }
+    }
+    
+    // If response itself is an array
+    if (Array.isArray(response)) {
+        return response;
+    }
+    
+    return [];
 }
 
 function showMappingSection(sectionName) {
@@ -499,6 +732,141 @@ function showMappingSection(sectionName) {
     
     document.getElementById('section-' + sectionName).style.display = 'block';
     document.getElementById('tab-' + sectionName).style.fontWeight = 'bold';
+}
+
+// ===================================
+// 0. LEVEL-DESIGNATION MAPPING
+// ===================================
+
+function setupLevelDesignationSection() {
+    console.log('🔧 Setting up Level-Designation section...');
+    console.log('📊 Levels data available:', levelsData);
+    
+    const levelSelect = document.getElementById('ld-level');
+    if (!levelSelect) {
+        console.error('❌ Level select element not found!');
+        return;
+    }
+    
+    if (levelsData.length === 0) {
+        console.warn('⚠️ No levels data available');
+        levelSelect.innerHTML = '<option value="">-- No Levels Created Yet --</option>';
+        showError('No hierarchy levels found. Please create levels in Part 1 - Hierarchy section first.');
+        return;
+    }
+    
+    populateDropdown(levelSelect, levelsData, '_id', 'levelName');
+    console.log('✅ Level dropdown populated with', levelsData.length, 'levels');
+    
+    const designationsContainer = document.getElementById('ld-designations-checkboxes');
+    if (!designationsContainer) {
+        console.error('❌ Designations container not found!');
+        return;
+    }
+    
+    designationsContainer.innerHTML = '';
+    
+    if (designationsData.length === 0) {
+        designationsContainer.innerHTML = '<p style="color: var(--gray-500); padding: var(--space-4);">No designations available. Please create designations in Part 1 first.</p>';
+        return;
+    }
+    
+    designationsData.forEach(designation => {
+        if (!designation || !designation._id) return;
+        
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="checkbox" name="ld-designation" value="${designation._id}">
+            ${designation.name || 'Unnamed'}
+        `;
+        designationsContainer.appendChild(label);
+        designationsContainer.appendChild(document.createElement('br'));
+    });
+    
+    console.log('✅ Level-Designation section setup complete');
+}
+
+function toggleAllDesignations(checkbox) {
+    const designationCheckboxes = document.querySelectorAll('input[name="ld-designation"]');
+    designationCheckboxes.forEach(cb => cb.checked = checkbox.checked);
+}
+
+async function handleAssignLevelToDesignations(e) {
+    e.preventDefault();
+    
+    const levelId = document.getElementById('ld-level').value;
+    const selectedDesignations = Array.from(document.querySelectorAll('input[name="ld-designation"]:checked'))
+        .map(cb => cb.value);
+    
+    if (!levelId) {
+        showError('Please select a level');
+        return;
+    }
+    
+    if (selectedDesignations.length === 0) {
+        showError('Please select at least one designation');
+        return;
+    }
+    
+    try {
+        showLoading('Assigning level to designations...');
+        
+        const response = await apiPost(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING, {
+            levelId: levelId,
+            designationIds: selectedDesignations
+        }, true);
+        
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(response.message || 'Level assigned to designations successfully!');
+            document.getElementById('assign-level-designation-form').reset();
+            document.getElementById('ld-all-designations').checked = false;
+            loadAllData();
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
+}
+
+function displayLevelDesignationMappings() {
+    const tbody = document.querySelector('#level-designation-table tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (levelDesignationMappings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No level-designation mappings yet. Use the form above to assign levels.</td></tr>';
+        return;
+    }
+    
+    levelDesignationMappings.forEach(mapping => {
+        if (!mapping) return;
+        
+        const row = tbody.insertRow();
+        const levelName = safeGet(mapping, 'levelId.levelName', '-');
+        const designations = (mapping.designationIds || [])
+            .map(d => d?.name || 'Unnamed')
+            .join(', ') || 'None';
+        
+        const levelId = safeGet(mapping, 'levelId._id');
+        
+        row.innerHTML = `
+            <td>${levelName}</td>
+            <td>${designations}</td>
+            <td>
+                ${levelId ? `<button onclick="editLevelDesignationMapping('${levelId}')">Edit</button>` : ''}
+            </td>
+        `;
+    });
+}
+
+async function editLevelDesignationMapping(levelId) {
+    const mapping = levelDesignationMappings.find(m => m.levelId?._id === levelId);
+    if (mapping) {
+        openEditModal('level-designation', mapping._id, mapping);
+    }
 }
 
 // ===================================
@@ -516,6 +884,8 @@ function setupStaffClassSection() {
     classesContainer.innerHTML = '';
     
     classesData.forEach(cls => {
+        if (!cls || !cls._id) return;
+        
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="sc-class" value="${cls._id}">
@@ -538,6 +908,16 @@ async function handleAssignStaffToClasses(e) {
     const designationId = document.getElementById('sc-designation').value;
     const selectedClasses = Array.from(document.querySelectorAll('input[name="sc-class"]:checked'))
         .map(cb => cb.value);
+    
+    if (!staffId) {
+        showError('Please select a staff member');
+        return;
+    }
+    
+    if (!designationId) {
+        showError('Please select a designation');
+        return;
+    }
     
     if (selectedClasses.length === 0) {
         showError('Please select at least one class');
@@ -579,16 +959,24 @@ function displayStaffClassMappings() {
     }
     
     staffClassMappings.forEach(mapping => {
+        if (!mapping) return;
+        
         const row = tbody.insertRow();
-        const classes = mapping.assignedClasses.map(c => formatClassName(c)).join(', ') || 'None';
+        const staffName = safeGet(mapping, 'staffId.name', '-');
+        const designationName = safeGet(mapping, 'designationId.name', '-');
+        const classes = (mapping.assignedClasses || [])
+            .map(c => formatClassName(c))
+            .join(', ') || 'None';
         
         row.innerHTML = `
-            <td>${mapping.staffId?.name || '-'}</td>
-            <td>${mapping.designationId?.name || '-'}</td>
+            <td>${staffName}</td>
+            <td>${designationName}</td>
             <td>${classes}</td>
             <td>
-                <button onclick="editStaffClassMapping('${mapping._id}')">Edit</button>
-                <button onclick="deleteStaffClassMapping('${mapping._id}')">Delete</button>
+                ${mapping._id ? `
+                    <button onclick="editStaffClassMapping('${mapping._id}')">Edit</button>
+                    <button onclick="deleteStaffClassMapping('${mapping._id}')">Delete</button>
+                ` : ''}
             </td>
         `;
     });
@@ -633,10 +1021,12 @@ function setupClassSubjectSection() {
     subjectsContainer.innerHTML = '';
     
     subjectsData.forEach(subject => {
+        if (!subject || !subject._id) return;
+        
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="cs-subject" value="${subject._id}">
-            ${subject.subjectName}
+            ${subject.subjectName || 'Unnamed'}
         `;
         subjectsContainer.appendChild(label);
         subjectsContainer.appendChild(document.createElement('br'));
@@ -654,6 +1044,11 @@ async function handleAssignSubjectsToClass(e) {
     const classId = document.getElementById('cs-class').value;
     const selectedSubjects = Array.from(document.querySelectorAll('input[name="cs-subject"]:checked'))
         .map(cb => cb.value);
+    
+    if (!classId) {
+        showError('Please select a class');
+        return;
+    }
     
     if (selectedSubjects.length === 0) {
         showError('Please select at least one subject');
@@ -694,21 +1089,28 @@ function displayClassSubjectMappings() {
     }
     
     classSubjectMappings.forEach(mapping => {
+        if (!mapping) return;
+        
         const row = tbody.insertRow();
-        const subjects = mapping.subjectIds.map(s => s.subjectName).join(', ') || 'None';
+        const className = formatClassName(mapping.classId);
+        const subjects = (mapping.subjectIds || [])
+            .map(s => s?.subjectName || 'Unnamed')
+            .join(', ') || 'None';
+        
+        const classId = safeGet(mapping, 'classId._id');
         
         row.innerHTML = `
-            <td>${formatClassName(mapping.classId)}</td>
+            <td>${className}</td>
             <td>${subjects}</td>
             <td>
-                <button onclick="editClassSubjectMapping('${mapping.classId._id}')">Edit</button>
+                ${classId ? `<button onclick="editClassSubjectMapping('${classId}')">Edit</button>` : ''}
             </td>
         `;
     });
 }
 
 async function editClassSubjectMapping(classId) {
-    const mapping = classSubjectMappings.find(m => m.classId._id === classId);
+    const mapping = classSubjectMappings.find(m => m.classId?._id === classId);
     if (mapping) {
         openEditModal('class-subject', mapping._id, mapping);
     }
@@ -734,7 +1136,7 @@ async function handleTeacherClassSelection() {
         return;
     }
     
-    const classMapping = classSubjectMappings.find(m => m.classId._id === classId);
+    const classMapping = classSubjectMappings.find(m => m.classId?._id === classId);
     
     if (!classMapping || !classMapping.subjectIds || classMapping.subjectIds.length === 0) {
         showError('No subjects assigned to this class yet. Please assign subjects first in Section 2.');
@@ -746,10 +1148,12 @@ async function handleTeacherClassSelection() {
     container.innerHTML = '';
     
     classMapping.subjectIds.forEach(subject => {
+        if (!subject || !subject._id) return;
+        
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="ts-subject" value="${subject._id}">
-            ${subject.subjectName}
+            ${subject.subjectName || 'Unnamed'}
         `;
         container.appendChild(label);
         container.appendChild(document.createElement('br'));
@@ -765,6 +1169,16 @@ async function handleAssignTeacherToSubjects(e) {
     const classId = document.getElementById('ts-class').value;
     const selectedSubjects = Array.from(document.querySelectorAll('input[name="ts-subject"]:checked'))
         .map(cb => cb.value);
+    
+    if (!teacherId) {
+        showError('Please select a teacher');
+        return;
+    }
+    
+    if (!classId) {
+        showError('Please select a class');
+        return;
+    }
     
     if (selectedSubjects.length === 0) {
         showError('Please select at least one subject');
@@ -806,16 +1220,24 @@ function displayTeacherSubjectMappings() {
     }
     
     teacherSubjectMappings.forEach(mapping => {
+        if (!mapping) return;
+        
         const row = tbody.insertRow();
-        const subjects = mapping.subjectIds.map(s => s.subjectName).join(', ') || 'None';
+        const teacherName = safeGet(mapping, 'teacherId.name', '-');
+        const className = formatClassName(mapping.classId);
+        const subjects = (mapping.subjectIds || [])
+            .map(s => s?.subjectName || 'Unnamed')
+            .join(', ') || 'None';
         
         row.innerHTML = `
-            <td>${mapping.teacherId?.name || '-'}</td>
-            <td>${formatClassName(mapping.classId)}</td>
+            <td>${teacherName}</td>
+            <td>${className}</td>
             <td>${subjects}</td>
             <td>
-                <button onclick="editTeacherSubjectMapping('${mapping._id}')">Edit</button>
-                <button onclick="deleteTeacherSubjectMapping('${mapping._id}')">Delete</button>
+                ${mapping._id ? `
+                    <button onclick="editTeacherSubjectMapping('${mapping._id}')">Edit</button>
+                    <button onclick="deleteTeacherSubjectMapping('${mapping._id}')">Delete</button>
+                ` : ''}
             </td>
         `;
     });
@@ -853,9 +1275,10 @@ async function deleteTeacherSubjectMapping(id) {
 // ===================================
 
 function displayAllMappings() {
+    displayLevelDesignationMappings();
     displayStaffClassMappings();
     displayClassSubjectMappings();
     displayTeacherSubjectMappings();
 }
 
-console.log('✅ mapping.js loaded successfully');
+console.log('✅ mapping.js loaded successfully (FIXED VERSION with proper hierarchy handling)');

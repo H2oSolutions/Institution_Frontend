@@ -1,4 +1,4 @@
-// api.js - SECURE API HELPER WITH BETTER ERROR HANDLING
+// api.js - SECURE API HELPER WITH FIXED URL HANDLING
 
 // Get auth token from localStorage
 function getAuthToken() {
@@ -50,7 +50,7 @@ function handleAuthError(error) {
 }
 
 // ===============================
-// GET REQUEST - IMPROVED
+// GET REQUEST - FIXED
 // ===============================
 async function apiGet(endpoint, requiresAuth = false) {
     try {
@@ -72,16 +72,15 @@ async function apiGet(endpoint, requiresAuth = false) {
             headers['Authorization'] = `Bearer ${token}`;
         }
         
-        // Ensure endpoint starts with /
-        const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
-        const url = API_BASE_URL + path;
+        // ✅ FIX: Use endpoint directly (it's already a full URL from API_ENDPOINTS)
+        const url = endpoint;
         
         console.log('🔵 API GET:', url);
         
         const response = await fetch(url, {
             method: 'GET',
             headers: headers,
-            credentials: 'include' // Include cookies for future CSRF implementation
+            credentials: 'include'
         });
         
         // Handle non-JSON responses
@@ -128,7 +127,7 @@ async function apiGet(endpoint, requiresAuth = false) {
 }
 
 // ===============================
-// POST REQUEST - IMPROVED
+// POST REQUEST - FIXED
 // ===============================
 async function apiPost(endpoint, body, requiresAuth = false) {
     try {
@@ -149,9 +148,8 @@ async function apiPost(endpoint, body, requiresAuth = false) {
             headers['Authorization'] = `Bearer ${token}`;
         }
         
-        // Ensure endpoint starts with /
-        const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
-        const url = API_BASE_URL + path;
+        // ✅ FIX: Use endpoint directly
+        const url = endpoint;
         
         console.log('🟢 API POST:', url);
         
@@ -201,7 +199,7 @@ async function apiPost(endpoint, body, requiresAuth = false) {
 }
 
 // ===============================
-// PUT REQUEST - IMPROVED
+// PUT REQUEST - FIXED
 // ===============================
 async function apiPut(endpoint, body, requiresAuth = false) {
     try {
@@ -222,8 +220,8 @@ async function apiPut(endpoint, body, requiresAuth = false) {
             headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
-        const url = API_BASE_URL + path;
+        // ✅ FIX: Use endpoint directly
+        const url = endpoint;
         
         console.log('🟡 API PUT:', url);
         
@@ -264,7 +262,7 @@ async function apiPut(endpoint, body, requiresAuth = false) {
 }
 
 // ===============================
-// DELETE REQUEST - IMPROVED
+// DELETE REQUEST - FIXED
 // ===============================
 async function apiDelete(endpoint, requiresAuth = false) {
     try {
@@ -285,8 +283,8 @@ async function apiDelete(endpoint, requiresAuth = false) {
             headers['Authorization'] = `Bearer ${token}`;
         }
         
-        const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
-        const url = API_BASE_URL + path;
+        // ✅ FIX: Use endpoint directly
+        const url = endpoint;
         
         console.log('🔴 API DELETE:', url);
         
@@ -326,7 +324,7 @@ async function apiDelete(endpoint, requiresAuth = false) {
 }
 
 // ===============================
-// POST WITH FORMDATA - IMPROVED
+// POST WITH FORMDATA - FIXED
 // ===============================
 async function apiPostFormData(endpoint, formData, requiresAuth = false) {
     try {
@@ -347,8 +345,8 @@ async function apiPostFormData(endpoint, formData, requiresAuth = false) {
         
         // Don't set Content-Type for FormData - browser will set it with boundary
         
-        const path = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
-        const url = API_BASE_URL + path;
+        // ✅ FIX: Use endpoint directly
+        const url = endpoint;
         
         console.log('🟣 API POST FormData:', url);
         
@@ -390,3 +388,5 @@ async function apiPostFormData(endpoint, formData, requiresAuth = false) {
         throw error;
     }
 }
+
+console.log('✅ api.js loaded - Using endpoints directly from config');
