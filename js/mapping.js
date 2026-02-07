@@ -851,12 +851,14 @@ function displayLevelDesignationMappings() {
             .join(', ') || 'None';
         
         const levelId = safeGet(mapping, 'levelId._id');
+        const mappingId = mapping._id;
         
         row.innerHTML = `
             <td>${levelName}</td>
             <td>${designations}</td>
             <td>
                 ${levelId ? `<button onclick="editLevelDesignationMapping('${levelId}')">Edit</button>` : ''}
+                ${mappingId ? `<button onclick="deleteLevelDesignationMapping('${mappingId}')">Delete</button>` : ''}
             </td>
         `;
     });
@@ -866,6 +868,26 @@ async function editLevelDesignationMapping(levelId) {
     const mapping = levelDesignationMappings.find(m => m.levelId?._id === levelId);
     if (mapping) {
         openEditModal('level-designation', mapping._id, mapping);
+    }
+}
+
+async function deleteLevelDesignationMapping(id) {
+    if (!confirm('Are you sure you want to delete this level-designation mapping?')) return;
+    
+    try {
+        showLoading('Deleting level-designation mapping...');
+        
+        const response = await apiDelete(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING + '/' + id, true);
+        
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(response.message || 'Level-designation mapping deleted successfully!');
+            loadAllData();
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
     }
 }
 
