@@ -3,21 +3,21 @@
 const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
 
 const API_ENDPOINTS = {
-    // ===== INSTITUTION =====
-    INSTITUTION_REGISTER: `${API_BASE_URL}/institution/register`,
-    INSTITUTION_LOGIN: `${API_BASE_URL}/institution/login`,
-    INSTITUTION_VERIFY_OTP: `${API_BASE_URL}/institution/verify-otp`,
-    INSTITUTION_RESEND_OTP: `${API_BASE_URL}/institution/resend-otp`,
-    INSTITUTION_SET_PASSWORD: `${API_BASE_URL}/institution/set-password`,
+    // ===== INSTITUTION ===== 
+    INSTITUTION_REGISTER: `${API_BASE_URL}/auth/register`,
+    INSTITUTION_LOGIN: `${API_BASE_URL}/auth/institution/login`,
+    INSTITUTION_VERIFY_OTP: `${API_BASE_URL}/auth/verify-otp`,
+    INSTITUTION_RESEND_OTP: `${API_BASE_URL}/auth/resend-otp`,
+    INSTITUTION_SET_PASSWORD: `${API_BASE_URL}/auth/set-password`,
     INSTITUTION_PROFILE: `${API_BASE_URL}/institution/profile`,
     INSTITUTION_UPDATE: `${API_BASE_URL}/institution/update`,
-    INSTITUTION_FORGOT_PASSWORD: `${API_BASE_URL}/institution/forgot-password`,
-    INSTITUTION_VERIFY_RESET_OTP: `${API_BASE_URL}/institution/verify-reset-otp`,
-    INSTITUTION_RESET_PASSWORD: `${API_BASE_URL}/institution/reset-password`,
+    INSTITUTION_FORGOT_PASSWORD: `${API_BASE_URL}/auth/forgot-password`,
+    INSTITUTION_VERIFY_RESET_OTP: `${API_BASE_URL}/auth/verify-reset-otp`,
+    INSTITUTION_RESET_PASSWORD: `${API_BASE_URL}/auth/reset-password`,
 
-    // ===== STAFF =====
+    // ===== STAFF ===== 
     STAFF: `${API_BASE_URL}/staff`,
-    STAFF_LOGIN: `${API_BASE_URL}/staff/login`,
+    STAFF_LOGIN: `${API_BASE_URL}/auth/staff/login`,
     STAFF_PROFILE: `${API_BASE_URL}/staff/profile`,
 
     // ===== STUDENTS =====

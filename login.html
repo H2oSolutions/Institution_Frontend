@@ -552,44 +552,47 @@
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script>
-// INLINED CONFIG - NO EXTERNAL FILE NEEDED
+   <!-- Scripts -->
+<script>
+// INLINED CONFIG - FIXED WITH FULL URLS ✅
 const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
 
 const API_ENDPOINTS = {
-    REGISTER: '/auth/register',
-    VERIFY_OTP: '/auth/verify-otp',
-    RESEND_OTP: '/auth/resend-otp',
-    SET_PASSWORD: '/auth/set-password',
-    INSTITUTION_LOGIN: '/auth/institution/login',
-    STAFF_LOGIN: '/auth/staff/login',
-    FORGOT_PASSWORD: '/auth/forgot-password',
-    RESET_PASSWORD: '/auth/reset-password',
-    PROFILE: '/dashboard/profile',
-    STATS: '/dashboard/stats',
-    INSTITUTION_PROFILE: '/institution/profile',
-    STAFF_PROFILE: '/staff/profile',
-    STAFF_ASSIGNMENTS: '/staff/assignments',
-    DESIGNATIONS: '/designations',
-    CLASSES: '/classes',
-    STAFF: '/staff',
-    SUBJECTS: '/subjects',
-    STUDENTS: '/students',
-    STUDENTS_BULK_UPLOAD: '/students/bulk-upload',
-    STUDENTS_BY_CLASS: '/students/class',
-    HIERARCHY: '/hierarchy',
-    STAFF_CLASS_MAPPING: '/mappings/staff-class',
-    CLASS_SUBJECT_MAPPING: '/mappings/class-subject',
-    TEACHER_SUBJECT_MAPPING: '/mappings/teacher-subject',
-    ALL_MAPPINGS: '/mappings/all',
-    CREDENTIALS: '/credentials',
-    ATTENDANCE: '/attendance'
+    REGISTER: `${API_BASE_URL}/auth/register`,
+    VERIFY_OTP: `${API_BASE_URL}/auth/verify-otp`,
+    RESEND_OTP: `${API_BASE_URL}/auth/resend-otp`,
+    SET_PASSWORD: `${API_BASE_URL}/auth/set-password`,
+    INSTITUTION_LOGIN: `${API_BASE_URL}/auth/institution/login`,
+    STAFF_LOGIN: `${API_BASE_URL}/auth/staff/login`,
+    FORGOT_PASSWORD: `${API_BASE_URL}/auth/forgot-password`,
+    RESET_PASSWORD: `${API_BASE_URL}/auth/reset-password`,
+    PROFILE: `${API_BASE_URL}/dashboard/profile`,
+    STATS: `${API_BASE_URL}/dashboard/stats`,
+    INSTITUTION_PROFILE: `${API_BASE_URL}/institution/profile`,
+    STAFF_PROFILE: `${API_BASE_URL}/staff/profile`,
+    STAFF_ASSIGNMENTS: `${API_BASE_URL}/staff/assignments`,
+    DESIGNATIONS: `${API_BASE_URL}/designations`,
+    CLASSES: `${API_BASE_URL}/classes`,
+    STAFF: `${API_BASE_URL}/staff`,
+    SUBJECTS: `${API_BASE_URL}/subjects`,
+    STUDENTS: `${API_BASE_URL}/students`,
+    STUDENTS_BULK_UPLOAD: `${API_BASE_URL}/students/bulk-upload`,
+    STUDENTS_BY_CLASS: `${API_BASE_URL}/students/class`,
+    HIERARCHY: `${API_BASE_URL}/hierarchy`,
+    STAFF_CLASS_MAPPING: `${API_BASE_URL}/mappings/staff-class`,
+    CLASS_SUBJECT_MAPPING: `${API_BASE_URL}/mappings/class-subject`,
+    TEACHER_SUBJECT_MAPPING: `${API_BASE_URL}/mappings/teacher-subject`,
+    ALL_MAPPINGS: `${API_BASE_URL}/mappings/all`,
+    CREDENTIALS: `${API_BASE_URL}/credentials`,
+    ATTENDANCE: `${API_BASE_URL}/attendance`
 };
 
 const INSTITUTION_TYPES = ['School', 'College', 'University'];
 const INDIAN_STATES = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'];
 const ACCESS_LEVELS = ['teacher', 'coordinator', 'admin'];
+
+console.log('✅ Config loaded - API_BASE_URL:', API_BASE_URL);
+console.log('✅ INSTITUTION_LOGIN endpoint:', API_ENDPOINTS.INSTITUTION_LOGIN);
 </script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
