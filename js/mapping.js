@@ -1,4 +1,4 @@
-// mapping.js - FIXED VERSION WITH PROPER HIERARCHY/LEVELS HANDLING
+// mapping.js - FIXED VERSION WITH BETTER ERROR HANDLING
 
 let staffData = [];
 let classesData = [];
@@ -735,98 +735,183 @@ function showMappingSection(sectionName) {
 }
 
 // ===================================
-// 0. LEVEL-DESIGNATION MAPPING
+// 0. LEVEL-DESIGNATION MAPPING (FIXED VERSION)
 // ===================================
 
+// ✅ FIXED: Only show UNASSIGNED designations in dropdown
 function setupLevelDesignationSection() {
     console.log('🔧 Setting up Level-Designation section...');
-    console.log('📊 Levels data available:', levelsData);
+    console.log('📊 Designations available:', designationsData.length);
+    console.log('📊 Levels available:', levelsData.length);
     
-    const levelSelect = document.getElementById('ld-level');
-    if (!levelSelect) {
-        console.error('❌ Level select element not found!');
+    const designationSelect = document.getElementById('ld-designation');
+    if (!designationSelect) {
+        console.error('❌ Designation select element not found!');
         return;
     }
-    
-    if (levelsData.length === 0) {
-        console.warn('⚠️ No levels data available');
-        levelSelect.innerHTML = '<option value="">-- No Levels Created Yet --</option>';
-        showError('No hierarchy levels found. Please create levels in Part 1 - Hierarchy section first.');
-        return;
-    }
-    
-    populateDropdown(levelSelect, levelsData, '_id', 'levelName');
-    console.log('✅ Level dropdown populated with', levelsData.length, 'levels');
-    
-    const designationsContainer = document.getElementById('ld-designations-checkboxes');
-    if (!designationsContainer) {
-        console.error('❌ Designations container not found!');
-        return;
-    }
-    
-    designationsContainer.innerHTML = '';
     
     if (designationsData.length === 0) {
-        designationsContainer.innerHTML = '<p style="color: var(--gray-500); padding: var(--space-4);">No designations available. Please create designations in Part 1 first.</p>';
+        console.warn('⚠️ No designations data available');
+        designationSelect.innerHTML = '<option value="">-- No Designations Created Yet --</option>';
+        showError('No designations found. Please create designations in Part 1 first.');
         return;
     }
     
-    designationsData.forEach(designation => {
-        if (!designation || !designation._id) return;
+    // ✅ FIXED: Filter out designations that already have levels assigned
+    const assignedDesignationIds = [];
+    levelDesignationMappings.forEach(mapping => {
+        if (mapping.designationIds) {
+            mapping.designationIds.forEach(des => {
+                if (des && des._id) {
+                    assignedDesignationIds.push(des._id);
+                }
+            });
+        }
+    });
+    
+    console.log('📌 Already assigned designation IDs:', assignedDesignationIds);
+    
+    // Filter to show only UNASSIGNED designations
+    const unassignedDesignations = designationsData.filter(des => 
+        !assignedDesignationIds.includes(des._id)
+    );
+    
+    console.log('📊 Unassigned designations:', unassignedDesignations.length);
+    
+    if (unassignedDesignations.length === 0) {
+        designationSelect.innerHTML = '<option value="">-- All Designations Already Assigned --</option>';
+        console.log('ℹ️ All designations have been assigned to levels');
+    } else {
+        // Populate dropdown with ONLY unassigned designations
+        populateDropdown(designationSelect, unassignedDesignations, '_id', 'name');
+        console.log('✅ Designation dropdown populated with', unassignedDesignations.length, 'unassigned designations');
+    }
+    
+    // Remove the change event listener that auto-selects levels
+    // (since we want fresh selection each time)
+    designationSelect.removeEventListener('change', updateLevelCheckboxes);
+    
+    // Populate Levels checkboxes
+    const levelsContainer = document.getElementById('ld-levels-checkboxes');
+    if (!levelsContainer) {
+        console.error('❌ Levels container not found!');
+        return;
+    }
+    
+    levelsContainer.innerHTML = '';
+    
+    if (levelsData.length === 0) {
+        levelsContainer.innerHTML = '<p style="color: var(--gray-500); padding: var(--space-4);">No hierarchy levels available. Please create levels in Part 1 - Hierarchy section first.</p>';
+        showError('No hierarchy levels found. Please set up hierarchy levels in Part 1 first.');
+        return;
+    }
+    
+    // Use RADIO buttons (only one level at a time)
+    levelsData.forEach(level => {
+        if (!level || !level._id) return;
         
         const label = document.createElement('label');
         label.innerHTML = `
-            <input type="checkbox" name="ld-designation" value="${designation._id}">
-            ${designation.name || 'Unnamed'}
+            <input type="radio" name="ld-level" value="${level._id}">
+            ${level.levelName || 'Unnamed Level'}
         `;
-        designationsContainer.appendChild(label);
-        designationsContainer.appendChild(document.createElement('br'));
+        levelsContainer.appendChild(label);
     });
     
     console.log('✅ Level-Designation section setup complete');
 }
 
-function toggleAllDesignations(checkbox) {
-    const designationCheckboxes = document.querySelectorAll('input[name="ld-designation"]');
-    designationCheckboxes.forEach(cb => cb.checked = checkbox.checked);
+// ✅ NEW: Update level checkboxes based on selected designation
+function updateLevelCheckboxes() {
+    const designationId = document.getElementById('ld-designation').value;
+    
+    if (!designationId) {
+        // Clear all selections if no designation selected
+        document.querySelectorAll('input[name="ld-level"]').forEach(radio => {
+            radio.checked = false;
+        });
+        return;
+    }
+    
+    // Find which level this designation is currently assigned to
+    const existingMapping = levelDesignationMappings.find(mapping => 
+        mapping.designationIds && mapping.designationIds.some(d => d._id === designationId)
+    );
+    
+    // Clear all selections first
+    document.querySelectorAll('input[name="ld-level"]').forEach(radio => {
+        radio.checked = false;
+    });
+    
+    // If designation has a level, check that radio button
+    if (existingMapping && existingMapping.levelId) {
+        const levelId = existingMapping.levelId._id;
+        const radio = document.querySelector(`input[name="ld-level"][value="${levelId}"]`);
+        if (radio) {
+            radio.checked = true;
+        }
+    }
 }
 
+// FIXED: Handle single level assignment (radio button)
 async function handleAssignLevelToDesignations(e) {
     e.preventDefault();
     
-    const levelId = document.getElementById('ld-level').value;
-    const selectedDesignations = Array.from(document.querySelectorAll('input[name="ld-designation"]:checked'))
-        .map(cb => cb.value);
+    const designationId = document.getElementById('ld-designation').value;
     
-    if (!levelId) {
+    // ✅ FIXED: Get selected radio button (only one level)
+    const selectedRadio = document.querySelector('input[name="ld-level"]:checked');
+    
+    if (!designationId) {
+        showError('Please select a designation');
+        return;
+    }
+    
+    if (!selectedRadio) {
         showError('Please select a level');
         return;
     }
     
-    if (selectedDesignations.length === 0) {
-        showError('Please select at least one designation');
-        return;
-    }
+    const selectedLevel = selectedRadio.value;
     
     try {
-        showLoading('Assigning level to designations...');
+        showLoading('Assigning level to designation...');
         
-        const response = await apiPost(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING, {
-            levelId: levelId,
-            designationIds: selectedDesignations
-        }, true);
+        const designationName = designationsData.find(d => d._id === designationId)?.name;
+        const levelName = levelsData.find(l => l._id === selectedLevel)?.levelName;
+        
+        console.log('📤 Assigning:', {
+            designation: designationName,
+            level: levelName,
+            designationId,
+            levelId: selectedLevel
+        });
+        
+        const payload = {
+            levelId: selectedLevel,
+            designationIds: [designationId]  // Array with single designation
+        };
+        
+        console.log('📤 Payload:', JSON.stringify(payload, null, 2));
+        
+        const response = await apiPost(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING, payload, true);
+        
+        console.log('📥 Response:', response);
         
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message || 'Level assigned to designations successfully!');
+            showSuccess(response.message || `Successfully assigned ${designationName} to ${levelName}!`);
             document.getElementById('assign-level-designation-form').reset();
-            document.getElementById('ld-all-designations').checked = false;
             loadAllData();
+        } else {
+            showError(response.message || 'Failed to assign level');
         }
+        
     } catch (error) {
+        console.error('❌ Assignment error:', error);
         hideLoading();
-        showError(error.message);
+        showError(error.message || 'Failed to assign level. Please check console for details.');
     }
 }
 
@@ -837,57 +922,224 @@ function displayLevelDesignationMappings() {
     tbody.innerHTML = '';
     
     if (levelDesignationMappings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No level-designation mappings yet. Use the form above to assign levels.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No designation-level mappings yet. Use the form above to assign levels.</td></tr>';
         return;
     }
     
+    // ✅ FIXED: Display one row per designation (since each designation has only one level)
+    const designationMap = new Map();
+    
+    // Build a map of designation -> level
     levelDesignationMappings.forEach(mapping => {
-        if (!mapping) return;
+        if (!mapping || !mapping.designationIds) return;
         
-        const row = tbody.insertRow();
         const levelName = safeGet(mapping, 'levelId.levelName', '-');
-        const designations = (mapping.designationIds || [])
-            .map(d => d?.name || 'Unnamed')
-            .join(', ') || 'None';
-        
-        const levelId = safeGet(mapping, 'levelId._id');
         const mappingId = mapping._id;
         
+        mapping.designationIds.forEach(designation => {
+            if (!designation || !designation._id) return;
+            
+            designationMap.set(designation._id, {
+                name: designation.name || 'Unnamed',
+                level: levelName,
+                mappingId: mappingId
+            });
+        });
+    });
+    
+    // Display one row per designation
+    designationMap.forEach((data, desId) => {
+        const row = tbody.insertRow();
+        
         row.innerHTML = `
-            <td>${levelName}</td>
-            <td>${designations}</td>
+            <td>${data.name}</td>
+            <td>${data.level}</td>
             <td>
-                ${levelId ? `<button onclick="editLevelDesignationMapping('${levelId}')">Edit</button>` : ''}
-                ${mappingId ? `<button onclick="deleteLevelDesignationMapping('${mappingId}')">Delete</button>` : ''}
+                <button onclick="editDesignationLevels('${desId}')">Edit</button>
+                <button onclick="deleteDesignationLevels('${desId}')">Delete</button>
             </td>
         `;
     });
+    
+    console.log('✅ Displayed', designationMap.size, 'designation-level mappings');
 }
 
-async function editLevelDesignationMapping(levelId) {
-    const mapping = levelDesignationMappings.find(m => m.levelId?._id === levelId);
-    if (mapping) {
-        openEditModal('level-designation', mapping._id, mapping);
+async function editDesignationLevels(designationId) {
+    // Find all mappings that include this designation
+    const relatedMappings = levelDesignationMappings.filter(m => 
+        m.designationIds && m.designationIds.some(d => d._id === designationId)
+    );
+    
+    if (relatedMappings.length === 0) {
+        showError('No mappings found for this designation');
+        return;
     }
+    
+    // Create a combined mapping object for editing
+    const designation = designationsData.find(d => d._id === designationId);
+    const assignedLevels = relatedMappings.map(m => m.levelId).filter(Boolean);
+    
+    const editData = {
+        designationId: designation,
+        levelIds: assignedLevels,
+        _id: designationId // Use designation ID as identifier
+    };
+    
+    openEditModal('level-designation', designationId, editData);
 }
 
-async function deleteLevelDesignationMapping(id) {
-    if (!confirm('Are you sure you want to delete this level-designation mapping?')) return;
+async function deleteDesignationLevels(designationId) {
+    if (!confirm('Are you sure you want to delete this designation-level assignment?')) return;
     
     try {
-        showLoading('Deleting level-designation mapping...');
+        showLoading('Deleting designation-level mapping...');
         
-        const response = await apiDelete(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING + '/' + id, true);
+        // Find the mapping that contains this designation
+        const mapping = levelDesignationMappings.find(m => 
+            m.designationIds && m.designationIds.some(d => d._id === designationId)
+        );
+        
+        if (!mapping) {
+            hideLoading();
+            showError('Mapping not found');
+            return;
+        }
+        
+        console.log('🗑️ Found mapping:', mapping._id);
+        console.log('📌 Current designations in mapping:', mapping.designationIds.map(d => d.name));
+        
+        // ✅ FIXED: Remove only THIS designation from the mapping
+        const remainingDesignations = mapping.designationIds.filter(
+            d => d._id.toString() !== designationId.toString()
+        );
+        
+        console.log('📌 Remaining designations after removal:', remainingDesignations.length);
+        
+        let response;
+        
+        if (remainingDesignations.length === 0) {
+            // No more designations in this level - delete the entire mapping
+            console.log('🗑️ No more designations - deleting entire mapping');
+            response = await apiDelete(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING + '/' + mapping._id, true);
+        } else {
+            // Still have other designations - update the mapping to remove just this one
+            console.log('✏️ Other designations remain - updating mapping to remove this designation');
+            
+            const remainingDesignationIds = remainingDesignations.map(d => d._id);
+            
+            response = await apiPost(
+                API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING,
+                {
+                    levelId: mapping.levelId._id,
+                    designationIds: remainingDesignationIds
+                },
+                true
+            );
+        }
         
         hideLoading();
         
         if (response.success) {
-            showSuccess(response.message || 'Level-designation mapping deleted successfully!');
+            showSuccess(response.message || 'Designation-level assignment deleted successfully!');
             loadAllData();
+        } else {
+            showError(response.message || 'Failed to delete mapping');
         }
+        
     } catch (error) {
+        console.error('❌ Delete error:', error);
         hideLoading();
-        showError(error.message);
+        showError(error.message || 'Failed to delete mapping');
+    }
+}
+
+// ===================================
+// LEVEL-DESIGNATION EDIT MODAL (REVERSED)
+// ===================================
+
+function generateLevelDesignationEditForm(data) {
+    const designationName = safeGet(data, 'designationId.name', '-');
+    
+    return `
+        <div class="edit-form-group">
+            <label>Designation</label>
+            <input type="text" value="${designationName}" disabled class="disabled-input">
+        </div>
+        
+        <div class="edit-form-group">
+            <label>Assigned Level * (Choose ONE only)</label>
+            <small style="display: block; margin-bottom: var(--space-2); color: var(--gray-600);">
+                Each designation can have only one level
+            </small>
+            <div class="edit-checkbox-container" id="edit-levels-container">
+                <!-- Levels will be inserted here as RADIO buttons -->
+            </div>
+        </div>
+    `;
+}
+
+function setupLevelDesignationEditForm(data) {
+    const container = document.getElementById('edit-levels-container');
+    const assignedLevelIds = (data.levelIds || []).map(l => l?._id).filter(Boolean);
+    const currentLevelId = assignedLevelIds[0]; // Should only be one level
+    
+    container.innerHTML = '';
+    
+    // ✅ FIXED: Use RADIO buttons instead of checkboxes
+    levelsData.forEach(level => {
+        if (!level || !level._id) return;
+        
+        const isChecked = currentLevelId === level._id;
+        const label = document.createElement('label');
+        label.innerHTML = `
+            <input type="radio" name="edit-level" value="${level._id}" ${isChecked ? 'checked' : ''}>
+            ${level.levelName || 'Unnamed'}
+        `;
+        container.appendChild(label);
+    });
+}
+
+async function saveLevelDesignationEdit() {
+    // ✅ FIXED: Get selected radio button (only one level)
+    const selectedRadio = document.querySelector('input[name="edit-level"]:checked');
+    
+    if (!selectedRadio) {
+        showError('Please select a level');
+        return;
+    }
+    
+    const selectedLevel = selectedRadio.value;
+    
+    showLoading('Updating designation-level mapping...');
+    
+    const designationId = currentEditId; // This is the designation ID
+    
+    try {
+        const payload = {
+            levelId: selectedLevel,
+            designationIds: [designationId]
+        };
+        
+        console.log('📤 Updating mapping:', payload);
+        
+        const response = await apiPost(API_ENDPOINTS.LEVEL_DESIGNATION_MAPPING, payload, true);
+        
+        console.log('📥 Update response:', response);
+        
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(response.message || 'Designation-level mapping updated successfully!');
+            closeEditModal();
+            loadAllData();
+        } else {
+            showError(response.message || 'Failed to update mapping');
+        }
+        
+    } catch (error) {
+        console.error('❌ Update error:', error);
+        hideLoading();
+        showError(error.message || 'Failed to update mapping');
     }
 }
 
@@ -1303,4 +1555,4 @@ function displayAllMappings() {
     displayTeacherSubjectMappings();
 }
 
-console.log('✅ mapping.js loaded successfully (FIXED VERSION with proper hierarchy handling)');
+console.log('✅ mapping.js loaded successfully (FIXED VERSION with better error handling)');
