@@ -1,7 +1,6 @@
-// credentials.js - WITH OVERLAY LOADING FUNCTIONALITY
+// credentials.js - SIMPLIFIED VERSION
 
 let staffData = [];
-let classesData = [];
 let credentialsData = [];
 let isDataLoaded = false;
 
@@ -42,7 +41,7 @@ function checkAuth() {
 }
 
 // ===============================
-// CHECK REQUIRED ELEMENTS - MATCHING YOUR HTML
+// CHECK REQUIRED ELEMENTS
 // ===============================
 function checkRequiredElements() {
     console.log('🔍 Checking required DOM elements...');
@@ -52,8 +51,6 @@ function checkRequiredElements() {
         'staff-select': 'Staff dropdown',
         'password': 'Password input',
         'confirm-password': 'Retype password input',
-        'can-access-all-classes': 'All classes checkbox',
-        'class-checkboxes': 'Classes container',
         'loginid-display': 'Login ID display',
         'credentials-table': 'Credentials table',
         'loading': 'Loading indicator',
@@ -105,29 +102,6 @@ function setupEventListeners() {
     } else {
         console.error('❌ Staff select not found');
     }
-    
-    // All classes checkbox
-    const allClassesCheckbox = document.getElementById('can-access-all-classes');
-    if (allClassesCheckbox) {
-        allClassesCheckbox.addEventListener('change', function(e) {
-            toggleAllClasses(e.target.checked);
-        });
-        console.log('✅ All classes checkbox listener added');
-    } else {
-        console.error('❌ All classes checkbox not found');
-    }
-    
-    // Access level radio buttons - show/hide additional access section
-    const accessLevelRadios = document.querySelectorAll('input[name="access-level"]');
-    accessLevelRadios.forEach(radio => {
-        radio.addEventListener('change', function(e) {
-            const additionalAccessSection = document.getElementById('additional-access-section');
-            if (additionalAccessSection) {
-                // Show additional access section for all access levels
-                additionalAccessSection.style.display = e.target.value ? 'block' : 'none';
-            }
-        });
-    });
 }
 
 // ===============================
@@ -139,19 +113,16 @@ async function loadCredentialsData() {
     try {
         showLoading('Loading data...');
         
-        const [staffResponse, classesResponse, credentialsResponse] = await Promise.all([
+        const [staffResponse, credentialsResponse] = await Promise.all([
             apiGet(API_ENDPOINTS.STAFF, true),
-            apiGet(API_ENDPOINTS.CLASSES, true),
             apiGet(API_ENDPOINTS.CREDENTIALS, true)
         ]);
         
         staffData = staffResponse.data || [];
-        classesData = classesResponse.data || [];
         credentialsData = credentialsResponse.data || [];
         
         console.log('✅ Data loaded:', {
             staff: staffData.length,
-            classes: classesData.length,
             credentials: credentialsData.length
         });
         
@@ -169,7 +140,7 @@ async function loadCredentialsData() {
 }
 
 // ===============================
-// SETUP FORM - MATCHING YOUR HTML
+// SETUP FORM
 // ===============================
 function setupCredentialForm() {
     console.log('🛠️ Setting up credential form...');
@@ -211,51 +182,6 @@ function setupCredentialForm() {
     
     staffSelect.disabled = false;
     console.log(`✅ Populated ${staffWithoutCredentials.length} staff`);
-    
-    // Setup class checkboxes
-    setupClassCheckboxes();
-}
-
-// ===============================
-// SETUP CLASS CHECKBOXES
-// ===============================
-function setupClassCheckboxes() {
-    console.log('📋 Setting up class checkboxes...');
-    
-    const container = document.getElementById('class-checkboxes');
-    if (!container) {
-        console.error('❌ Class checkboxes container not found');
-        return;
-    }
-    
-    container.innerHTML = '';
-    
-    if (classesData.length === 0) {
-        container.innerHTML = '<p style="color: gray;"><em>No classes available</em></p>';
-        return;
-    }
-    
-    classesData.forEach(cls => {
-        const label = document.createElement('label');
-        label.style.display = 'flex';
-        label.style.alignItems = 'center';
-        label.style.marginBottom = '8px';
-        label.style.cursor = 'pointer';
-        
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.name = 'specific-class';
-        checkbox.value = cls._id;
-        checkbox.style.marginRight = '8px';
-        
-        const text = document.createTextNode(cls.nickname || cls.className);
-        
-        label.appendChild(checkbox);
-        label.appendChild(text);
-        container.appendChild(label);
-    });
-    
-    console.log(`✅ Created ${classesData.length} class checkboxes`);
 }
 
 // ===============================
@@ -281,42 +207,20 @@ function handleStaffSelection(e) {
 }
 
 // ===============================
-// TOGGLE ALL CLASSES
-// ===============================
-function toggleAllClasses(isChecked) {
-    console.log('🔄 Toggle all classes:', isChecked);
-    
-    const classCheckboxes = document.querySelectorAll('input[name="specific-class"]');
-    classCheckboxes.forEach(cb => {
-        cb.checked = isChecked;
-        cb.disabled = isChecked;
-    });
-    
-    console.log(`✅ ${classCheckboxes.length} checkboxes ${isChecked ? 'checked' : 'unchecked'}`);
-}
-
-// ===============================
-// CREATE CREDENTIALS - MATCHING YOUR HTML
+// CREATE CREDENTIALS
 // ===============================
 async function handleCreateCredentials(e) {
     e.preventDefault();
     console.log('📝 Creating credentials...');
     
-    // Get form values using YOUR HTML IDs
+    // Get form values
     const staffId = document.getElementById('staff-select').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
-    const canAccessAllClasses = document.getElementById('can-access-all-classes').checked;
-    
-    // Get selected access level (radio button)
-    const accessLevelRadio = document.querySelector('input[name="access-level"]:checked');
-    const accessLevel = accessLevelRadio ? accessLevelRadio.value : null;
     
     console.log('📋 Form values:', {
         staffId,
-        passwordLength: password?.length,
-        accessLevel,
-        canAccessAllClasses
+        passwordLength: password?.length
     });
     
     // Validation
@@ -340,17 +244,6 @@ async function handleCreateCredentials(e) {
         return;
     }
     
-    if (!accessLevel) {
-        showError('Please select an access level');
-        return;
-    }
-    
-    // Get selected classes
-    const selectedClasses = Array.from(document.querySelectorAll('input[name="specific-class"]:checked'))
-        .map(cb => cb.value);
-    
-    console.log('📚 Selected classes:', selectedClasses.length);
-    
     // Check if credentials already exist
     const existingCred = credentialsData.find(c => c.staff && c.staff._id === staffId);
     if (existingCred) {
@@ -363,12 +256,7 @@ async function handleCreateCredentials(e) {
         
         const requestData = {
             staffId: staffId,
-            password: password,
-            accessLevel: accessLevel,
-            additionalAccess: {
-                canAccessAllClasses: canAccessAllClasses,
-                specificClasses: canAccessAllClasses ? [] : selectedClasses
-            }
+            password: password
         };
         
         console.log('📤 Request:', requestData);
@@ -385,18 +273,6 @@ async function handleCreateCredentials(e) {
             // Reset form
             document.getElementById('create-credentials-form').reset();
             document.getElementById('loginid-display').textContent = 'Select a staff member first';
-            
-            // Hide additional access section
-            const additionalAccessSection = document.getElementById('additional-access-section');
-            if (additionalAccessSection) {
-                additionalAccessSection.style.display = 'none';
-            }
-            
-            // Uncheck all class checkboxes
-            document.querySelectorAll('input[name="specific-class"]').forEach(cb => {
-                cb.checked = false;
-                cb.disabled = false;
-            });
             
             console.log('✅ Form reset, reloading data...');
             await loadCredentialsData();
@@ -427,7 +303,7 @@ function displayCredentials() {
     if (credentialsData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="empty-state">
+                <td colspan="5" class="empty-state">
                     <p>📭 No credentials created yet</p>
                     <small>Create your first staff credential above</small>
                 </td>
@@ -441,14 +317,6 @@ function displayCredentials() {
     credentialsData.forEach(cred => {
         const row = tbody.insertRow();
         
-        // Access info
-        let accessInfo = 'None';
-        if (cred.additionalAccess?.canAccessAllClasses) {
-            accessInfo = '<span class="status-badge status-active">All Classes</span>';
-        } else if (cred.additionalAccess?.specificClasses?.length > 0) {
-            accessInfo = `<span class="status-badge" style="background: var(--info-100); color: var(--info-700);">${cred.additionalAccess.specificClasses.length} classes</span>`;
-        }
-        
         // Last login
         const lastLogin = cred.lastLogin ? 
             new Date(cred.lastLogin).toLocaleString() : 
@@ -459,21 +327,9 @@ function displayCredentials() {
             '<span class="status-badge status-active">Active</span>' : 
             '<span class="status-badge status-inactive">Inactive</span>';
         
-        // Access level badge
-        let accessBadge = '';
-        if (cred.accessLevel === 'teacher') {
-            accessBadge = '<span class="access-badge access-teacher">👨‍🏫 Teacher</span>';
-        } else if (cred.accessLevel === 'coordinator') {
-            accessBadge = '<span class="access-badge access-coordinator">📋 Coordinator</span>';
-        } else if (cred.accessLevel === 'admin') {
-            accessBadge = '<span class="access-badge access-admin">🔐 Admin</span>';
-        }
-        
         row.innerHTML = `
             <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
             <td><strong>${cred.staff?.name || '-'}</strong></td>
-            <td>${accessBadge}</td>
-            <td>${accessInfo}</td>
             <td>${statusBadge}</td>
             <td>${lastLogin}</td>
             <td style="white-space: nowrap;">
