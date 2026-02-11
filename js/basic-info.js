@@ -480,7 +480,7 @@ async function handleAddDesignation(e) {
     try {
         showLoading('Adding designation...');
         
-        const response = await fetch(API_BASE_URL + API_ENDPOINTS.DESIGNATIONS, {
+        const response = await fetch(API_ENDPOINTS.DESIGNATIONS, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -625,7 +625,7 @@ async function handleAddClass(e) {
     try {
         showLoading('Adding class...');
         
-        const response = await fetch(API_BASE_URL + API_ENDPOINTS.CLASSES, {
+        const response = await fetch(API_ENDPOINTS.CLASSES, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -783,7 +783,7 @@ async function handleAddStaff(e) {
     try {
         showLoading('Adding staff...');
         
-        const response = await fetch(API_BASE_URL + API_ENDPOINTS.STAFF, {
+        const response = await fetch(API_ENDPOINTS.STAFF, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
