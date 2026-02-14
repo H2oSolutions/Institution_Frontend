@@ -1,4 +1,4 @@
-// basic-info.js - Part 1: Basic Information Logic
+// basic-info.js - Part 1: Basic Information Logic - UPDATED WITH 3 NEW OPTIONAL FIELDS
 
 let currentSection = 'designations';
 let designationsData = [];
@@ -9,7 +9,7 @@ let studentsData = [];
 let classStatistics = [];
 
 // ===================================
-// UTILITY FUNCTIONS (ADD AT THE TOP)
+// UTILITY FUNCTIONS
 // ===================================
 
 function validateMobile(mobile) {
@@ -21,7 +21,6 @@ function validateMobile(mobile) {
 function populateDropdown(selectElement, data, valueKey, textKey) {
     if (!selectElement) return;
     
-    // Clear existing options except the first one
     selectElement.innerHTML = '<option value="">-- Select --</option>';
     
     data.forEach(item => {
@@ -33,7 +32,7 @@ function populateDropdown(selectElement, data, valueKey, textKey) {
 }
 
 // ===================================
-// MESSAGE FUNCTIONS (Loading, Success, Error)
+// MESSAGE FUNCTIONS
 // ===================================
 
 function showLoading(message = 'Loading...') {
@@ -43,7 +42,6 @@ function showLoading(message = 'Loading...') {
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide error and success
     if (errorEl) {
         errorEl.classList.remove('show');
         errorEl.style.display = 'none';
@@ -53,19 +51,15 @@ function showLoading(message = 'Loading...') {
         successEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show loading
     if (loadingEl) {
         loadingEl.textContent = message;
         loadingEl.style.display = 'block';
         loadingEl.classList.add('show');
         console.log('✅ Loading shown:', message);
-    } else {
-        console.error('❌ Loading element not found!');
     }
 }
 
@@ -77,10 +71,8 @@ function hideLoading() {
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
-        console.log('✅ Loading hidden');
     }
     
-    // Hide overlay if no messages are showing
     const errorEl = document.getElementById('error-message');
     const successEl = document.getElementById('success-message');
     const anyMessageShowing = (errorEl && errorEl.classList.contains('show')) || 
@@ -98,7 +90,6 @@ function showSuccess(message) {
     const errorEl = document.getElementById('error-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide loading and error
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
@@ -108,29 +99,22 @@ function showSuccess(message) {
         errorEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show success
     if (successEl) {
         successEl.textContent = message;
         successEl.style.display = 'block';
         successEl.classList.add('show');
-        console.log('✅ Success shown:', message);
         
-        // Auto-hide after 5 seconds
         setTimeout(() => {
             successEl.classList.remove('show');
             successEl.style.display = 'none';
             if (overlay) {
                 overlay.classList.remove('show');
             }
-            console.log('✅ Success auto-hidden');
         }, 5000);
-    } else {
-        console.error('❌ Success element not found!');
     }
 }
 
@@ -141,7 +125,6 @@ function showError(message) {
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
     
-    // Hide loading and success
     if (loadingEl) {
         loadingEl.classList.remove('show');
         loadingEl.style.display = 'none';
@@ -151,117 +134,24 @@ function showError(message) {
         successEl.style.display = 'none';
     }
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('show');
     }
     
-    // Show error
     if (errorEl) {
         errorEl.textContent = message;
         errorEl.style.display = 'block';
         errorEl.classList.add('show');
-        console.log('❌ Error shown:', message);
         
-        // Auto-hide after 7 seconds
         setTimeout(() => {
             errorEl.classList.remove('show');
             errorEl.style.display = 'none';
             if (overlay) {
                 overlay.classList.remove('show');
             }
-            console.log('❌ Error auto-hidden');
         }, 7000);
-    } else {
-        console.error('❌ Error element not found!');
     }
 }
-
-// ===================================
-// UPLOAD RESULTS MODAL FUNCTIONS
-// ===================================
-
-// function showUploadResultsModal(results) {
-//     console.log('📊 Showing upload results modal:', results);
-    
-//     const modal = document.getElementById('upload-results-modal');
-//     const statsContainer = document.getElementById('upload-stats-container');
-//     const errorsContainer = document.getElementById('upload-errors-container');
-//     const errorsList = document.getElementById('errors-list');
-    
-//     if (!modal || !statsContainer) {
-//         console.error('❌ Upload results modal elements not found');
-//         return;
-//     }
-    
-//     // Ensure results object has all required properties
-//     const safeResults = {
-//         total: results.total || 0,
-//         successful: results.successful || 0,
-//         failed: results.failed || 0,
-//         totalInClass: results.totalInClass || 0,
-//         errors: results.errors || []
-//     };
-    
-//     console.log('📊 Safe results:', safeResults);
-    
-//     // Build stats HTML
-//     let statsHTML = `
-//         <div class="stat-card total">
-//             <div class="stat-number">${safeResults.total}</div>
-//             <div class="stat-label">Total Processed</div>
-//         </div>
-//         <div class="stat-card success">
-//             <div class="stat-number">${safeResults.successful}</div>
-//             <div class="stat-label">Successfully Added</div>
-//         </div>
-//         <div class="stat-card failed">
-//             <div class="stat-number">${safeResults.failed}</div>
-//             <div class="stat-label">Failed/Duplicates</div>
-//         </div>
-//         <div class="stat-card class-total">
-//             <div class="stat-number">${safeResults.totalInClass}</div>
-//             <div class="stat-label">Total in Class Now</div>
-//         </div>
-//     `;
-    
-//     statsContainer.innerHTML = statsHTML;
-    
-//     // Show errors if any
-//     if (safeResults.errors && Array.isArray(safeResults.errors) && safeResults.errors.length > 0) {
-//         errorsContainer.style.display = 'block';
-//         errorsList.innerHTML = safeResults.errors.map(err => {
-//             const message = err.message || err.error || err;
-//             const row = err.row || 'N/A';
-//             return `
-//                 <div class="error-item">
-//                     <strong>Row ${row}:</strong> ${message}
-//                 </div>
-//             `;
-//         }).join('');
-//     } else {
-//         errorsContainer.style.display = 'none';
-//     }
-    
-//     // Show modal
-//     modal.classList.add('show');
-//     console.log('✅ Upload results modal displayed');
-// }
-
-// function closeUploadModal() {
-//     const modal = document.getElementById('upload-results-modal');
-//     if (modal) {
-//         modal.classList.remove('show');
-//     }
-// }
-
-// // Close modal when clicking outside
-// document.addEventListener('click', function(e) {
-//     const modal = document.getElementById('upload-results-modal');
-//     if (e.target === modal) {
-//         closeUploadModal();
-//     }
-// });
 
 // ===================================
 // CLASS STATISTICS FUNCTIONS
@@ -270,8 +160,6 @@ function showError(message) {
 async function loadClassStatistics() {
     try {
         console.log('📊 Loading class statistics...');
-        
-        // Get classes with student counts
         const classesResponse = await apiGet(API_ENDPOINTS.CLASSES, true);
         
         if (classesResponse.success) {
@@ -290,14 +178,12 @@ function displayClassStatistics() {
     
     if (!totalClassesEl || !totalStudentsEl || !classListEl) return;
     
-    // Calculate totals
     const totalClasses = classStatistics.length;
     const totalStudents = classStatistics.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
     
     totalClassesEl.textContent = totalClasses;
     totalStudentsEl.textContent = totalStudents;
     
-    // Display class list
     if (classStatistics.length === 0) {
         classListEl.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: var(--space-4);">No classes available</p>';
         return;
@@ -323,10 +209,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Show first section by default
     showSection('designations');
     
-    // Load all data
     loadDesignations();
     loadClasses();
     loadStaff();
@@ -334,7 +218,6 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStudents();
     loadHierarchy();
     
-    // Setup form handlers
     const addDesForm = document.getElementById('add-designation-form');
     const addClassForm = document.getElementById('add-class-form');
     const addStaffForm = document.getElementById('add-staff-form');
@@ -351,7 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (bulkUploadForm) bulkUploadForm.addEventListener('submit', handleBulkUpload);
     if (hierarchyForm) hierarchyForm.addEventListener('submit', handleSaveHierarchy);
     
-    // Phone validation for staff and student mobile inputs
     const staffMobile = document.getElementById('staff-mobile');
     const studentMobile = document.getElementById('student-mobile');
     
@@ -359,10 +241,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!input) return;
         
         input.addEventListener('input', function(e) {
-            // Remove non-numeric characters
             this.value = this.value.replace(/[^0-9]/g, '');
             
-            // Validate length
             if (this.value.length === 10) {
                 this.classList.remove('phone-invalid');
                 this.classList.add('phone-valid');
@@ -382,15 +262,12 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function showSection(sectionName) {
-    // Hide all sections
     const sections = document.querySelectorAll('.section');
     sections.forEach(s => s.style.display = 'none');
     
-    // Remove active class from all tabs
     const tabs = document.querySelectorAll('#section-tabs button');
     tabs.forEach(t => t.style.fontWeight = 'normal');
     
-    // Show selected section
     const section = document.getElementById('section-' + sectionName);
     const tab = document.getElementById('tab-' + sectionName);
     
@@ -399,7 +276,6 @@ function showSection(sectionName) {
     
     currentSection = sectionName;
     
-    // Load class statistics when showing students section
     if (sectionName === 'students') {
         loadClassStatistics();
     }
@@ -411,19 +287,16 @@ function showSection(sectionName) {
 
 async function loadDesignations() {
     try {
-        console.log('Loading designations...');
         showLoading('Loading designations...');
         const response = await apiGet(API_ENDPOINTS.DESIGNATIONS, true);
         
         hideLoading();
         if (response.success) {
             designationsData = response.data;
-            console.log('✅ Designations loaded:', designationsData.length);
             displayDesignations();
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Failed to load designations:', error);
         showError('Failed to load designations: ' + error.message);
     }
 }
@@ -451,17 +324,14 @@ function displayDesignations() {
         `;
     });
     
-    // Update staff designation dropdown
     const staffDesSelect = document.getElementById('staff-designation');
     if (staffDesSelect) {
         populateDropdown(staffDesSelect, designationsData, '_id', 'name');
-        console.log('✅ Staff designation dropdown populated');
     }
 }
 
 async function handleAddDesignation(e) {
     e.preventDefault();
-    console.log('Adding designation...');
     
     const name = document.getElementById('des-name').value.trim();
     
@@ -486,9 +356,7 @@ async function handleAddDesignation(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                name: name
-            })
+            body: JSON.stringify({ name: name })
         });
         
         const data = await response.json();
@@ -504,7 +372,6 @@ async function handleAddDesignation(e) {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Error:', error);
         showError('Error: ' + error.message);
     }
 }
@@ -520,9 +387,7 @@ async function deleteDesignation(id) {
     
     try {
         showLoading('Deleting designation...');
-        
         const response = await apiDelete(API_ENDPOINTS.DESIGNATIONS + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -541,17 +406,14 @@ async function deleteDesignation(id) {
 
 async function loadClasses() {
     try {
-        console.log('Loading classes...');
         showLoading('Loading classes...');
         const response = await apiGet(API_ENDPOINTS.CLASSES, true);
         
         hideLoading();
         if (response.success) {
             classesData = response.data;
-            console.log('✅ Classes loaded:', classesData.length);
             displayClasses();
             
-            // Also update class statistics if on students section
             if (currentSection === 'students') {
                 classStatistics = classesData;
                 displayClassStatistics();
@@ -559,7 +421,6 @@ async function loadClasses() {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Failed to load classes:', error);
         showError('Failed to load classes: ' + error.message);
     }
 }
@@ -591,7 +452,6 @@ function displayClasses() {
         `;
     });
     
-    // Update student class dropdowns
     const studentClassSelect = document.getElementById('student-class');
     const bulkClassSelect = document.getElementById('bulk-class-select');
     
@@ -605,7 +465,6 @@ function displayClasses() {
 
 async function handleAddClass(e) {
     e.preventDefault();
-    console.log('Adding class...');
     
     const className = document.getElementById('class-name').value.trim();
     const nickname = document.getElementById('class-nickname').value.trim();
@@ -638,7 +497,6 @@ async function handleAddClass(e) {
         });
         
         const data = await response.json();
-        
         hideLoading();
         
         if (response.ok && data.success) {
@@ -650,7 +508,6 @@ async function handleAddClass(e) {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Error:', error);
         showError('Error: ' + error.message);
     }
 }
@@ -666,9 +523,7 @@ async function deleteClass(id) {
     
     try {
         showLoading('Deleting class...');
-        
         const response = await apiDelete(API_ENDPOINTS.CLASSES + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -687,19 +542,16 @@ async function deleteClass(id) {
 
 async function loadStaff() {
     try {
-        console.log('Loading staff...');
         showLoading('Loading staff...');
         const response = await apiGet(API_ENDPOINTS.STAFF, true);
-        
         hideLoading();
+        
         if (response.success) {
             staffData = response.data;
-            console.log('✅ Staff loaded:', staffData.length);
             displayStaff();
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Failed to load staff:', error);
         showError('Failed to load staff: ' + error.message);
     }
 }
@@ -736,7 +588,6 @@ function displayStaff() {
 
 async function handleAddStaff(e) {
     e.preventDefault();
-    console.log('Adding staff...');
     
     const nameInput = document.getElementById('staff-name');
     const mobileInput = document.getElementById('staff-mobile');
@@ -751,13 +602,8 @@ async function handleAddStaff(e) {
     const mobileNo = mobileInput.value.trim();
     const designationId = designationInput.value;
     
-    if (!name) {
-        showError('Please enter staff name');
-        return;
-    }
-    
-    if (!mobileNo) {
-        showError('Please enter mobile number');
+    if (!name || !mobileNo || !designationId) {
+        showError('Please fill all required fields');
         return;
     }
     
@@ -766,17 +612,10 @@ async function handleAddStaff(e) {
         return;
     }
     
-    if (!designationId) {
-        showError('Please select a designation');
-        return;
-    }
-    
     const token = localStorage.getItem('token');
     if (!token) {
         showError('Please login again');
-        setTimeout(() => {
-            window.location.href = 'login.html';
-        }, 2000);
+        setTimeout(() => window.location.href = 'login.html', 2000);
         return;
     }
     
@@ -797,27 +636,22 @@ async function handleAddStaff(e) {
         });
         
         const data = await response.json();
-        
         hideLoading();
         
         if (response.ok && data.success) {
             showSuccess(data.message || 'Staff added successfully!');
-            
             const form = document.getElementById('add-staff-form');
             form.reset();
             const staffMobileInput = document.getElementById('staff-mobile');
             if (staffMobileInput) {
                 staffMobileInput.classList.remove('phone-valid', 'phone-invalid');
             }
-            
             await loadStaff();
         } else {
-            showError(data.message || `Failed to add staff (Status: ${response.status})`);
+            showError(data.message || `Failed to add staff`);
         }
-        
     } catch (error) {
         hideLoading();
-        console.error('❌ Error:', error);
         showError('Network error: ' + error.message);
     }
 }
@@ -833,9 +667,7 @@ async function deleteStaff(id) {
     
     try {
         showLoading('Deleting staff...');
-        
         const response = await apiDelete(API_ENDPOINTS.STAFF + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -854,19 +686,16 @@ async function deleteStaff(id) {
 
 async function loadSubjects() {
     try {
-        console.log('Loading subjects...');
         showLoading('Loading subjects...');
         const response = await apiGet(API_ENDPOINTS.SUBJECTS, true);
-        
         hideLoading();
+        
         if (response.success) {
             subjectsData = response.data;
-            console.log('✅ Subjects loaded:', subjectsData.length);
             displaySubjects();
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Failed to load subjects:', error);
         showError('Failed to load subjects: ' + error.message);
     }
 }
@@ -896,7 +725,6 @@ function displaySubjects() {
 
 async function handleAddSubject(e) {
     e.preventDefault();
-    console.log('Adding subject...');
     
     const subjectName = document.getElementById('subject-name').value.trim();
     
@@ -907,11 +735,7 @@ async function handleAddSubject(e) {
     
     try {
         showLoading('Adding subject...');
-        
-        const response = await apiPost(API_ENDPOINTS.SUBJECTS, {
-            subjectName: subjectName
-        }, true);
-        
+        const response = await apiPost(API_ENDPOINTS.SUBJECTS, { subjectName: subjectName }, true);
         hideLoading();
         
         if (response.success) {
@@ -921,7 +745,6 @@ async function handleAddSubject(e) {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Add subject error:', error);
         showError(error.message);
     }
 }
@@ -937,9 +760,7 @@ async function deleteSubject(id) {
     
     try {
         showLoading('Deleting subject...');
-        
         const response = await apiDelete(API_ENDPOINTS.SUBJECTS + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -953,24 +774,21 @@ async function deleteSubject(id) {
 }
 
 // ===================================
-// 5. STUDENTS MANAGEMENT
+// 5. STUDENTS MANAGEMENT - ✅ UPDATED WITH 3 NEW OPTIONAL FIELDS
 // ===================================
 
 async function loadStudents() {
     try {
-        console.log('Loading students...');
         showLoading('Loading students...');
         const response = await apiGet(API_ENDPOINTS.STUDENTS + '?limit=100', true);
-        
         hideLoading();
+        
         if (response.success) {
             studentsData = response.data;
-            console.log('✅ Students loaded:', studentsData.length);
             displayStudents();
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Failed to load students:', error);
         showError('Failed to load students: ' + error.message);
     }
 }
@@ -980,6 +798,7 @@ async function loadAllStudents() {
     loadStudents();
 }
 
+// ✅ UPDATED: displayStudents - Now shows 3 new columns
 function displayStudents() {
     const tbody = document.querySelector('#students-table tbody');
     if (!tbody) return;
@@ -987,18 +806,33 @@ function displayStudents() {
     tbody.innerHTML = '';
     
     if (studentsData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No students found. Add one above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center">No students found. Add one above.</td></tr>';
         return;
     }
     
     studentsData.forEach((student, index) => {
         const row = tbody.insertRow();
+        
+        // Helper function to format date
+        const formatDate = (dateString) => {
+            if (!dateString) return '-';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-IN');
+            } catch {
+                return '-';
+            }
+        };
+        
         row.innerHTML = `
             <td>${index + 1}</td>
             <td>${student.name}</td>
             <td>${student.fatherName}</td>
+            <td>${student.motherName || '-'}</td>
             <td>${student.classId?.className || '-'}</td>
             <td>${student.mobileNo}</td>
+            <td>${formatDate(student.dateOfBirth)}</td>
+            <td>${student.simpleAddress || '-'}</td>
             <td>
                 <button onclick="editStudent('${student._id}')">Edit</button>
                 <button onclick="deleteStudent('${student._id}')">Delete</button>
@@ -1007,81 +841,18 @@ function displayStudents() {
     });
 }
 
-async function handleAddStudent(e) {
-    e.preventDefault();
-    console.log('Adding student...');
-    
-    const name = document.getElementById('student-name').value.trim();
-    const fatherName = document.getElementById('student-father').value.trim();
-    const classId = document.getElementById('student-class').value;
-    const mobileNo = document.getElementById('student-mobile').value.trim();
-    
-    if (!name || !fatherName || !classId || !mobileNo) {
-        showError('Please fill all required fields');
-        return;
-    }
-    
-    if (!validateMobile(mobileNo)) {
-        showError('Please enter a valid 10-digit mobile number starting with 6-9');
-        return;
-    }
-    
-    try {
-        showLoading('Adding student...');
-        
-        const response = await apiPost(API_ENDPOINTS.STUDENTS, {
-            name: name,
-            fatherName: fatherName,
-            classId: classId,
-            mobileNo: mobileNo
-        }, true);
-        
-        hideLoading();
-        
-        if (response.success) {
-            // Get updated class info
-            const selectedClass = classesData.find(c => c._id === classId);
-            
-            // Fetch updated class data to get current student count
-            const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
-            const totalInClass = classResponse.success ? classResponse.data.studentCount : (selectedClass?.studentCount || 0) + 1;
-            
-            // Show upload results modal
-            showUploadResultsModal({
-                total: 1,
-                successful: 1,
-                failed: 0,
-                totalInClass: totalInClass,
-                errors: []
-            });
-            
-            const form = document.getElementById('add-student-form');
-            form.reset();
-            const studentMobileInput = document.getElementById('student-mobile');
-            if (studentMobileInput) {
-                studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
-            }
-            
-            // Reload data
-            await loadStudents();
-            await loadClasses();
-            await loadClassStatistics();
-        }
-    } catch (error) {
-        hideLoading();
-        console.error('❌ Add student error:', error);
-        showError(error.message);
-    }
-}
-
+// ✅ UPDATED: handleAddStudent - Now collects 3 new optional fields
 async function handleAddStudent(e) {
     e.preventDefault();
     console.log('Adding student...');
     
     const nameInput = document.getElementById('student-name');
     const fatherInput = document.getElementById('student-father');
+    const motherInput = document.getElementById('student-mother');
     const classInput = document.getElementById('student-class');
     const mobileInput = document.getElementById('student-mobile');
+    const dobInput = document.getElementById('student-dob');
+    const addressInput = document.getElementById('student-address');
     
     if (!nameInput || !fatherInput || !classInput || !mobileInput) {
         showError('Form error: Required fields not found');
@@ -1090,8 +861,11 @@ async function handleAddStudent(e) {
     
     const name = nameInput.value.trim();
     const fatherName = fatherInput.value.trim();
+    const motherName = motherInput ? motherInput.value.trim() : '';
     const classId = classInput.value;
     const mobileNo = mobileInput.value.trim();
+    const dateOfBirth = dobInput ? dobInput.value : '';
+    const simpleAddress = addressInput ? addressInput.value.trim() : '';
     
     if (!name || !fatherName || !classId || !mobileNo) {
         showError('Please fill all required fields');
@@ -1109,27 +883,29 @@ async function handleAddStudent(e) {
         const response = await apiPost(API_ENDPOINTS.STUDENTS, {
             name: name,
             fatherName: fatherName,
+            motherName: motherName || undefined,
             classId: classId,
-            mobileNo: mobileNo
+            mobileNo: mobileNo,
+            dateOfBirth: dateOfBirth || undefined,
+            simpleAddress: simpleAddress || undefined
         }, true);
         
         hideLoading();
         
         if (response.success) {
-            // Get updated class info
             const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
             const totalInClass = classResponse.success ? classResponse.data.studentCount : 1;
             
-            // Show upload results modal
-            showUploadResultsModal({
+            showBulkUploadResultsModal({
+                className: classesData.find(c => c._id === classId)?.className || 'Class',
                 total: 1,
                 successful: 1,
                 failed: 0,
                 totalInClass: totalInClass,
-                errors: []
+                errors: [],
+                successMessage: 'Student added successfully!'
             });
             
-            // Reset form
             const form = document.getElementById('add-student-form');
             form.reset();
             const studentMobileInput = document.getElementById('student-mobile');
@@ -1137,13 +913,12 @@ async function handleAddStudent(e) {
                 studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
             }
             
-            // Reload data
             await loadStudents();
             await loadClasses();
             await loadClassStatistics();
         } else if (response.isDuplicate) {
-            // Handle duplicate student
-            showUploadResultsModal({
+            showBulkUploadResultsModal({
+                className: classesData.find(c => c._id === classId)?.className || 'Class',
                 total: 1,
                 successful: 0,
                 failed: 1,
@@ -1155,9 +930,9 @@ async function handleAddStudent(e) {
         hideLoading();
         console.error('❌ Add student error:', error);
         
-        // Check if it's a duplicate error (409 status)
         if (error.message.includes('Duplicate') || error.message.includes('409')) {
-            showUploadResultsModal({
+            showBulkUploadResultsModal({
+                className: 'Class',
                 total: 1,
                 successful: 0,
                 failed: 1,
@@ -1170,7 +945,6 @@ async function handleAddStudent(e) {
     }
 }
 
-
 async function searchStudents() {
     const searchTerm = document.getElementById('search-student').value.trim();
     
@@ -1181,9 +955,7 @@ async function searchStudents() {
     
     try {
         showLoading('Searching...');
-        
         const response = await apiGet(API_ENDPOINTS.STUDENTS + '?search=' + encodeURIComponent(searchTerm), true);
-        
         hideLoading();
         
         if (response.success) {
@@ -1192,7 +964,6 @@ async function searchStudents() {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Search error:', error);
         showError(error.message);
     }
 }
@@ -1208,9 +979,7 @@ async function deleteStudent(id) {
     
     try {
         showLoading('Deleting student...');
-        
         const response = await apiDelete(API_ENDPOINTS.STUDENTS + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -1231,11 +1000,10 @@ async function deleteStudent(id) {
 
 async function loadHierarchy() {
     try {
-        console.log('Loading hierarchy...');
         showLoading('Loading hierarchy...');
         const response = await apiGet(API_ENDPOINTS.HIERARCHY, true);
-        
         hideLoading();
+        
         if (response.success && response.data) {
             displayCurrentHierarchy(response.data.numLevels);
         } else {
@@ -1249,7 +1017,6 @@ async function loadHierarchy() {
 
 async function handleSaveHierarchy(e) {
     e.preventDefault();
-    console.log('Saving hierarchy...');
     
     const numLevels = parseInt(document.getElementById('num-levels').value);
     
@@ -1260,11 +1027,7 @@ async function handleSaveHierarchy(e) {
     
     try {
         showLoading('Saving hierarchy...');
-        
-        const response = await apiPost(API_ENDPOINTS.HIERARCHY, {
-            numLevels: numLevels
-        }, true);
-        
+        const response = await apiPost(API_ENDPOINTS.HIERARCHY, { numLevels: numLevels }, true);
         hideLoading();
         
         if (response.success) {
@@ -1273,7 +1036,6 @@ async function handleSaveHierarchy(e) {
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Save hierarchy error:', error);
         showError(error.message);
     }
 }
@@ -1299,7 +1061,7 @@ function displayCurrentHierarchy(numLevels) {
 }
 
 // ===================================
-// EDIT MODAL FUNCTIONS
+// EDIT MODAL FUNCTIONS - ✅ UPDATED FOR STUDENTS
 // ===================================
 
 let currentEditType = null;
@@ -1315,7 +1077,6 @@ function openEditModal(type, id, data) {
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
     
-    // Set title based on type
     const titles = {
         'designation': 'Edit Designation',
         'class': 'Edit Class',
@@ -1325,7 +1086,6 @@ function openEditModal(type, id, data) {
     };
     modalTitle.textContent = titles[type] || 'Edit Item';
     
-    // Generate form fields based on type
     let fieldsHTML = '';
     
     switch(type) {
@@ -1380,6 +1140,7 @@ function openEditModal(type, id, data) {
             break;
             
         case 'student':
+            // ✅ UPDATED: Student edit modal now includes 3 new fields
             fieldsHTML = `
                 <div class="edit-modal-field">
                     <label>Name *</label>
@@ -1388,6 +1149,10 @@ function openEditModal(type, id, data) {
                 <div class="edit-modal-field">
                     <label>Father Name *</label>
                     <input type="text" id="edit-student-father" value="${data.fatherName || ''}" required>
+                </div>
+                <div class="edit-modal-field">
+                    <label>Mother Name</label>
+                    <input type="text" id="edit-student-mother" value="${data.motherName || ''}">
                 </div>
                 <div class="edit-modal-field">
                     <label>Class *</label>
@@ -1399,13 +1164,20 @@ function openEditModal(type, id, data) {
                     <label>Mobile * (10 digits)</label>
                     <input type="tel" id="edit-student-mobile" maxlength="10" value="${data.mobileNo || ''}" required class="phone-field">
                 </div>
+                <div class="edit-modal-field">
+                    <label>Date of Birth</label>
+                    <input type="date" id="edit-student-dob" value="${data.dateOfBirth ? data.dateOfBirth.split('T')[0] : ''}">
+                </div>
+                <div class="edit-modal-field">
+                    <label>Address</label>
+                    <textarea id="edit-student-address" rows="3">${data.simpleAddress || ''}</textarea>
+                </div>
             `;
             break;
     }
     
     modalBody.innerHTML = fieldsHTML;
     
-    // Add phone validation to modal phone fields
     const phoneFields = modalBody.querySelectorAll('.phone-field');
     phoneFields.forEach(field => {
         field.addEventListener('input', function() {
@@ -1442,9 +1214,7 @@ async function saveEdit() {
         
         switch(currentEditType) {
             case 'designation':
-                updatedData = {
-                    name: document.getElementById('edit-des-name').value
-                };
+                updatedData = { name: document.getElementById('edit-des-name').value };
                 showLoading('Updating designation...');
                 response = await apiPut(API_ENDPOINTS.DESIGNATIONS + '/' + currentEditId, updatedData, true);
                 hideLoading();
@@ -1490,9 +1260,7 @@ async function saveEdit() {
                 break;
                 
             case 'subject':
-                updatedData = {
-                    subjectName: document.getElementById('edit-subject-name').value
-                };
+                updatedData = { subjectName: document.getElementById('edit-subject-name').value };
                 showLoading('Updating subject...');
                 response = await apiPut(API_ENDPOINTS.SUBJECTS + '/' + currentEditId, updatedData, true);
                 hideLoading();
@@ -1503,17 +1271,27 @@ async function saveEdit() {
                 break;
                 
             case 'student':
+                // ✅ UPDATED: Student update now includes 3 new fields
                 const studentMobileInput = document.getElementById('edit-student-mobile');
                 if (studentMobileInput.value.length !== 10) {
                     alert('Please enter a valid 10-digit mobile number');
                     return;
                 }
+                
+                const studentMotherInput = document.getElementById('edit-student-mother');
+                const studentDOBInput = document.getElementById('edit-student-dob');
+                const studentAddressInput = document.getElementById('edit-student-address');
+                
                 updatedData = {
                     name: document.getElementById('edit-student-name').value,
                     fatherName: document.getElementById('edit-student-father').value,
+                    motherName: studentMotherInput ? studentMotherInput.value.trim() : undefined,
                     classId: document.getElementById('edit-student-class').value,
-                    mobileNo: studentMobileInput.value
+                    mobileNo: studentMobileInput.value,
+                    dateOfBirth: studentDOBInput && studentDOBInput.value ? studentDOBInput.value : undefined,
+                    simpleAddress: studentAddressInput ? studentAddressInput.value.trim() : undefined
                 };
+                
                 showLoading('Updating student...');
                 response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + currentEditId, updatedData, true);
                 hideLoading();
@@ -1551,14 +1329,11 @@ function getClassOptions(selectedClass) {
     return options;
 }
 
-// Close edit modal when clicking outside
 document.addEventListener('click', function(e) {
     const modal = document.getElementById('upload-results-modal');
     if (e.target === modal) {
-        // Only close if clicking directly on overlay, not the content
         closeUploadModal();
     }
 });
 
-
-console.log('✅ basic-info.js loaded successfully');
+console.log('✅ basic-info.js loaded successfully with 3 new optional fields');

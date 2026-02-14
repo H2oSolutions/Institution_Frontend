@@ -1,28 +1,34 @@
-// students-bulk.js - COMPLETE FIXED VERSION WITH DETAILED RESULTS
+// students-bulk.js - COMPLETE VERSION WITH 3 NEW OPTIONAL FIELDS
 
-// Download Excel Template
+// Download Excel Template - ✅ UPDATED with 3 new columns
 function downloadStudentTemplate() {
     const wb = XLSX.utils.book_new();
     
+    // ✅ UPDATED: Template now includes Mother Name, DOB, and Address
     const templateData = [
-        ['Name', 'Father Name', 'Mobile No'],
-        ['John Doe', 'Robert Doe', '9876543210'],
-        ['Jane Smith', 'Michael Smith', '9876543211'],
-        ['Alex Johnson', 'David Johnson', '9876543212']
+        ['Name', 'Father Name', 'Mother Name', 'Mobile No', 'DOB', 'Address'],
+        ['John Doe', 'Robert Doe', 'Jane Doe', '9876543210', '2010-05-15', '123 Main Street, City'],
+        ['Jane Smith', 'Michael Smith', 'Sarah Smith', '9876543211', '2011-08-20', '456 Park Avenue, Town'],
+        ['Alex Johnson', 'David Johnson', 'Mary Johnson', '9876543212', '2012-03-10', '789 Oak Road, Village']
     ];
     
     const ws = XLSX.utils.aoa_to_sheet(templateData);
     
+    // ✅ UPDATED: Column widths for 6 columns
     ws['!cols'] = [
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 15 }
+        { wch: 20 },  // Name
+        { wch: 20 },  // Father Name
+        { wch: 20 },  // Mother Name
+        { wch: 15 },  // Mobile No
+        { wch: 15 },  // DOB
+        { wch: 40 }   // Address
     ];
     
     XLSX.utils.book_append_sheet(wb, ws, 'Students');
     XLSX.writeFile(wb, 'Student_Upload_Template.xlsx');
     
-    console.log('✅ Template downloaded');
+    console.log('✅ Template downloaded with 6 columns');
+    showSuccess('Template downloaded! Fill in student details (Mother Name, DOB, and Address are optional)');
 }
 
 // Handle Bulk Upload Form Submission
@@ -241,4 +247,4 @@ window.addEventListener('click', function(e) {
     }
 });
 
-console.log('✅ students-bulk.js (COMPLETE FIXED) loaded successfully');
+console.log('✅ students-bulk.js loaded successfully with 3 new optional fields');
