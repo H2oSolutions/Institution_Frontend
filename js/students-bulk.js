@@ -9,7 +9,7 @@ function downloadStudentTemplate() {
         ['Name', 'Father Name', 'Mother Name', 'Mobile No', 'DOB', 'Address'],
         ['John Doe', 'Robert Doe', 'Jane Doe', '9876543210', '2010-05-15', '123 Main Street, City'],
         ['Jane Smith', 'Michael Smith', 'Sarah Smith', '9876543211', '2011-08-20', '456 Park Avenue, Town'],
-        ['Alex Johnson', 'David Johnson', 'Mary Johnson', '9876543212', '2012-03-10', '789 Oak Road, Village']
+        ['Alex Johnson', 'David Johnson', 'Mary Johnson', '9876543202', '2012-03-10', '789 Oak Road, Village']
     ];
     
     const ws = XLSX.utils.aoa_to_sheet(templateData);
