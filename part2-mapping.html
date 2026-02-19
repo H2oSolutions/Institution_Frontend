@@ -14,770 +14,165 @@
     <link rel="stylesheet" href="css/style.css">
     
     <style>
-        /* Part 2 Specific Styles */
-        body {
-            background: var(--gray-50);
-        }
+        body { background: var(--gray-50); }
 
-        #part2-container {
-            min-height: 100vh;
-            padding-bottom: var(--space-10);
-        }
+        #part2-container { min-height: 100vh; padding-bottom: var(--space-10); }
 
         /* Enhanced Header */
         #header {
             background: var(--gradient-primary);
             color: var(--white);
             padding: var(--space-6) var(--space-8);
-            position: sticky;
-            top: 0;
+            position: sticky; top: 0;
             z-index: var(--z-sticky);
             box-shadow: var(--shadow-xl);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: var(--space-4);
-            flex-wrap: wrap;
+            display: flex; justify-content: space-between; align-items: center;
+            gap: var(--space-4); flex-wrap: wrap;
         }
-
-        #header h1 {
-            margin: 0;
-            font-size: clamp(1.25rem, 4vw, 1.75rem);
-            background: none;
-            -webkit-text-fill-color: var(--white);
-            font-weight: 800;
-        }
-
-        #header > div {
-            display: flex;
-            gap: var(--space-3);
-            flex-wrap: wrap;
-        }
-
+        #header h1 { margin: 0; font-size: clamp(1.25rem, 4vw, 1.75rem); background: none; -webkit-text-fill-color: var(--white); font-weight: 800; }
+        #header > div { display: flex; gap: var(--space-3); flex-wrap: wrap; }
         #header button {
-            background: rgba(255, 255, 255, 0.2);
-            color: var(--white);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            padding: var(--space-3) var(--space-5);
-            border-radius: var(--radius-full);
-            font-weight: 600;
-            font-size: var(--text-sm);
-            cursor: pointer;
+            background: rgba(255,255,255,0.2); color: var(--white);
+            border: 2px solid rgba(255,255,255,0.3);
+            padding: var(--space-3) var(--space-5); border-radius: var(--radius-full);
+            font-weight: 600; font-size: var(--text-sm); cursor: pointer;
             transition: all var(--duration-200) var(--ease-out);
-            backdrop-filter: blur(10px);
-            white-space: nowrap;
+            backdrop-filter: blur(10px); white-space: nowrap;
         }
+        #header button:hover { background: rgba(255,255,255,0.3); border-color: rgba(255,255,255,0.5); transform: translateY(-2px); }
 
-        #header button:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
-            transform: translateY(-2px);
-        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 var(--space-6); }
 
-        /* Container */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 var(--space-6);
-        }
-
-        /* Messages - Centered Overlay */
-        #loading,
-        #error-message,
-        #success-message {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 10001;
-            padding: var(--space-8) var(--space-10);
-            border-radius: var(--radius-2xl);
-            font-weight: 600;
-            font-size: var(--text-lg);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-            min-width: 300px;
-            max-width: 500px;
-            text-align: center;
+        /* Messages */
+        #loading, #error-message, #success-message {
+            display: none; position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); z-index: 10001;
+            padding: var(--space-8) var(--space-10); border-radius: var(--radius-2xl);
+            font-weight: 600; font-size: var(--text-lg);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            min-width: 300px; max-width: 500px; text-align: center;
             animation: messageSlideIn 0.3s ease-out;
         }
+        .message-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; backdrop-filter: blur(4px); }
+        .message-overlay.show { display: block; animation: fadeIn 0.3s ease-out; }
+        #loading.show { display: block !important; background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; border: 3px solid #f59e0b; }
+        #error-message.show { display: block !important; background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 3px solid #dc2626; }
+        #success-message.show { display: block !important; background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; border: 3px solid #10b981; }
+        #loading::before { content: '⏳'; display: block; font-size: 48px; margin-bottom: var(--space-4); animation: spin 2s linear infinite; }
+        #success-message::before { content: '✅'; display: block; font-size: 48px; margin-bottom: var(--space-4); animation: scaleIn 0.5s ease-out; }
+        #error-message::before { content: '❌'; display: block; font-size: 48px; margin-bottom: var(--space-4); animation: shake 0.5s ease-out; }
 
-        /* Message Overlay Background */
-        .message-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 10000;
-            backdrop-filter: blur(4px);
-        }
+        /* Edit Modal */
+        #edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10002; backdrop-filter: blur(8px); animation: fadeIn 0.3s ease-out; }
+        #edit-modal.show { display: flex; align-items: center; justify-content: center; }
+        .edit-modal-content { background: var(--white); border-radius: var(--radius-3xl); box-shadow: 0 25px 80px rgba(0,0,0,0.4); max-width: 600px; width: 90%; max-height: 85vh; overflow-y: auto; animation: slideUp 0.4s ease-out; }
+        .edit-modal-header { background: var(--gradient-primary); color: var(--white); padding: var(--space-6) var(--space-8); border-radius: var(--radius-3xl) var(--radius-3xl) 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .edit-modal-header h2 { margin: 0; font-size: var(--text-2xl); font-weight: 700; }
+        .edit-modal-close { background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.3); color: var(--white); width: 36px; height: 36px; border-radius: 50%; font-size: var(--text-xl); font-weight: 700; cursor: pointer; transition: all var(--duration-200) var(--ease-out); display: flex; align-items: center; justify-content: center; }
+        .edit-modal-close:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
+        .edit-modal-body { padding: var(--space-8); }
+        .edit-form-group { margin-bottom: var(--space-6); }
+        .edit-form-group label { display: block; font-weight: 600; color: var(--gray-700); margin-bottom: var(--space-2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+        .edit-form-group select, .edit-form-group input[type="text"] { width: 100%; padding: var(--space-4) var(--space-6); font-size: var(--text-base); font-family: inherit; color: var(--gray-900); background: var(--white); border: 2px solid var(--gray-300); border-radius: var(--radius-lg); transition: all var(--duration-200) var(--ease-out); }
+        .edit-form-group select:focus, .edit-form-group input[type="text"]:focus { outline: none; border-color: var(--primary-600); box-shadow: 0 0 0 4px var(--primary-100); }
+        .edit-form-group .disabled-input { background: var(--gray-100); color: var(--gray-600); cursor: not-allowed; }
+        .edit-checkbox-container { background: var(--gray-50); padding: var(--space-6); border-radius: var(--radius-xl); border: 2px solid var(--gray-300); max-height: 300px; overflow-y: auto; }
+        .edit-checkbox-container label { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2); border-radius: var(--radius-md); transition: all var(--duration-150) var(--ease-out); text-transform: none; font-weight: 500; letter-spacing: normal; cursor: pointer; }
+        .edit-checkbox-container label:hover { background: var(--primary-50); color: var(--primary-700); }
+        .edit-checkbox-container input[type="checkbox"], .edit-checkbox-container input[type="radio"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-600); }
+        .edit-modal-footer { padding: var(--space-6) var(--space-8); border-top: 2px solid var(--gray-200); display: flex; gap: var(--space-4); justify-content: flex-end; }
+        .edit-modal-footer button { padding: var(--space-4) var(--space-8); font-weight: 600; border-radius: var(--radius-xl); font-size: var(--text-base); cursor: pointer; transition: all var(--duration-200) var(--ease-out); border: 2px solid transparent; }
+        .edit-modal-cancel { background: var(--gray-200); color: var(--gray-700); }
+        .edit-modal-cancel:hover { background: var(--gray-300); }
+        .edit-modal-save { background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-md); }
+        .edit-modal-save:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
 
-        .message-overlay.show {
-            display: block;
-            animation: fadeIn 0.3s ease-out;
-        }
+        /* Section Tabs */
+        #section-tabs { display: flex; gap: var(--space-3); background: var(--white); padding: var(--space-4); border-radius: var(--radius-2xl); box-shadow: var(--shadow-lg); margin: var(--space-8) 0; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 2px solid var(--gray-200); }
+        #section-tabs button { flex: 1; min-width: 200px; padding: var(--space-5) var(--space-6); background: var(--gray-100); color: var(--gray-700); border: 2px solid transparent; border-radius: var(--radius-xl); font-weight: 600; font-size: var(--text-sm); transition: all var(--duration-300) var(--ease-out); cursor: pointer; position: relative; text-align: center; }
+        #section-tabs button:hover { background: var(--primary-100); color: var(--primary-700); transform: translateY(-4px); }
+        #section-tabs button[style*="font-weight: bold"], #section-tabs button.active { background: var(--gradient-primary); color: var(--white); box-shadow: var(--shadow-md); }
 
-        #loading.show { 
-            display: block !important; 
-            background: linear-gradient(135deg, #fef3c7, #fde68a);
-            color: #92400e; 
-            border: 3px solid #f59e0b;
-        }
-        
-        #error-message.show { 
-            display: block !important; 
-            background: linear-gradient(135deg, #fee2e2, #fecaca);
-            color: #991b1b; 
-            border: 3px solid #dc2626;
-        }
-        
-        #success-message.show { 
-            display: block !important; 
-            background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-            color: #065f46; 
-            border: 3px solid #10b981;
-        }
+        /* Mapping Section */
+        .mapping-section { display: none; background: var(--white); border-radius: var(--radius-3xl); padding: var(--space-10); box-shadow: var(--shadow-lg); margin-bottom: var(--space-8); border: 2px solid var(--gray-200); animation: fadeInUp 0.4s ease-out; }
+        .mapping-section h2 { color: var(--gray-900); font-size: var(--text-3xl); margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-3); }
+        .mapping-section > p { color: var(--gray-600); margin-bottom: var(--space-8); font-size: var(--text-base); font-style: italic; }
+        .mapping-section h3 { color: var(--primary-700); font-size: var(--text-xl); margin: var(--space-8) 0 var(--space-4) 0; padding-bottom: var(--space-3); border-bottom: 3px solid var(--primary-200); }
 
-        /* Message Icons */
-        #loading::before {
-            content: '⏳';
-            display: block;
-            font-size: 48px;
-            margin-bottom: var(--space-4);
-            animation: spin 2s linear infinite;
-        }
+        /* Visual Mapping */
+        .mapping-visual { display: flex; align-items: center; justify-content: center; gap: var(--space-6); padding: var(--space-8); background: linear-gradient(135deg, var(--primary-50), var(--secondary-50)); border-radius: var(--radius-2xl); margin: var(--space-6) 0; border: 2px dashed var(--primary-300); }
+        .mapping-item { background: var(--white); padding: var(--space-6); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); min-width: 150px; text-align: center; font-weight: 700; color: var(--primary-700); border: 2px solid var(--primary-400); }
+        .mapping-arrow { font-size: var(--text-4xl); color: var(--primary-600); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
 
-        #success-message::before {
-            content: '✅';
-            display: block;
-            font-size: 48px;
-            margin-bottom: var(--space-4);
-            animation: scaleIn 0.5s ease-out;
-        }
+        /* Forms */
+        form { background: var(--gray-50); padding: var(--space-8); border-radius: var(--radius-2xl); border: 2px solid var(--gray-200); margin-bottom: var(--space-8); transition: all var(--duration-300) var(--ease-out); }
+        form:hover { border-color: var(--primary-300); box-shadow: var(--shadow-md); }
+        form > div { margin-bottom: var(--space-6); }
+        label { display: block; font-weight: 600; color: var(--gray-700); margin-bottom: var(--space-2); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+        select { width: 100%; padding: var(--space-4) var(--space-6); font-size: var(--text-base); font-family: inherit; color: var(--gray-900); background: var(--white); border: 2px solid var(--gray-300); border-radius: var(--radius-lg); transition: all var(--duration-200) var(--ease-out); cursor: pointer; }
+        select:focus { outline: none; border-color: var(--primary-600); box-shadow: 0 0 0 4px var(--primary-100); }
 
-        #error-message::before {
-            content: '❌';
-            display: block;
-            font-size: 48px;
-            margin-bottom: var(--space-4);
-            animation: shake 0.5s ease-out;
-        }
+        /* Checkbox containers */
+        .checkbox-container { background: var(--white); padding: var(--space-6); border-radius: var(--radius-xl); border: 2px solid var(--gray-300); max-height: 300px; overflow-y: auto; }
+        .checkbox-container label { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2); border-radius: var(--radius-md); transition: all var(--duration-150) var(--ease-out); text-transform: none; font-weight: 500; letter-spacing: normal; cursor: pointer; }
+        .checkbox-container label:hover { background: var(--primary-50); color: var(--primary-700); }
+        .checkbox-container input[type="checkbox"], .checkbox-container input[type="radio"] { width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary-600); }
+        .select-all-checkbox { background: var(--primary-100); border: 2px solid var(--primary-400); font-weight: 700; color: var(--primary-800); }
+        .select-all-checkbox:hover { background: var(--primary-200) !important; }
 
-        /* ===================================
-           EDIT MODAL STYLES
-           =================================== */
-        
-        #edit-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 10002;
-            backdrop-filter: blur(8px);
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        #edit-modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .edit-modal-content {
-            background: var(--white);
-            border-radius: var(--radius-3xl);
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
-            max-width: 600px;
-            width: 90%;
-            max-height: 85vh;
-            overflow-y: auto;
-            animation: slideUp 0.4s ease-out;
-        }
-
-        .edit-modal-header {
-            background: var(--gradient-primary);
-            color: var(--white);
-            padding: var(--space-6) var(--space-8);
-            border-radius: var(--radius-3xl) var(--radius-3xl) 0 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .edit-modal-header h2 {
-            margin: 0;
-            font-size: var(--text-2xl);
-            font-weight: 700;
-        }
-
-        .edit-modal-close {
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            color: var(--white);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            font-size: var(--text-xl);
-            font-weight: 700;
-            cursor: pointer;
-            transition: all var(--duration-200) var(--ease-out);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .edit-modal-close:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg);
-        }
-
-        .edit-modal-body {
-            padding: var(--space-8);
-        }
-
-        .edit-form-group {
-            margin-bottom: var(--space-6);
-        }
-
-        .edit-form-group label {
-            display: block;
-            font-weight: 600;
-            color: var(--gray-700);
-            margin-bottom: var(--space-2);
-            font-size: var(--text-sm);
-            text-transform: uppercase;
+        /* ✅ NEW: Class group header inside subjects checkbox container (Section 4) */
+        .subject-class-group-header {
+            font-weight: 700; color: var(--primary-700);
+            padding: var(--space-2) var(--space-3);
+            background: var(--primary-50); border-radius: var(--radius-md);
+            margin: var(--space-3) 0 var(--space-2);
+            font-size: var(--text-sm); text-transform: uppercase;
             letter-spacing: var(--tracking-wide);
         }
 
-        .edit-form-group select,
-        .edit-form-group input[type="text"] {
-            width: 100%;
-            padding: var(--space-4) var(--space-6);
-            font-size: var(--text-base);
-            font-family: inherit;
-            color: var(--gray-900);
-            background: var(--white);
-            border: 2px solid var(--gray-300);
-            border-radius: var(--radius-lg);
-            transition: all var(--duration-200) var(--ease-out);
-        }
-
-        .edit-form-group select:focus,
-        .edit-form-group input[type="text"]:focus {
-            outline: none;
-            border-color: var(--primary-600);
-            box-shadow: 0 0 0 4px var(--primary-100);
-        }
-
-        .edit-form-group .disabled-input {
-            background: var(--gray-100);
-            color: var(--gray-600);
-            cursor: not-allowed;
-        }
-
-        .edit-checkbox-container {
-            background: var(--gray-50);
-            padding: var(--space-6);
-            border-radius: var(--radius-xl);
-            border: 2px solid var(--gray-300);
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .edit-checkbox-container label {
-            display: flex;
-            align-items: center;
-            gap: var(--space-3);
-            padding: var(--space-3) var(--space-4);
-            margin-bottom: var(--space-2);
-            border-radius: var(--radius-md);
-            transition: all var(--duration-150) var(--ease-out);
-            text-transform: none;
-            font-weight: 500;
-            letter-spacing: normal;
-            cursor: pointer;
-        }
-
-        .edit-checkbox-container label:hover {
-            background: var(--primary-50);
-            color: var(--primary-700);
-        }
-
-        .edit-checkbox-container input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: var(--primary-600);
-        }
-
-        .edit-modal-footer {
-            padding: var(--space-6) var(--space-8);
-            border-top: 2px solid var(--gray-200);
-            display: flex;
-            gap: var(--space-4);
-            justify-content: flex-end;
-        }
-
-        .edit-modal-footer button {
-            padding: var(--space-4) var(--space-8);
-            font-weight: 600;
-            border-radius: var(--radius-xl);
-            font-size: var(--text-base);
-            cursor: pointer;
-            transition: all var(--duration-200) var(--ease-out);
-            border: 2px solid transparent;
-        }
-
-        .edit-modal-cancel {
-            background: var(--gray-200);
-            color: var(--gray-700);
-        }
-
-        .edit-modal-cancel:hover {
-            background: var(--gray-300);
-        }
-
-        .edit-modal-save {
-            background: var(--gradient-primary);
-            color: var(--white);
-            box-shadow: var(--shadow-md);
-        }
-
-        .edit-modal-save:hover {
-            box-shadow: var(--shadow-lg);
-            transform: translateY(-2px);
-        }
-
-        /* Section Tabs - Enhanced */
-        #section-tabs {
-            display: flex;
-            gap: var(--space-3);
-            background: var(--white);
-            padding: var(--space-4);
-            border-radius: var(--radius-2xl);
-            box-shadow: var(--shadow-lg);
-            margin: var(--space-8) 0;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            border: 2px solid var(--gray-200);
-        }
-
-        #section-tabs button {
-            flex: 1;
-            min-width: 200px;
-            padding: var(--space-5) var(--space-6);
-            background: var(--gray-100);
-            color: var(--gray-700);
-            border: 2px solid transparent;
-            border-radius: var(--radius-xl);
-            font-weight: 600;
-            font-size: var(--text-sm);
-            transition: all var(--duration-300) var(--ease-out);
-            cursor: pointer;
-            position: relative;
-            text-align: center;
-        }
-
-        #section-tabs button::before {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%) scaleX(0);
-            width: 80%;
-            height: 4px;
-            background: var(--gradient-primary);
-            border-radius: var(--radius-full);
-            transition: transform var(--duration-300) var(--ease-out);
-        }
-
-        #section-tabs button:hover {
-            background: var(--primary-100);
-            color: var(--primary-700);
-            transform: translateY(-4px);
-        }
-
-        #section-tabs button[style*="font-weight: bold"],
-        #section-tabs button.active {
-            background: var(--gradient-primary);
-            color: var(--white);
-            box-shadow: var(--shadow-md);
-        }
-
-        #section-tabs button[style*="font-weight: bold"]::before,
-        #section-tabs button.active::before {
-            transform: translateX(-50%) scaleX(1);
-        }
-
-        /* Mapping Section Container */
-        .mapping-section {
-            display: none;
-            background: var(--white);
-            border-radius: var(--radius-3xl);
-            padding: var(--space-10);
-            box-shadow: var(--shadow-lg);
-            margin-bottom: var(--space-8);
-            border: 2px solid var(--gray-200);
-            animation: fadeInUp 0.4s ease-out;
-        }
-
-        .mapping-section h2 {
-            color: var(--gray-900);
-            font-size: var(--text-3xl);
-            margin-bottom: var(--space-3);
-            display: flex;
-            align-items: center;
-            gap: var(--space-3);
-        }
-
-        .mapping-section > p {
-            color: var(--gray-600);
-            margin-bottom: var(--space-8);
-            font-size: var(--text-base);
-            font-style: italic;
-        }
-
-        .mapping-section h3 {
-            color: var(--primary-700);
-            font-size: var(--text-xl);
-            margin: var(--space-8) 0 var(--space-4) 0;
-            padding-bottom: var(--space-3);
-            border-bottom: 3px solid var(--primary-200);
-        }
-
-        /* Visual Mapping Indicator */
-        .mapping-visual {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: var(--space-6);
-            padding: var(--space-8);
-            background: linear-gradient(135deg, var(--primary-50), var(--secondary-50));
-            border-radius: var(--radius-2xl);
-            margin: var(--space-6) 0;
-            border: 2px dashed var(--primary-300);
-        }
-
-        .mapping-item {
-            background: var(--white);
-            padding: var(--space-6);
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-md);
-            min-width: 150px;
-            text-align: center;
-            font-weight: 700;
-            color: var(--primary-700);
-            border: 2px solid var(--primary-400);
-        }
-
-        .mapping-arrow {
-            font-size: var(--text-4xl);
-            color: var(--primary-600);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.7; transform: scale(1.1); }
-        }
-
-        /* Enhanced Forms */
-        form {
-            background: var(--gray-50);
-            padding: var(--space-8);
-            border-radius: var(--radius-2xl);
-            border: 2px solid var(--gray-200);
-            margin-bottom: var(--space-8);
-            transition: all var(--duration-300) var(--ease-out);
-        }
-
-        form:hover {
-            border-color: var(--primary-300);
-            box-shadow: var(--shadow-md);
-        }
-
-        form > div {
-            margin-bottom: var(--space-6);
-        }
-
-        label {
-            display: block;
-            font-weight: 600;
-            color: var(--gray-700);
-            margin-bottom: var(--space-2);
-            font-size: var(--text-sm);
-            text-transform: uppercase;
-            letter-spacing: var(--tracking-wide);
-        }
-
-        select {
-            width: 100%;
-            padding: var(--space-4) var(--space-6);
-            font-size: var(--text-base);
-            font-family: inherit;
-            color: var(--gray-900);
-            background: var(--white);
-            border: 2px solid var(--gray-300);
-            border-radius: var(--radius-lg);
-            transition: all var(--duration-200) var(--ease-out);
-            cursor: pointer;
-        }
-
-        select:focus {
-            outline: none;
-            border-color: var(--primary-600);
-            box-shadow: 0 0 0 4px var(--primary-100);
-        }
-
-        /* Checkbox Section */
-        .checkbox-container {
-            background: var(--white);
-            padding: var(--space-6);
-            border-radius: var(--radius-xl);
-            border: 2px solid var(--gray-300);
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .checkbox-container label {
-            display: flex;
-            align-items: center;
-            gap: var(--space-3);
-            padding: var(--space-3) var(--space-4);
-            margin-bottom: var(--space-2);
-            border-radius: var(--radius-md);
-            transition: all var(--duration-150) var(--ease-out);
-            text-transform: none;
-            font-weight: 500;
-            letter-spacing: normal;
-            cursor: pointer;
-        }
-
-        .checkbox-container label:hover {
-            background: var(--primary-50);
-            color: var(--primary-700);
-        }
-
-        .checkbox-container input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: var(--primary-600);
-        }
-
-        /* All/Select All Checkbox */
-        .select-all-checkbox {
-            background: var(--primary-100);
-            border: 2px solid var(--primary-400);
-            font-weight: 700;
-            color: var(--primary-800);
-        }
-
-        .select-all-checkbox:hover {
-            background: var(--primary-200);
-        }
-
-        /* Enhanced Tables */
-        .table-wrapper {
-            width: 100%;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            margin: var(--space-8) 0;
-            border-radius: var(--radius-2xl);
-            box-shadow: var(--shadow-lg);
-            border: 2px solid var(--gray-200);
-        }
-
-        table {
-            width: 100%;
-            min-width: 700px;
-            background: var(--white);
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-
-        thead {
-            background: var(--gradient-primary);
-            color: var(--white);
-            position: sticky;
-            top: 0;
-            z-index: var(--z-10);
-        }
-
-        thead th {
-            padding: var(--space-5) var(--space-6);
-            text-align: left;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: var(--tracking-wider);
-            font-size: var(--text-sm);
-            white-space: nowrap;
-        }
-
-        tbody tr {
-            border-bottom: 1px solid var(--gray-200);
-            transition: all var(--duration-200) var(--ease-out);
-        }
-
-        tbody tr:hover {
-            background: var(--primary-50);
-            transform: scale(1.01);
-            box-shadow: var(--shadow-sm);
-        }
-
-        tbody td {
-            padding: var(--space-5) var(--space-6);
-            color: var(--gray-700);
-            font-size: var(--text-sm);
-        }
-
-        tbody td button {
-            padding: var(--space-2) var(--space-4);
-            font-size: var(--text-xs);
-            margin: 0 var(--space-1);
-            min-height: auto;
-        }
+        /* Tables */
+        .table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: var(--space-8) 0; border-radius: var(--radius-2xl); box-shadow: var(--shadow-lg); border: 2px solid var(--gray-200); }
+        table { width: 100%; min-width: 700px; background: var(--white); border-collapse: separate; border-spacing: 0; }
+        thead { background: var(--gradient-primary); color: var(--white); position: sticky; top: 0; z-index: var(--z-10); }
+        thead th { padding: var(--space-5) var(--space-6); text-align: left; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wider); font-size: var(--text-sm); white-space: nowrap; }
+        tbody tr { border-bottom: 1px solid var(--gray-200); transition: all var(--duration-200) var(--ease-out); }
+        tbody tr:hover { background: var(--primary-50); transform: scale(1.01); box-shadow: var(--shadow-sm); }
+        tbody td { padding: var(--space-5) var(--space-6); color: var(--gray-700); font-size: var(--text-sm); }
+        tbody td button { padding: var(--space-2) var(--space-4); font-size: var(--text-xs); margin: 0 var(--space-1); min-height: auto; }
 
         /* Info Box */
-        .info-box {
-            background: linear-gradient(135deg, var(--info-50), var(--info-100));
-            padding: var(--space-6);
-            border-radius: var(--radius-xl);
-            border-left: 4px solid var(--info-500);
-            margin: var(--space-6) 0;
-            color: var(--info-900);
-            font-size: var(--text-sm);
-        }
-
-        .info-box strong {
-            display: block;
-            margin-bottom: var(--space-2);
-            font-size: var(--text-base);
-        }
+        .info-box { background: linear-gradient(135deg, var(--info-50), var(--info-100)); padding: var(--space-6); border-radius: var(--radius-xl); border-left: 4px solid var(--info-500); margin: var(--space-6) 0; color: var(--info-900); font-size: var(--text-sm); }
+        .info-box strong { display: block; margin-bottom: var(--space-2); font-size: var(--text-base); }
 
         /* Responsive */
         @media (max-width: 768px) {
-            #header {
-                flex-direction: column;
-                text-align: center;
-                padding: var(--space-5);
-            }
-
-            #section-tabs {
-                flex-direction: column;
-            }
-
-            #section-tabs button {
-                min-width: auto;
-            }
-
-            .mapping-visual {
-                flex-direction: column;
-            }
-
-            .mapping-section {
-                padding: var(--space-6);
-            }
-
-            form {
-                padding: var(--space-6);
-            }
-
-            #loading,
-            #error-message,
-            #success-message {
-                min-width: 280px;
-                max-width: 90%;
-                padding: var(--space-6);
-                font-size: var(--text-base);
-            }
-
-            .edit-modal-content {
-                width: 95%;
-                max-height: 90vh;
-            }
+            #header { flex-direction: column; text-align: center; padding: var(--space-5); }
+            #section-tabs { flex-direction: column; }
+            #section-tabs button { min-width: auto; }
+            .mapping-visual { flex-direction: column; }
+            .mapping-section { padding: var(--space-6); }
+            form { padding: var(--space-6); }
+            #loading, #error-message, #success-message { min-width: 280px; max-width: 90%; padding: var(--space-6); font-size: var(--text-base); }
+            .edit-modal-content { width: 95%; max-height: 90vh; }
         }
 
         /* Animations */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes messageSlideIn { from { opacity: 0; transform: translate(-50%, -60%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes scaleIn { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
 
-        @keyframes messageSlideIn {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -60%);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, -50%);
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        @keyframes scaleIn {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* Conditional Display Helper */
-        #ts-subjects-container {
-            display: none;
-            margin-top: var(--space-6);
-        }
-
-        #ts-subjects-container.show {
-            display: block;
-            animation: fadeInUp 0.3s ease-out;
-        }
+        #ts-subjects-container { display: none; margin-top: var(--space-6); }
+        #ts-subjects-container.show { display: block; animation: fadeInUp 0.3s ease-out; }
     </style>
 </head>
 <body>
     <div id="part2-container">
-        <!-- Message Overlay Background -->
         <div class="message-overlay" id="message-overlay"></div>
-
-        <!-- Messages (Centered Overlay) -->
         <div id="loading">Loading...</div>
         <div id="error-message"></div>
         <div id="success-message"></div>
@@ -789,9 +184,7 @@
                     <h2 id="edit-modal-title">Edit Assignment</h2>
                     <button class="edit-modal-close" onclick="closeEditModal()">×</button>
                 </div>
-                <div class="edit-modal-body" id="edit-modal-body">
-                    <!-- Dynamic content will be inserted here -->
-                </div>
+                <div class="edit-modal-body" id="edit-modal-body"></div>
                 <div class="edit-modal-footer">
                     <button class="edit-modal-cancel" onclick="closeEditModal()">Cancel</button>
                     <button class="edit-modal-save" id="edit-modal-save">Save Changes</button>
@@ -811,91 +204,60 @@
         <div class="container">
             <!-- Section Navigation -->
             <div id="section-tabs">
-                <button onclick="showMappingSection('level-designation')" id="tab-level-designation">
-    1️⃣ Designations → Levels  
-</button>
-
-<button onclick="showMappingSection('staff-class')" id="tab-staff-class">
-    2️⃣ Staff → Designation → Classes 
-</button>
-
-<button onclick="showMappingSection('class-subject')" id="tab-class-subject">
-    3️⃣ Classes → Subjects
-</button>
-
-<button onclick="showMappingSection('teacher-subject')" id="tab-teacher-subject">
-    4️⃣ Teachers → Class → Subjects
-</button>
-
+                <button onclick="showMappingSection('level-designation')" id="tab-level-designation">1️⃣ Designations → Levels</button>
+                <button onclick="showMappingSection('class-subject')" id="tab-class-subject">2️⃣ Classes → Subjects</button>
+                <button onclick="showMappingSection('staff-class')" id="tab-staff-class">3️⃣ Staff → Designation → Classes</button>
+                <button onclick="showMappingSection('teacher-subject')" id="tab-teacher-subject">4️⃣ Teachers → Class → Subjects</button>
             </div>
 
-            <!-- UPDATED: ASSIGN LEVELS TO DESIGNATIONS - SINGLE LEVEL ONLY -->
-<div id="section-level-designation" class="mapping-section" style="display:none;">
-    <h2>🎯 Assign Level to Designation</h2>
-    <p>Select a designation and assign ONE hierarchy level to it. Each designation can have only one level.</p>
-
-    <!-- Visual Indicator -->
-    <div class="mapping-visual">
-        <div class="mapping-item">🏆 Designation</div>
-        <div class="mapping-arrow">→</div>
-        <div class="mapping-item">📊 ONE Level</div>
-    </div>
-
-    <h3>➕ Assign Level to Designation</h3>
-    <form id="assign-level-designation-form">
-        <div>
-            <label for="ld-designation">Select Designation *</label>
-            <select id="ld-designation" required>
-                <option value="">-- Select Designation --</option>
-            </select>
-            <small style="display: block; margin-top: var(--space-2); color: var(--gray-600);">
-                All designations appear here. Select one to assign or reassign its level.
-            </small>
-        </div>
-
-        <div>
-            <label>Select Level to Assign * (Choose ONE only)</label>
-            <div class="info-box">
-                <strong>💡 Important:</strong>
-                Each designation can have ONLY ONE level. If the designation already has a level, selecting a new one will replace it.
+            <!-- SECTION 1: ASSIGN LEVELS TO DESIGNATIONS -->
+            <div id="section-level-designation" class="mapping-section" style="display:none;">
+                <h2>🎯 Assign Level to Designation</h2>
+                <p>Select a designation and assign ONE hierarchy level to it. Each designation can have only one level.</p>
+                <div class="mapping-visual">
+                    <div class="mapping-item">🏆 Designation</div>
+                    <div class="mapping-arrow">→</div>
+                    <div class="mapping-item">📊 ONE Level</div>
+                </div>
+                <h3>➕ Assign Level to Designation</h3>
+                <form id="assign-level-designation-form">
+                    <div>
+                        <label for="ld-designation">Select Designation *</label>
+                        <select id="ld-designation" required>
+                            <option value="">-- Select Designation --</option>
+                        </select>
+                        <small style="display:block;margin-top:var(--space-2);color:var(--gray-600);">All unassigned designations appear here.</small>
+                    </div>
+                    <div>
+                        <label>Select Level to Assign * (Choose ONE only)</label>
+                        <div class="info-box">
+                            <strong>💡 Important:</strong>
+                            Each designation can have ONLY ONE level. If already assigned, selecting a new one will replace it.
+                        </div>
+                        <div class="checkbox-container" id="ld-levels-checkboxes"></div>
+                    </div>
+                    <button type="submit">Assign Level to Designation</button>
+                </form>
+                <h3>📊 Current Designation-Level Mappings</h3>
+                <div class="table-wrapper">
+                    <table id="level-designation-table">
+                        <thead><tr><th>Designation</th><th>Assigned Level</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
-            <div class="checkbox-container" id="ld-levels-checkboxes">
-                <!-- Levels will be populated here as RADIO buttons -->
-            </div>
-        </div>
 
-        <button type="submit">Assign Level to Designation</button>
-    </form>
-
-    <h3>📊 Current Designation-Level Mappings</h3>
-    <div class="table-wrapper">
-        <table id="level-designation-table">
-            <thead>
-                <tr>
-                    <th>Designation</th>
-                    <th>Assigned Level</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-</div>
-
-            <!-- 1. ASSIGN STAFF TO CLASSES -->
+            <!-- SECTION 2: ASSIGN STAFF TO CLASSES -->
             <div id="section-staff-class" class="mapping-section" style="display:none;">
                 <h2>👥 Assign Staff to Classes</h2>
-                <p>Assign designation and classes to staff members (Class teacher, coordinator, principal etc.)</p>
-
-                <!-- Visual Indicator -->
+                <p>Assign designation and classes to staff members. Selecting a class will <strong>automatically assign all its subjects</strong> to the staff member.</p>
                 <div class="mapping-visual">
                     <div class="mapping-item">👨‍🏫 Staff</div>
                     <div class="mapping-arrow">→</div>
                     <div class="mapping-item">🏆 Designation</div>
                     <div class="mapping-arrow">→</div>
-                    <div class="mapping-item">📚 Classes</div>
+                    <div class="mapping-item">📚 Classes + 📖 Subjects</div>
                 </div>
-
                 <h3>➕ Assign Staff Member</h3>
                 <form id="assign-staff-class-form">
                     <div>
@@ -904,19 +266,17 @@
                             <option value="">-- Select Staff --</option>
                         </select>
                     </div>
-
                     <div>
                         <label for="sc-designation">Designation *</label>
                         <select id="sc-designation" required>
                             <option value="">-- Select Designation --</option>
                         </select>
                     </div>
-
                     <div>
                         <label>Assigned Classes *</label>
                         <div class="info-box">
-                            <strong>💡 Tip:</strong>
-                            Select "All Classes" or choose specific classes below
+                            <strong>💡 Auto-Subject Assignment:</strong>
+                            When you select a class, all subjects of that class will be <strong>automatically assigned</strong> to this staff member. Perfect for managers, principals, class teachers, etc.
                         </div>
                         <div class="checkbox-container">
                             <label class="select-all-checkbox">
@@ -926,38 +286,27 @@
                             <div id="sc-classes-checkboxes"></div>
                         </div>
                     </div>
-
+                    <!-- Subject preview is inserted here dynamically by JS -->
                     <button type="submit">Assign Staff to Classes</button>
                 </form>
-
                 <h3>📊 Current Assignments</h3>
                 <div class="table-wrapper">
                     <table id="staff-class-table">
-                        <thead>
-                            <tr>
-                                <th>Staff Name</th>
-                                <th>Designation</th>
-                                <th>Assigned Classes</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Staff Name</th><th>Designation</th><th>Assigned Classes</th><th>Actions</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- 2. ASSIGN SUBJECTS TO CLASSES -->
+            <!-- SECTION 3: ASSIGN SUBJECTS TO CLASSES -->
             <div id="section-class-subject" class="mapping-section" style="display:none;">
                 <h2>📖 Assign Subjects to Classes</h2>
                 <p>Choose a class and select which subjects are taught in that class</p>
-
-                <!-- Visual Indicator -->
                 <div class="mapping-visual">
                     <div class="mapping-item">📚 Class</div>
                     <div class="mapping-arrow">→</div>
                     <div class="mapping-item">📖 Subjects</div>
                 </div>
-
                 <h3>➕ Assign Subjects to a Class</h3>
                 <form id="assign-class-subject-form">
                     <div>
@@ -965,11 +314,8 @@
                         <select id="cs-class" required>
                             <option value="">-- Select Class --</option>
                         </select>
-                        <small style="display: block; margin-top: var(--space-2); color: var(--gray-600);">
-                            Nick name will appear automatically if created earlier
-                        </small>
+                        <small style="display:block;margin-top:var(--space-2);color:var(--gray-600);">Nick name will appear automatically if created earlier</small>
                     </div>
-
                     <div>
                         <label>Choose Subjects *</label>
                         <div class="info-box">
@@ -984,39 +330,28 @@
                             <div id="cs-subjects-checkboxes"></div>
                         </div>
                     </div>
-
                     <button type="submit">Assign Subjects to Class</button>
                 </form>
-
                 <h3>📊 Current Subject Assignments</h3>
                 <div class="table-wrapper">
                     <table id="class-subject-table">
-                        <thead>
-                            <tr>
-                                <th>Class</th>
-                                <th>Assigned Subjects</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Class</th><th>Assigned Subjects</th><th>Actions</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- 3. ASSIGN TEACHERS TO SUBJECTS -->
+            <!-- SECTION 4: ASSIGN TEACHERS TO SUBJECTS (MULTI-CLASS) -->
             <div id="section-teacher-subject" class="mapping-section" style="display:none;">
                 <h2>👨‍🏫 Assign Teachers to Subjects</h2>
-                <p>Choose a teacher, then select class and subjects they teach</p>
-
-                <!-- Visual Indicator -->
+                <p>Choose a teacher, select one or more classes, then pick the subjects they teach from those classes</p>
                 <div class="mapping-visual">
                     <div class="mapping-item">👨‍🏫 Teacher</div>
                     <div class="mapping-arrow">→</div>
-                    <div class="mapping-item">📚 Class</div>
+                    <div class="mapping-item">📚 Classes (Multi)</div>
                     <div class="mapping-arrow">→</div>
                     <div class="mapping-item">📖 Subjects</div>
                 </div>
-
                 <h3>➕ Assign Teacher to Subjects</h3>
                 <form id="assign-teacher-subject-form">
                     <div>
@@ -1027,22 +362,40 @@
                     </div>
 
                     <div>
-                        <label for="ts-class">Class *</label>
-                        <select id="ts-class" required>
-                            <option value="">-- Select Class --</option>
+                        <label for="ts-designation">Designation *</label>
+                        <select id="ts-designation" required>
+                            <option value="">-- Select Designation --</option>
                         </select>
-                        <small style="display: block; margin-top: var(--space-2); color: var(--gray-600);">
-                            Subjects assigned to this class will appear below
-                        </small>
                     </div>
 
-                    <div id="ts-subjects-container">
-                        <label>Subjects (Tick the ones this teacher teaches) *</label>
+                    <!-- ✅ CHANGED: Multi-class checkboxes instead of single dropdown -->
+                    <div>
+                        <label>Select Class(es) *</label>
                         <div class="info-box">
-                            <strong>💡 Note:</strong>
-                            Only subjects assigned to the selected class will appear here
+                            <strong>💡 Multi-Class Support:</strong>
+                            Select one or more classes. Subjects from each selected class will appear below, grouped by class.
                         </div>
                         <div class="checkbox-container">
+                            <label class="select-all-checkbox">
+                                <input type="checkbox" id="ts-all-classes" onchange="toggleAllTeacherClasses(this)">
+                                ✅ All Classes
+                            </label>
+                            <div id="ts-class-checkboxes"></div>
+                        </div>
+                    </div>
+
+                    <!-- Subjects appear here after class selection -->
+                    <div id="ts-subjects-container">
+                        <label>Select Subjects *</label>
+                        <div class="info-box">
+                            <strong>💡 Note:</strong>
+                            Only subjects assigned to the selected class(es) appear here, grouped by class. Use "Select All" to tick all subjects at once. Make sure the teacher is assigned to classes in <strong>Section 3</strong> first.
+                        </div>
+                        <div class="checkbox-container">
+                            <label class="select-all-checkbox">
+                                <input type="checkbox" id="ts-all-subjects" onchange="toggleAllTeacherSubjects(this)">
+                                ✅ Select All Subjects
+                            </label>
                             <div id="ts-subjects-checkboxes"></div>
                         </div>
                     </div>
@@ -1053,22 +406,15 @@
                 <h3>📊 Current Teacher Assignments</h3>
                 <div class="table-wrapper">
                     <table id="teacher-subject-table">
-                        <thead>
-                            <tr>
-                                <th>Teacher Name</th>
-                                <th>Class</th>
-                                <th>Assigned Subjects</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Teacher Name</th><th>Designation</th><th>Class</th><th>Assigned Subjects</th><th>Actions</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Scripts -->
+        </div><!-- /.container -->
+    </div><!-- /#part2-container -->
+
     <script src="js/config-v2.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/api.js"></script>
