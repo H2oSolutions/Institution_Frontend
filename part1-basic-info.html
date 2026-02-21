@@ -261,21 +261,10 @@
             margin-bottom: 8px;
         }
 
-        .stat-card.total .stat-number {
-            color: #1e40af;
-        }
-
-        .stat-card.success .stat-number {
-            color: #065f46;
-        }
-
-        .stat-card.failed .stat-number {
-            color: #991b1b;
-        }
-
-        .stat-card.class-total .stat-number {
-            color: #92400e;
-        }
+        .stat-card.total .stat-number { color: #1e40af; }
+        .stat-card.success .stat-number { color: #065f46; }
+        .stat-card.failed .stat-number { color: #991b1b; }
+        .stat-card.class-total .stat-number { color: #92400e; }
 
         .stat-label {
             font-size: 14px;
@@ -314,9 +303,7 @@
             color: #374151;
         }
 
-        .error-item strong {
-            color: #991b1b;
-        }
+        .error-item strong { color: #991b1b; }
 
         .upload-modal-footer {
             padding: 24px 30px;
@@ -404,10 +391,7 @@
             border-left: 3px solid #3b82f6;
         }
 
-        .class-name {
-            font-weight: 600;
-            color: var(--gray-800);
-        }
+        .class-name { font-weight: 600; color: var(--gray-800); }
 
         .class-student-count {
             background: #3b82f6;
@@ -419,49 +403,12 @@
         }
 
         /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes messageSlideIn {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -60%);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, -50%);
-            }
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(40px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        @keyframes scaleIn {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes messageSlideIn { from { opacity: 0; transform: translate(-50%, -60%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes scaleIn { 0% { transform: scale(0); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
 
         /* Section Tabs */
         #section-tabs {
@@ -479,14 +426,8 @@
             border: 2px solid var(--gray-200);
         }
 
-        #section-tabs::-webkit-scrollbar {
-            height: 4px;
-        }
-
-        #section-tabs::-webkit-scrollbar-thumb {
-            background: var(--primary-500);
-            border-radius: var(--radius-full);
-        }
+        #section-tabs::-webkit-scrollbar { height: 4px; }
+        #section-tabs::-webkit-scrollbar-thumb { background: var(--primary-500); border-radius: var(--radius-full); }
 
         #section-tabs button {
             flex: 1;
@@ -558,11 +499,7 @@
             gap: var(--space-3);
         }
 
-        .section > p {
-            color: var(--gray-600);
-            margin-bottom: var(--space-6);
-            font-size: var(--text-base);
-        }
+        .section > p { color: var(--gray-600); margin-bottom: var(--space-6); font-size: var(--text-base); }
 
         .section h3 {
             color: var(--primary-700);
@@ -582,14 +519,8 @@
             transition: all var(--duration-300) var(--ease-out);
         }
 
-        form:hover {
-            border-color: var(--primary-300);
-            box-shadow: var(--shadow-md);
-        }
-
-        form > div {
-            margin-bottom: var(--space-6);
-        }
+        form:hover { border-color: var(--primary-300); box-shadow: var(--shadow-md); }
+        form > div { margin-bottom: var(--space-6); }
 
         label {
             display: block;
@@ -621,37 +552,19 @@
             transition: all var(--duration-200) var(--ease-out);
         }
 
-        input:focus,
-        select:focus,
-        textarea:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--primary-600);
             box-shadow: 0 0 0 4px var(--primary-100);
         }
 
-        input::placeholder,
-        textarea::placeholder {
-            color: var(--gray-400);
-        }
+        input::placeholder, textarea::placeholder { color: var(--gray-400); }
 
         /* Phone Number Validation States */
-        input[type="tel"].phone-invalid {
-            border-color: #dc2626 !important;
-            background-color: #fef2f2 !important;
-        }
-
-        input[type="tel"].phone-valid {
-            border-color: #16a34a !important;
-            background-color: #f0fdf4 !important;
-        }
-
-        input[type="tel"].phone-invalid:focus {
-            box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1) !important;
-        }
-
-        input[type="tel"].phone-valid:focus {
-            box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1) !important;
-        }
+        input[type="tel"].phone-invalid { border-color: #dc2626 !important; background-color: #fef2f2 !important; }
+        input[type="tel"].phone-valid { border-color: #16a34a !important; background-color: #f0fdf4 !important; }
+        input[type="tel"].phone-invalid:focus { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1) !important; }
+        input[type="tel"].phone-valid:focus { box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1) !important; }
 
         /* Enhanced Tables */
         .table-wrapper {
@@ -672,13 +585,7 @@
             border-spacing: 0;
         }
 
-        thead {
-            background: var(--gradient-primary);
-            color: var(--white);
-            position: sticky;
-            top: 0;
-            z-index: var(--z-10);
-        }
+        thead { background: var(--gradient-primary); color: var(--white); position: sticky; top: 0; z-index: var(--z-10); }
 
         thead th {
             padding: var(--space-5) var(--space-6);
@@ -690,29 +597,10 @@
             white-space: nowrap;
         }
 
-        tbody tr {
-            border-bottom: 1px solid var(--gray-200);
-            transition: all var(--duration-200) var(--ease-out);
-        }
-
-        tbody tr:hover {
-            background: var(--primary-50);
-            transform: scale(1.01);
-            box-shadow: var(--shadow-sm);
-        }
-
-        tbody td {
-            padding: var(--space-5) var(--space-6);
-            color: var(--gray-700);
-            font-size: var(--text-sm);
-        }
-
-        tbody td button {
-            padding: var(--space-2) var(--space-4);
-            font-size: var(--text-xs);
-            margin: 0 var(--space-1);
-            min-height: auto;
-        }
+        tbody tr { border-bottom: 1px solid var(--gray-200); transition: all var(--duration-200) var(--ease-out); }
+        tbody tr:hover { background: var(--primary-50); transform: scale(1.01); box-shadow: var(--shadow-sm); }
+        tbody td { padding: var(--space-5) var(--space-6); color: var(--gray-700); font-size: var(--text-sm); }
+        tbody td button { padding: var(--space-2) var(--space-4); font-size: var(--text-xs); margin: 0 var(--space-1); min-height: auto; }
 
         /* Student Bulk Upload Section */
         .upload-section {
@@ -723,10 +611,7 @@
             margin-bottom: var(--space-8);
         }
 
-        .upload-section h3 {
-            color: var(--primary-900);
-            border-bottom-color: var(--primary-400);
-        }
+        .upload-section h3 { color: var(--primary-900); border-bottom-color: var(--primary-400); }
 
         .download-template-btn {
             background: var(--white);
@@ -739,37 +624,19 @@
             transition: all var(--duration-200) var(--ease-out);
         }
 
-        .download-template-btn:hover {
-            background: var(--primary-600);
-            color: var(--white);
-            transform: translateY(-2px);
-        }
+        .download-template-btn:hover { background: var(--primary-600); color: var(--white); transform: translateY(-2px); }
 
         /* Search Bar */
-        .search-container {
-            display: flex;
-            gap: var(--space-4);
-            margin-bottom: var(--space-6);
-            flex-wrap: wrap;
-        }
+        .search-container { display: flex; gap: var(--space-4); margin-bottom: var(--space-6); flex-wrap: wrap; }
+        .search-container input { flex: 1; min-width: 250px; }
+        .search-container button { min-width: 120px; }
 
-        .search-container input {
-            flex: 1;
-            min-width: 250px;
-        }
-
-        .search-container button {
-            min-width: 120px;
-        }
-
-        /* Edit Modal Styles - UPDATED TO BE MORE COMPACT */
+        /* Edit Modal Styles */
         .edit-modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.6);
             z-index: 10000;
             overflow-y: auto;
@@ -777,12 +644,7 @@
             backdrop-filter: blur(4px);
         }
 
-        .edit-modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.3s ease-out;
-        }
+        .edit-modal.show { display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s ease-out; }
 
         .edit-modal-content {
             background: white;
@@ -806,19 +668,12 @@
             border-bottom: 2px solid #e5e7eb;
         }
 
-        .edit-modal-header h3 {
-            margin: 0;
-            font-size: 20px;
-            color: #111827;
-            border: none;
-            padding: 0;
-        }
+        .edit-modal-header h3 { margin: 0; font-size: 20px; color: #111827; border: none; padding: 0; }
 
         .edit-modal-close {
             background: #f3f4f6;
             border: none;
-            width: 32px;
-            height: 32px;
+            width: 32px; height: 32px;
             border-radius: 50%;
             cursor: pointer;
             font-size: 18px;
@@ -830,18 +685,10 @@
             flex-shrink: 0;
         }
 
-        .edit-modal-close:hover {
-            background: #e5e7eb;
-            color: #111827;
-        }
+        .edit-modal-close:hover { background: #e5e7eb; color: #111827; }
+        .edit-modal-body { margin-bottom: 20px; }
 
-        .edit-modal-body {
-            margin-bottom: 20px;
-        }
-
-        .edit-modal-field {
-            margin-bottom: 16px;
-        }
+        .edit-modal-field { margin-bottom: 16px; }
 
         .edit-modal-field label {
             display: block;
@@ -864,11 +711,7 @@
             transition: all 0.2s;
         }
 
-        .edit-modal-field textarea {
-            resize: vertical;
-            min-height: 60px;
-            max-height: 120px;
-        }
+        .edit-modal-field textarea { resize: vertical; min-height: 60px; max-height: 120px; }
 
         .edit-modal-field input:focus,
         .edit-modal-field select:focus,
@@ -878,11 +721,8 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        /* Remove placeholder text visibility */
         .edit-modal-field input::placeholder,
-        .edit-modal-field textarea::placeholder {
-            color: transparent;
-        }
+        .edit-modal-field textarea::placeholder { color: transparent; }
 
         .edit-modal-footer {
             display: flex;
@@ -902,110 +742,27 @@
             font-size: 14px;
         }
 
-        .edit-modal-cancel {
-            background: #f3f4f6;
-            color: #374151;
-        }
-
-        .edit-modal-cancel:hover {
-            background: #e5e7eb;
-        }
-
-        .edit-modal-save {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white;
-        }
-
-        .edit-modal-save:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        }
+        .edit-modal-cancel { background: #f3f4f6; color: #374151; }
+        .edit-modal-cancel:hover { background: #e5e7eb; }
+        .edit-modal-save { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+        .edit-modal-save:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
 
         /* Responsive */
         @media (max-width: 768px) {
-            #header {
-                flex-direction: column;
-                text-align: center;
-                padding: var(--space-5);
-            }
-
-            #section-tabs {
-                padding: var(--space-3);
-            }
-
-            #section-tabs button {
-                min-width: 120px;
-                font-size: var(--text-xs);
-            }
-
-            .section {
-                padding: var(--space-6);
-            }
-
-            form {
-                padding: var(--space-6);
-            }
-
-            .search-container {
-                flex-direction: column;
-            }
-
-            .search-container input,
-            .search-container button {
-                width: 100%;
-            }
-
-            .edit-modal-content,
-            .upload-modal-content {
-                padding: 20px;
-                margin: 10px;
-                max-width: 95%;
-            }
-
-            .edit-modal-header h3,
-            .upload-modal-header h3 {
-                font-size: 18px;
-            }
-
-            .edit-modal-field {
-                margin-bottom: 14px;
-            }
-
-            .edit-modal-field input,
-            .edit-modal-field select,
-            .edit-modal-field textarea {
-                padding: 9px 12px;
-                font-size: 14px;
-            }
-
-            #loading,
-            #error-message,
-            #success-message {
-                min-width: 280px;
-                max-width: 90%;
-                padding: var(--space-6);
-                font-size: var(--text-base);
-            }
-
-            .upload-stats {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
+            #header { flex-direction: column; text-align: center; padding: var(--space-5); }
+            #section-tabs { padding: var(--space-3); }
+            #section-tabs button { min-width: 120px; font-size: var(--text-xs); }
+            .section { padding: var(--space-6); }
+            form { padding: var(--space-6); }
+            .search-container { flex-direction: column; }
+            .search-container input, .search-container button { width: 100%; }
+            .edit-modal-content, .upload-modal-content { padding: 20px; margin: 10px; max-width: 95%; }
+            #loading, #error-message, #success-message { min-width: 280px; max-width: 90%; padding: var(--space-6); font-size: var(--text-base); }
+            .upload-stats { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; }
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -1026,14 +783,10 @@
                 </div>
                 <div class="upload-modal-body">
                     <div id="success-list-container" style="display: none;"></div>
-                    <div class="upload-stats" id="upload-stats-container">
-                        <!-- Stats will be dynamically inserted here -->
-                    </div>
+                    <div class="upload-stats" id="upload-stats-container"></div>
                     <div class="upload-errors" id="upload-errors-container" style="display: none;">
                         <h4>⚠️ Errors Details</h4>
-                        <div class="errors-list" id="errors-list">
-                            <!-- Errors will be dynamically inserted here -->
-                        </div>
+                        <div class="errors-list" id="errors-list"></div>
                     </div>
                 </div>
                 <div class="upload-modal-footer">
@@ -1073,7 +826,6 @@
                         <label for="des-name">Designation Name *</label>
                         <input type="text" id="des-name" placeholder="e.g., Principal, Teacher, Coordinator" required>
                     </div>
-
                     <button type="submit">Add Designation</button>
                 </form>
 
@@ -1103,12 +855,10 @@
                         <label for="class-name">Class Name *</label>
                         <input type="text" id="class-name" placeholder="e.g., 10th Grade, BSc 1st Year" required>
                     </div>
-
                     <div>
                         <label for="class-nickname">Nick Name (Optional)</label>
                         <input type="text" id="class-nickname" placeholder="Short name or code">
                     </div>
-
                     <button type="submit">Add Class</button>
                 </form>
 
@@ -1146,12 +896,7 @@
                         <input type="tel" id="staff-mobile" maxlength="10" placeholder="10-digit mobile number" required>
                     </div>
 
-                    <div>
-                        <label for="staff-designation">Designation *</label>
-                        <select id="staff-designation" required>
-                            <option value="">-- Select Designation --</option>
-                        </select>
-                    </div>
+                    <!-- ✅ DESIGNATION REMOVED — assigned in Part 2 Mapping -->
 
                     <button type="submit">Add Staff</button>
                 </form>
@@ -1163,7 +908,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Mobile No</th>
-                                <th>Designation</th>
+                                <!-- ✅ DESIGNATION COLUMN REMOVED -->
                                 <th>Assigned Classes</th>
                                 <th>Has Credentials</th>
                                 <th>Actions</th>
@@ -1185,7 +930,6 @@
                         <label for="subject-name">Subject Name *</label>
                         <input type="text" id="subject-name" placeholder="e.g., Mathematics, Physics" required>
                     </div>
-
                     <button type="submit">Add Subject</button>
                 </form>
 
@@ -1203,7 +947,7 @@
                 </div>
             </div>
 
-            <!-- 5. STUDENTS SECTION - ✅ UPDATED WITH 3 NEW OPTIONAL FIELDS -->
+            <!-- 5. STUDENTS SECTION -->
             <div id="section-students" class="section" style="display:none;">
                 <h2>🎓 Students Management</h2>
                 <p><em>Manage student records - add individually or bulk upload</em></p>
@@ -1221,9 +965,7 @@
                             <span class="stats-item-value" id="total-students-count">0</span>
                         </div>
                     </div>
-                    <div class="class-list" id="class-list">
-                        <!-- Class items will be dynamically inserted here -->
-                    </div>
+                    <div class="class-list" id="class-list"></div>
                 </div>
 
                 <!-- Bulk Upload Section -->
@@ -1241,7 +983,6 @@
                                 <option value="">Choose a class...</option>
                             </select>
                         </div>
-
                         <div>
                             <label for="student-file">Upload Excel File *</label>
                             <input type="file" id="student-file" accept=".xls,.xlsx" required>
@@ -1249,55 +990,43 @@
                                 Formats: .xlsx, .xls (Max 10MB)
                             </small>
                         </div>
-
                         <button type="submit">📤 Upload Students</button>
                     </form>
                 </div>
 
-                <!-- ✅ UPDATED: Add Individual Student Form - Class at TOP + 3 new optional fields -->
+                <!-- Add Individual Student Form -->
                 <h3>➕ Add Individual Student</h3>
                 <form id="add-student-form">
-                    <!-- ✅ CLASS FIELD MOVED TO TOP -->
                     <div>
                         <label for="student-class">Class *</label>
                         <select id="student-class" required>
                             <option value="">Select class...</option>
                         </select>
                     </div>
-
                     <div>
                         <label for="student-name">Name *</label>
                         <input type="text" id="student-name" placeholder="Student's full name" required>
                     </div>
-
                     <div>
                         <label for="student-father">Father Name *</label>
                         <input type="text" id="student-father" placeholder="Father's full name" required>
                     </div>
-
-                    <!-- ✅ NEW FIELD 1: Mother Name (Optional) -->
                     <div>
                         <label for="student-mother">Mother Name</label>
                         <input type="text" id="student-mother" placeholder="Mother's full name (optional)">
                     </div>
-
                     <div>
                         <label for="student-mobile">Mobile * (10 digits)</label>
                         <input type="tel" id="student-mobile" maxlength="10" placeholder="10-digit mobile number" required>
                     </div>
-
-                    <!-- ✅ NEW FIELD 2: Date of Birth (Optional) -->
                     <div>
                         <label for="student-dob">Date of Birth</label>
                         <input type="date" id="student-dob">
                     </div>
-
-                    <!-- ✅ NEW FIELD 3: Address (Optional) -->
                     <div>
                         <label for="student-address">Address</label>
                         <textarea id="student-address" rows="3" placeholder="Student's address (optional)"></textarea>
                     </div>
-
                     <button type="submit">Add Student</button>
                 </form>
 
@@ -1308,7 +1037,6 @@
                     <button onclick="loadAllStudents()">Show All</button>
                 </div>
 
-                <!-- ✅ UPDATED: Students Table - Now with 9 columns (was 6) -->
                 <h3>📊 Students List</h3>
                 <div class="table-wrapper">
                     <table id="students-table">
@@ -1317,11 +1045,11 @@
                                 <th>#</th>
                                 <th>Name</th>
                                 <th>Father Name</th>
-                                <th>Mother Name</th>      <!-- ✅ NEW COLUMN -->
+                                <th>Mother Name</th>
                                 <th>Class</th>
                                 <th>Mobile No</th>
-                                <th>DOB</th>               <!-- ✅ NEW COLUMN -->
-                                <th>Address</th>           <!-- ✅ NEW COLUMN -->
+                                <th>DOB</th>
+                                <th>Address</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -1352,7 +1080,6 @@
                             <option value="10">10 Levels</option>
                         </select>
                     </div>
-
                     <button type="submit">Save Hierarchy</button>
                 </form>
 
@@ -1371,9 +1098,7 @@
                 <h3 id="modal-title">Edit Item</h3>
                 <button class="edit-modal-close" onclick="closeEditModal()">✕</button>
             </div>
-            <div class="edit-modal-body" id="modal-body">
-                <!-- Dynamic fields will be inserted here -->
-            </div>
+            <div class="edit-modal-body" id="modal-body"></div>
             <div class="edit-modal-footer">
                 <button class="edit-modal-cancel" onclick="closeEditModal()">Cancel</button>
                 <button class="edit-modal-save" onclick="saveEdit()">Save Changes</button>

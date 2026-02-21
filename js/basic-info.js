@@ -1,4 +1,5 @@
-// basic-info.js - Part 1: Basic Information Logic - UPDATED WITH 3 NEW OPTIONAL FIELDS
+// basic-info.js - Part 1: Basic Information Logic
+// ✅ UPDATED: Designation removed from Staff section (now handled in Part 2 Mapping)
 
 let currentSection = 'designations';
 let designationsData = [];
@@ -20,9 +21,7 @@ function validateMobile(mobile) {
 
 function populateDropdown(selectElement, data, valueKey, textKey) {
     if (!selectElement) return;
-    
     selectElement.innerHTML = '<option value="">-- Select --</option>';
-    
     data.forEach(item => {
         const option = document.createElement('option');
         option.value = typeof valueKey === 'function' ? valueKey(item) : item[valueKey];
@@ -36,119 +35,76 @@ function populateDropdown(selectElement, data, valueKey, textKey) {
 // ===================================
 
 function showLoading(message = 'Loading...') {
-    console.log('🔄 showLoading called:', message);
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error-message');
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
-    
-    if (errorEl) {
-        errorEl.classList.remove('show');
-        errorEl.style.display = 'none';
-    }
-    if (successEl) {
-        successEl.classList.remove('show');
-        successEl.style.display = 'none';
-    }
-    
-    if (overlay) {
-        overlay.classList.add('show');
-    }
-    
+
+    if (errorEl) { errorEl.classList.remove('show'); errorEl.style.display = 'none'; }
+    if (successEl) { successEl.classList.remove('show'); successEl.style.display = 'none'; }
+    if (overlay) overlay.classList.add('show');
+
     if (loadingEl) {
         loadingEl.textContent = message;
         loadingEl.style.display = 'block';
         loadingEl.classList.add('show');
-        console.log('✅ Loading shown:', message);
     }
 }
 
 function hideLoading() {
-    console.log('🔄 hideLoading called');
     const loadingEl = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loadingEl) {
-        loadingEl.classList.remove('show');
-        loadingEl.style.display = 'none';
-    }
-    
+
+    if (loadingEl) { loadingEl.classList.remove('show'); loadingEl.style.display = 'none'; }
+
     const errorEl = document.getElementById('error-message');
     const successEl = document.getElementById('success-message');
-    const anyMessageShowing = (errorEl && errorEl.classList.contains('show')) || 
+    const anyMessageShowing = (errorEl && errorEl.classList.contains('show')) ||
                               (successEl && successEl.classList.contains('show'));
-    
-    if (overlay && !anyMessageShowing) {
-        overlay.classList.remove('show');
-    }
+
+    if (overlay && !anyMessageShowing) overlay.classList.remove('show');
 }
 
 function showSuccess(message) {
-    console.log('✅ showSuccess called:', message);
     const successEl = document.getElementById('success-message');
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error-message');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loadingEl) {
-        loadingEl.classList.remove('show');
-        loadingEl.style.display = 'none';
-    }
-    if (errorEl) {
-        errorEl.classList.remove('show');
-        errorEl.style.display = 'none';
-    }
-    
-    if (overlay) {
-        overlay.classList.add('show');
-    }
-    
+
+    if (loadingEl) { loadingEl.classList.remove('show'); loadingEl.style.display = 'none'; }
+    if (errorEl) { errorEl.classList.remove('show'); errorEl.style.display = 'none'; }
+    if (overlay) overlay.classList.add('show');
+
     if (successEl) {
         successEl.textContent = message;
         successEl.style.display = 'block';
         successEl.classList.add('show');
-        
         setTimeout(() => {
             successEl.classList.remove('show');
             successEl.style.display = 'none';
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
+            if (overlay) overlay.classList.remove('show');
         }, 5000);
     }
 }
 
 function showError(message) {
-    console.log('❌ showError called:', message);
     const errorEl = document.getElementById('error-message');
     const loadingEl = document.getElementById('loading');
     const successEl = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loadingEl) {
-        loadingEl.classList.remove('show');
-        loadingEl.style.display = 'none';
-    }
-    if (successEl) {
-        successEl.classList.remove('show');
-        successEl.style.display = 'none';
-    }
-    
-    if (overlay) {
-        overlay.classList.add('show');
-    }
-    
+
+    if (loadingEl) { loadingEl.classList.remove('show'); loadingEl.style.display = 'none'; }
+    if (successEl) { successEl.classList.remove('show'); successEl.style.display = 'none'; }
+    if (overlay) overlay.classList.add('show');
+
     if (errorEl) {
         errorEl.textContent = message;
         errorEl.style.display = 'block';
         errorEl.classList.add('show');
-        
         setTimeout(() => {
             errorEl.classList.remove('show');
             errorEl.style.display = 'none';
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
+            if (overlay) overlay.classList.remove('show');
         }, 7000);
     }
 }
@@ -159,9 +115,7 @@ function showError(message) {
 
 async function loadClassStatistics() {
     try {
-        console.log('📊 Loading class statistics...');
         const classesResponse = await apiGet(API_ENDPOINTS.CLASSES, true);
-        
         if (classesResponse.success) {
             classStatistics = classesResponse.data;
             displayClassStatistics();
@@ -175,20 +129,20 @@ function displayClassStatistics() {
     const totalClassesEl = document.getElementById('total-classes-count');
     const totalStudentsEl = document.getElementById('total-students-count');
     const classListEl = document.getElementById('class-list');
-    
+
     if (!totalClassesEl || !totalStudentsEl || !classListEl) return;
-    
+
     const totalClasses = classStatistics.length;
     const totalStudents = classStatistics.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
-    
+
     totalClassesEl.textContent = totalClasses;
     totalStudentsEl.textContent = totalStudents;
-    
+
     if (classStatistics.length === 0) {
         classListEl.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: var(--space-4);">No classes available</p>';
         return;
     }
-    
+
     classListEl.innerHTML = classStatistics.map(cls => `
         <div class="class-list-item">
             <span class="class-name">${cls.nickname || cls.className}</span>
@@ -203,21 +157,21 @@ function displayClassStatistics() {
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Part 1 - Basic Info initializing...');
-    
+
     if (!checkAuth()) {
         console.error('Authentication failed');
         return;
     }
-    
+
     showSection('designations');
-    
+
     loadDesignations();
     loadClasses();
     loadStaff();
     loadSubjects();
     loadStudents();
     loadHierarchy();
-    
+
     const addDesForm = document.getElementById('add-designation-form');
     const addClassForm = document.getElementById('add-class-form');
     const addStaffForm = document.getElementById('add-staff-form');
@@ -225,7 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const addStudentForm = document.getElementById('add-student-form');
     const bulkUploadForm = document.getElementById('bulk-upload-form');
     const hierarchyForm = document.getElementById('hierarchy-form');
-    
+
     if (addDesForm) addDesForm.addEventListener('submit', handleAddDesignation);
     if (addClassForm) addClassForm.addEventListener('submit', handleAddClass);
     if (addStaffForm) addStaffForm.addEventListener('submit', handleAddStaff);
@@ -233,16 +187,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (addStudentForm) addStudentForm.addEventListener('submit', handleAddStudent);
     if (bulkUploadForm) bulkUploadForm.addEventListener('submit', handleBulkUpload);
     if (hierarchyForm) hierarchyForm.addEventListener('submit', handleSaveHierarchy);
-    
+
     const staffMobile = document.getElementById('staff-mobile');
     const studentMobile = document.getElementById('student-mobile');
-    
+
     function validatePhoneInput(input) {
         if (!input) return;
-        
-        input.addEventListener('input', function(e) {
+        input.addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '');
-            
             if (this.value.length === 10) {
                 this.classList.remove('phone-invalid');
                 this.classList.add('phone-valid');
@@ -254,28 +206,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     validatePhoneInput(staffMobile);
     validatePhoneInput(studentMobile);
-    
+
     console.log('✅ All event listeners attached');
 });
 
 function showSection(sectionName) {
     const sections = document.querySelectorAll('.section');
     sections.forEach(s => s.style.display = 'none');
-    
+
     const tabs = document.querySelectorAll('#section-tabs button');
     tabs.forEach(t => t.style.fontWeight = 'normal');
-    
+
     const section = document.getElementById('section-' + sectionName);
     const tab = document.getElementById('tab-' + sectionName);
-    
+
     if (section) section.style.display = 'block';
     if (tab) tab.style.fontWeight = 'bold';
-    
+
     currentSection = sectionName;
-    
+
     if (sectionName === 'students') {
         loadClassStatistics();
     }
@@ -289,7 +241,6 @@ async function loadDesignations() {
     try {
         showLoading('Loading designations...');
         const response = await apiGet(API_ENDPOINTS.DESIGNATIONS, true);
-        
         hideLoading();
         if (response.success) {
             designationsData = response.data;
@@ -304,14 +255,14 @@ async function loadDesignations() {
 function displayDesignations() {
     const tbody = document.querySelector('#designations-table tbody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     if (designationsData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center">No designations found. Add one above.</td></tr>';
         return;
     }
-    
+
     designationsData.forEach(des => {
         const row = tbody.insertRow();
         row.innerHTML = `
@@ -323,46 +274,26 @@ function displayDesignations() {
             </td>
         `;
     });
-    
-    const staffDesSelect = document.getElementById('staff-designation');
-    if (staffDesSelect) {
-        populateDropdown(staffDesSelect, designationsData, '_id', 'name');
-    }
+    // NOTE: No staff-designation dropdown to populate — designation is handled in Part 2 Mapping
 }
 
 async function handleAddDesignation(e) {
     e.preventDefault();
-    
     const name = document.getElementById('des-name').value.trim();
-    
-    if (!name) {
-        showError('Please enter a designation name');
-        return;
-    }
-    
+    if (!name) { showError('Please enter a designation name'); return; }
+
     const token = localStorage.getItem('token');
-    if (!token) {
-        showError('Please login again');
-        window.location.href = 'login.html';
-        return;
-    }
-    
+    if (!token) { showError('Please login again'); window.location.href = 'login.html'; return; }
+
     try {
         showLoading('Adding designation...');
-        
         const response = await fetch(API_ENDPOINTS.DESIGNATIONS, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ name: name })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ name })
         });
-        
         const data = await response.json();
-        
         hideLoading();
-        
         if (response.ok && data.success) {
             showSuccess(data.message || 'Designation added successfully');
             document.getElementById('add-designation-form').reset();
@@ -384,16 +315,11 @@ async function editDesignation(id) {
 
 async function deleteDesignation(id) {
     if (!confirm('Are you sure you want to delete this designation?')) return;
-    
     try {
         showLoading('Deleting designation...');
         const response = await apiDelete(API_ENDPOINTS.DESIGNATIONS + '/' + id, true);
         hideLoading();
-        
-        if (response.success) {
-            showSuccess(response.message);
-            loadDesignations();
-        }
+        if (response.success) { showSuccess(response.message); loadDesignations(); }
     } catch (error) {
         hideLoading();
         showError(error.message);
@@ -408,12 +334,10 @@ async function loadClasses() {
     try {
         showLoading('Loading classes...');
         const response = await apiGet(API_ENDPOINTS.CLASSES, true);
-        
         hideLoading();
         if (response.success) {
             classesData = response.data;
             displayClasses();
-            
             if (currentSection === 'students') {
                 classStatistics = classesData;
                 displayClassStatistics();
@@ -428,18 +352,17 @@ async function loadClasses() {
 function displayClasses() {
     const tbody = document.querySelector('#classes-table tbody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     if (classesData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">No classes found. Add one above.</td></tr>';
         return;
     }
-    
+
     classesData.forEach(cls => {
         const row = tbody.insertRow();
         const subjects = cls.assignedSubjects ? cls.assignedSubjects.map(s => s.subjectName).join(', ') : '-';
-        
         row.innerHTML = `
             <td>${cls.className}</td>
             <td>${cls.nickname || '-'}</td>
@@ -451,54 +374,33 @@ function displayClasses() {
             </td>
         `;
     });
-    
+
     const studentClassSelect = document.getElementById('student-class');
     const bulkClassSelect = document.getElementById('bulk-class-select');
-    
-    if (studentClassSelect) {
-        populateDropdown(studentClassSelect, classesData, '_id', data => data.nickname || data.className);
-    }
-    if (bulkClassSelect) {
-        populateDropdown(bulkClassSelect, classesData, '_id', data => data.nickname || data.className);
-    }
+
+    if (studentClassSelect) populateDropdown(studentClassSelect, classesData, '_id', data => data.nickname || data.className);
+    if (bulkClassSelect) populateDropdown(bulkClassSelect, classesData, '_id', data => data.nickname || data.className);
 }
 
 async function handleAddClass(e) {
     e.preventDefault();
-    
     const className = document.getElementById('class-name').value.trim();
     const nickname = document.getElementById('class-nickname').value.trim();
-    
-    if (!className) {
-        showError('Please enter a class name');
-        return;
-    }
-    
+
+    if (!className) { showError('Please enter a class name'); return; }
+
     const token = localStorage.getItem('token');
-    if (!token) {
-        showError('Please login again');
-        window.location.href = 'login.html';
-        return;
-    }
-    
+    if (!token) { showError('Please login again'); window.location.href = 'login.html'; return; }
+
     try {
         showLoading('Adding class...');
-        
         const response = await fetch(API_ENDPOINTS.CLASSES, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                className: className,
-                nickname: nickname || null
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ className, nickname: nickname || null })
         });
-        
         const data = await response.json();
         hideLoading();
-        
         if (response.ok && data.success) {
             showSuccess(data.message || 'Class added successfully');
             document.getElementById('add-class-form').reset();
@@ -520,16 +422,11 @@ async function editClass(id) {
 
 async function deleteClass(id) {
     if (!confirm('Are you sure you want to delete this class?')) return;
-    
     try {
         showLoading('Deleting class...');
         const response = await apiDelete(API_ENDPOINTS.CLASSES + '/' + id, true);
         hideLoading();
-        
-        if (response.success) {
-            showSuccess(response.message);
-            loadClasses();
-        }
+        if (response.success) { showSuccess(response.message); loadClasses(); }
     } catch (error) {
         hideLoading();
         showError(error.message);
@@ -538,6 +435,7 @@ async function deleteClass(id) {
 
 // ===================================
 // 3. STAFF MANAGEMENT
+// ✅ Designation field removed — assigned in Part 2 Mapping
 // ===================================
 
 async function loadStaff() {
@@ -545,7 +443,6 @@ async function loadStaff() {
         showLoading('Loading staff...');
         const response = await apiGet(API_ENDPOINTS.STAFF, true);
         hideLoading();
-        
         if (response.success) {
             staffData = response.data;
             displayStaff();
@@ -559,23 +456,26 @@ async function loadStaff() {
 function displayStaff() {
     const tbody = document.querySelector('#staff-table tbody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     if (staffData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">No staff found. Add one above.</td></tr>';
+        // ✅ colspan updated from 6 to 5 (designation column removed)
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">No staff found. Add one above.</td></tr>';
         return;
     }
-    
+
     staffData.forEach(staff => {
         const row = tbody.insertRow();
         const classes = staff.assignedClasses ? staff.assignedClasses.map(c => c.className).join(', ') : '-';
-        const credentials = staff.hasCredentials ? (staff.isCredentialActive ? 'Yes (Active)' : 'Yes (Inactive)') : 'No';
-        
+        const credentials = staff.hasCredentials
+            ? (staff.isCredentialActive ? 'Yes (Active)' : 'Yes (Inactive)')
+            : 'No';
+
+        // ✅ Designation column removed from row
         row.innerHTML = `
             <td>${staff.name}</td>
             <td>${staff.mobileNo}</td>
-            <td>${staff.designationId?.name || '-'}</td>
             <td>${classes}</td>
             <td>${credentials}</td>
             <td>
@@ -588,67 +488,61 @@ function displayStaff() {
 
 async function handleAddStaff(e) {
     e.preventDefault();
-    
+
     const nameInput = document.getElementById('staff-name');
     const mobileInput = document.getElementById('staff-mobile');
-    const designationInput = document.getElementById('staff-designation');
-    
-    if (!nameInput || !mobileInput || !designationInput) {
+
+    if (!nameInput || !mobileInput) {
         showError('Form error: Required fields not found');
         return;
     }
-    
+
     const name = nameInput.value.trim();
     const mobileNo = mobileInput.value.trim();
-    const designationId = designationInput.value;
-    
-    if (!name || !mobileNo || !designationId) {
+
+    // ✅ designationId removed from required check
+    if (!name || !mobileNo) {
         showError('Please fill all required fields');
         return;
     }
-    
+
     if (!validateMobile(mobileNo)) {
         showError('Please enter a valid 10-digit mobile number starting with 6-9');
         return;
     }
-    
+
     const token = localStorage.getItem('token');
     if (!token) {
         showError('Please login again');
         setTimeout(() => window.location.href = 'login.html', 2000);
         return;
     }
-    
+
     try {
         showLoading('Adding staff...');
-        
+
+        // ✅ designationId NOT sent — backend now accepts staff without designation
         const response = await fetch(API_ENDPOINTS.STAFF, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({
-                name: name,
-                mobileNo: mobileNo,
-                designationId: designationId
-            })
+            body: JSON.stringify({ name, mobileNo })
         });
-        
+
         const data = await response.json();
         hideLoading();
-        
+
         if (response.ok && data.success) {
             showSuccess(data.message || 'Staff added successfully!');
             const form = document.getElementById('add-staff-form');
             form.reset();
             const staffMobileInput = document.getElementById('staff-mobile');
-            if (staffMobileInput) {
-                staffMobileInput.classList.remove('phone-valid', 'phone-invalid');
-            }
+            if (staffMobileInput) staffMobileInput.classList.remove('phone-valid', 'phone-invalid');
             await loadStaff();
         } else {
-            showError(data.message || `Failed to add staff`);
+            showError(data.message || 'Failed to add staff');
         }
     } catch (error) {
         hideLoading();
@@ -664,16 +558,11 @@ async function editStaff(id) {
 
 async function deleteStaff(id) {
     if (!confirm('Are you sure you want to delete this staff member?')) return;
-    
     try {
         showLoading('Deleting staff...');
         const response = await apiDelete(API_ENDPOINTS.STAFF + '/' + id, true);
         hideLoading();
-        
-        if (response.success) {
-            showSuccess(response.message);
-            loadStaff();
-        }
+        if (response.success) { showSuccess(response.message); loadStaff(); }
     } catch (error) {
         hideLoading();
         showError(error.message);
@@ -689,7 +578,6 @@ async function loadSubjects() {
         showLoading('Loading subjects...');
         const response = await apiGet(API_ENDPOINTS.SUBJECTS, true);
         hideLoading();
-        
         if (response.success) {
             subjectsData = response.data;
             displaySubjects();
@@ -703,14 +591,14 @@ async function loadSubjects() {
 function displaySubjects() {
     const tbody = document.querySelector('#subjects-table tbody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     if (subjectsData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="2" style="text-align:center">No subjects found. Add one above.</td></tr>';
         return;
     }
-    
+
     subjectsData.forEach(subject => {
         const row = tbody.insertRow();
         row.innerHTML = `
@@ -725,19 +613,13 @@ function displaySubjects() {
 
 async function handleAddSubject(e) {
     e.preventDefault();
-    
     const subjectName = document.getElementById('subject-name').value.trim();
-    
-    if (!subjectName) {
-        showError('Please enter a subject name');
-        return;
-    }
-    
+    if (!subjectName) { showError('Please enter a subject name'); return; }
+
     try {
         showLoading('Adding subject...');
-        const response = await apiPost(API_ENDPOINTS.SUBJECTS, { subjectName: subjectName }, true);
+        const response = await apiPost(API_ENDPOINTS.SUBJECTS, { subjectName }, true);
         hideLoading();
-        
         if (response.success) {
             showSuccess(response.message || 'Subject added successfully');
             document.getElementById('add-subject-form').reset();
@@ -757,16 +639,11 @@ async function editSubject(id) {
 
 async function deleteSubject(id) {
     if (!confirm('Are you sure you want to delete this subject?')) return;
-    
     try {
         showLoading('Deleting subject...');
         const response = await apiDelete(API_ENDPOINTS.SUBJECTS + '/' + id, true);
         hideLoading();
-        
-        if (response.success) {
-            showSuccess(response.message);
-            loadSubjects();
-        }
+        if (response.success) { showSuccess(response.message); loadSubjects(); }
     } catch (error) {
         hideLoading();
         showError(error.message);
@@ -774,7 +651,7 @@ async function deleteSubject(id) {
 }
 
 // ===================================
-// 5. STUDENTS MANAGEMENT - ✅ UPDATED WITH 3 NEW OPTIONAL FIELDS
+// 5. STUDENTS MANAGEMENT
 // ===================================
 
 async function loadStudents() {
@@ -782,7 +659,6 @@ async function loadStudents() {
         showLoading('Loading students...');
         const response = await apiGet(API_ENDPOINTS.STUDENTS + '?limit=100', true);
         hideLoading();
-        
         if (response.success) {
             studentsData = response.data;
             displayStudents();
@@ -798,32 +674,24 @@ async function loadAllStudents() {
     loadStudents();
 }
 
-// ✅ UPDATED: displayStudents - Now shows 3 new columns
 function displayStudents() {
     const tbody = document.querySelector('#students-table tbody');
     if (!tbody) return;
-    
+
     tbody.innerHTML = '';
-    
+
     if (studentsData.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" style="text-align:center">No students found. Add one above.</td></tr>';
         return;
     }
-    
+
     studentsData.forEach((student, index) => {
         const row = tbody.insertRow();
-        
-        // Helper function to format date
         const formatDate = (dateString) => {
             if (!dateString) return '-';
-            try {
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-IN');
-            } catch {
-                return '-';
-            }
+            try { return new Date(dateString).toLocaleDateString('en-IN'); }
+            catch { return '-'; }
         };
-        
         row.innerHTML = `
             <td>${index + 1}</td>
             <td>${student.name}</td>
@@ -841,11 +709,9 @@ function displayStudents() {
     });
 }
 
-// ✅ UPDATED: handleAddStudent - Now collects 3 new optional fields
 async function handleAddStudent(e) {
     e.preventDefault();
-    console.log('Adding student...');
-    
+
     const nameInput = document.getElementById('student-name');
     const fatherInput = document.getElementById('student-father');
     const motherInput = document.getElementById('student-mother');
@@ -853,12 +719,12 @@ async function handleAddStudent(e) {
     const mobileInput = document.getElementById('student-mobile');
     const dobInput = document.getElementById('student-dob');
     const addressInput = document.getElementById('student-address');
-    
+
     if (!nameInput || !fatherInput || !classInput || !mobileInput) {
         showError('Form error: Required fields not found');
         return;
     }
-    
+
     const name = nameInput.value.trim();
     const fatherName = fatherInput.value.trim();
     const motherName = motherInput ? motherInput.value.trim() : '';
@@ -866,77 +732,59 @@ async function handleAddStudent(e) {
     const mobileNo = mobileInput.value.trim();
     const dateOfBirth = dobInput ? dobInput.value : '';
     const simpleAddress = addressInput ? addressInput.value.trim() : '';
-    
+
     if (!name || !fatherName || !classId || !mobileNo) {
         showError('Please fill all required fields');
         return;
     }
-    
+
     if (!validateMobile(mobileNo)) {
         showError('Please enter a valid 10-digit mobile number starting with 6-9');
         return;
     }
-    
+
     try {
         showLoading('Adding student...');
-        
         const response = await apiPost(API_ENDPOINTS.STUDENTS, {
-            name: name,
-            fatherName: fatherName,
+            name,
+            fatherName,
             motherName: motherName || undefined,
-            classId: classId,
-            mobileNo: mobileNo,
+            classId,
+            mobileNo,
             dateOfBirth: dateOfBirth || undefined,
             simpleAddress: simpleAddress || undefined
         }, true);
-        
         hideLoading();
-        
+
         if (response.success) {
             const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
             const totalInClass = classResponse.success ? classResponse.data.studentCount : 1;
-            
+
             showBulkUploadResultsModal({
                 className: classesData.find(c => c._id === classId)?.className || 'Class',
-                total: 1,
-                successful: 1,
-                failed: 0,
-                totalInClass: totalInClass,
-                errors: [],
-                successMessage: 'Student added successfully!'
+                total: 1, successful: 1, failed: 0, totalInClass,
+                errors: [], successMessage: 'Student added successfully!'
             });
-            
-            const form = document.getElementById('add-student-form');
-            form.reset();
+
+            document.getElementById('add-student-form').reset();
             const studentMobileInput = document.getElementById('student-mobile');
-            if (studentMobileInput) {
-                studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
-            }
-            
+            if (studentMobileInput) studentMobileInput.classList.remove('phone-valid', 'phone-invalid');
+
             await loadStudents();
             await loadClasses();
             await loadClassStatistics();
         } else if (response.isDuplicate) {
             showBulkUploadResultsModal({
                 className: classesData.find(c => c._id === classId)?.className || 'Class',
-                total: 1,
-                successful: 0,
-                failed: 1,
-                totalInClass: 0,
+                total: 1, successful: 0, failed: 1, totalInClass: 0,
                 errors: [{ row: 1, message: response.message }]
             });
         }
     } catch (error) {
         hideLoading();
-        console.error('❌ Add student error:', error);
-        
         if (error.message.includes('Duplicate') || error.message.includes('409')) {
             showBulkUploadResultsModal({
-                className: 'Class',
-                total: 1,
-                successful: 0,
-                failed: 1,
-                totalInClass: 0,
+                className: 'Class', total: 1, successful: 0, failed: 1, totalInClass: 0,
                 errors: [{ row: 1, message: error.message }]
             });
         } else {
@@ -947,21 +795,13 @@ async function handleAddStudent(e) {
 
 async function searchStudents() {
     const searchTerm = document.getElementById('search-student').value.trim();
-    
-    if (!searchTerm) {
-        loadStudents();
-        return;
-    }
-    
+    if (!searchTerm) { loadStudents(); return; }
+
     try {
         showLoading('Searching...');
         const response = await apiGet(API_ENDPOINTS.STUDENTS + '?search=' + encodeURIComponent(searchTerm), true);
         hideLoading();
-        
-        if (response.success) {
-            studentsData = response.data;
-            displayStudents();
-        }
+        if (response.success) { studentsData = response.data; displayStudents(); }
     } catch (error) {
         hideLoading();
         showError(error.message);
@@ -976,12 +816,10 @@ async function editStudent(id) {
 
 async function deleteStudent(id) {
     if (!confirm('Are you sure you want to delete this student?')) return;
-    
     try {
         showLoading('Deleting student...');
         const response = await apiDelete(API_ENDPOINTS.STUDENTS + '/' + id, true);
         hideLoading();
-        
         if (response.success) {
             showSuccess(response.message);
             await loadStudents();
@@ -1003,12 +841,7 @@ async function loadHierarchy() {
         showLoading('Loading hierarchy...');
         const response = await apiGet(API_ENDPOINTS.HIERARCHY, true);
         hideLoading();
-        
-        if (response.success && response.data) {
-            displayCurrentHierarchy(response.data.numLevels);
-        } else {
-            hideLoading();
-        }
+        if (response.success && response.data) displayCurrentHierarchy(response.data.numLevels);
     } catch (error) {
         hideLoading();
         console.error('Failed to load hierarchy:', error);
@@ -1017,19 +850,13 @@ async function loadHierarchy() {
 
 async function handleSaveHierarchy(e) {
     e.preventDefault();
-    
     const numLevels = parseInt(document.getElementById('num-levels').value);
-    
-    if (!numLevels) {
-        showError('Please select number of levels');
-        return;
-    }
-    
+    if (!numLevels) { showError('Please select number of levels'); return; }
+
     try {
         showLoading('Saving hierarchy...');
-        const response = await apiPost(API_ENDPOINTS.HIERARCHY, { numLevels: numLevels }, true);
+        const response = await apiPost(API_ENDPOINTS.HIERARCHY, { numLevels }, true);
         hideLoading();
-        
         if (response.success) {
             showSuccess(response.message || 'Hierarchy saved successfully');
             displayCurrentHierarchy(numLevels);
@@ -1043,25 +870,25 @@ async function handleSaveHierarchy(e) {
 function displayCurrentHierarchy(numLevels) {
     const container = document.getElementById('current-hierarchy');
     if (!container) return;
-    
+
     if (!numLevels || numLevels === 0) {
         container.innerHTML = '<p>No hierarchy defined yet.</p>';
         return;
     }
-    
-    let hierarchyHTML = '<ul style="list-style-type: none; padding-left: 0;">';
+
+    let html = '<ul style="list-style-type: none; padding-left: 0;">';
     for (let i = 1; i <= numLevels; i++) {
-        hierarchyHTML += `<li style="padding: 10px; margin-bottom: 8px; background: white; border-left: 4px solid var(--primary-500); border-radius: 8px;">
+        html += `<li style="padding: 10px; margin-bottom: 8px; background: white; border-left: 4px solid var(--primary-500); border-radius: 8px;">
             <strong>Level ${i}</strong>
         </li>`;
     }
-    hierarchyHTML += '</ul>';
-    
-    container.innerHTML = hierarchyHTML;
+    html += '</ul>';
+    container.innerHTML = html;
 }
 
 // ===================================
-// EDIT MODAL FUNCTIONS - ✅ UPDATED FOR STUDENTS
+// EDIT MODAL FUNCTIONS
+// ✅ Staff edit modal: designation removed
 // ===================================
 
 let currentEditType = null;
@@ -1072,11 +899,11 @@ function openEditModal(type, id, data) {
     currentEditType = type;
     currentEditId = id;
     currentEditData = data;
-    
+
     const modal = document.getElementById('edit-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
-    
+
     const titles = {
         'designation': 'Edit Designation',
         'class': 'Edit Class',
@@ -1085,9 +912,9 @@ function openEditModal(type, id, data) {
         'student': 'Edit Student'
     };
     modalTitle.textContent = titles[type] || 'Edit Item';
-    
+
     let fieldsHTML = '';
-    
+
     switch(type) {
         case 'designation':
             fieldsHTML = `
@@ -1097,7 +924,7 @@ function openEditModal(type, id, data) {
                 </div>
             `;
             break;
-            
+
         case 'class':
             fieldsHTML = `
                 <div class="edit-modal-field">
@@ -1110,8 +937,9 @@ function openEditModal(type, id, data) {
                 </div>
             `;
             break;
-            
+
         case 'staff':
+            // ✅ Designation field removed from edit modal — assigned in Part 2 Mapping
             fieldsHTML = `
                 <div class="edit-modal-field">
                     <label>Name *</label>
@@ -1121,15 +949,9 @@ function openEditModal(type, id, data) {
                     <label>Mobile No * (10 digits)</label>
                     <input type="tel" id="edit-staff-mobile" maxlength="10" value="${data.mobileNo || ''}" required class="phone-field">
                 </div>
-                <div class="edit-modal-field">
-                    <label>Designation *</label>
-                    <select id="edit-staff-designation" required>
-                        ${getDesignationOptions(data.designationId?._id || data.designationId)}
-                    </select>
-                </div>
             `;
             break;
-            
+
         case 'subject':
             fieldsHTML = `
                 <div class="edit-modal-field">
@@ -1138,9 +960,8 @@ function openEditModal(type, id, data) {
                 </div>
             `;
             break;
-            
+
         case 'student':
-            // ✅ UPDATED: Student edit modal now includes 3 new fields
             fieldsHTML = `
                 <div class="edit-modal-field">
                     <label>Name *</label>
@@ -1175,25 +996,23 @@ function openEditModal(type, id, data) {
             `;
             break;
     }
-    
+
     modalBody.innerHTML = fieldsHTML;
-    
+
     const phoneFields = modalBody.querySelectorAll('.phone-field');
     phoneFields.forEach(field => {
         field.addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9]/g, '');
             if (this.value.length === 10) {
-                this.classList.remove('phone-invalid');
-                this.classList.add('phone-valid');
+                this.classList.remove('phone-invalid'); this.classList.add('phone-valid');
             } else if (this.value.length > 0) {
-                this.classList.remove('phone-valid');
-                this.classList.add('phone-invalid');
+                this.classList.remove('phone-valid'); this.classList.add('phone-invalid');
             } else {
                 this.classList.remove('phone-valid', 'phone-invalid');
             }
         });
     });
-    
+
     modal.classList.add('show');
 }
 
@@ -1207,23 +1026,20 @@ function closeEditModal() {
 
 async function saveEdit() {
     if (!currentEditType || !currentEditId) return;
-    
+
     try {
         let updatedData = {};
         let response;
-        
+
         switch(currentEditType) {
             case 'designation':
                 updatedData = { name: document.getElementById('edit-des-name').value };
                 showLoading('Updating designation...');
                 response = await apiPut(API_ENDPOINTS.DESIGNATIONS + '/' + currentEditId, updatedData, true);
                 hideLoading();
-                if (response.success) {
-                    showSuccess(response.message);
-                    loadDesignations();
-                }
+                if (response.success) { showSuccess(response.message); loadDesignations(); }
                 break;
-                
+
             case 'class':
                 updatedData = {
                     className: document.getElementById('edit-class-name').value,
@@ -1238,8 +1054,9 @@ async function saveEdit() {
                     await loadClassStatistics();
                 }
                 break;
-                
+
             case 'staff':
+                // ✅ designationId removed from update payload
                 const mobileInput = document.getElementById('edit-staff-mobile');
                 if (mobileInput.value.length !== 10) {
                     alert('Please enter a valid 10-digit mobile number');
@@ -1247,51 +1064,37 @@ async function saveEdit() {
                 }
                 updatedData = {
                     name: document.getElementById('edit-staff-name').value,
-                    mobileNo: mobileInput.value,
-                    designationId: document.getElementById('edit-staff-designation').value
+                    mobileNo: mobileInput.value
                 };
                 showLoading('Updating staff...');
                 response = await apiPut(API_ENDPOINTS.STAFF + '/' + currentEditId, updatedData, true);
                 hideLoading();
-                if (response.success) {
-                    showSuccess(response.message);
-                    loadStaff();
-                }
+                if (response.success) { showSuccess(response.message); loadStaff(); }
                 break;
-                
+
             case 'subject':
                 updatedData = { subjectName: document.getElementById('edit-subject-name').value };
                 showLoading('Updating subject...');
                 response = await apiPut(API_ENDPOINTS.SUBJECTS + '/' + currentEditId, updatedData, true);
                 hideLoading();
-                if (response.success) {
-                    showSuccess(response.message);
-                    loadSubjects();
-                }
+                if (response.success) { showSuccess(response.message); loadSubjects(); }
                 break;
-                
+
             case 'student':
-                // ✅ UPDATED: Student update now includes 3 new fields
                 const studentMobileInput = document.getElementById('edit-student-mobile');
                 if (studentMobileInput.value.length !== 10) {
                     alert('Please enter a valid 10-digit mobile number');
                     return;
                 }
-                
-                const studentMotherInput = document.getElementById('edit-student-mother');
-                const studentDOBInput = document.getElementById('edit-student-dob');
-                const studentAddressInput = document.getElementById('edit-student-address');
-                
                 updatedData = {
                     name: document.getElementById('edit-student-name').value,
                     fatherName: document.getElementById('edit-student-father').value,
-                    motherName: studentMotherInput ? studentMotherInput.value.trim() : undefined,
+                    motherName: document.getElementById('edit-student-mother')?.value.trim() || undefined,
                     classId: document.getElementById('edit-student-class').value,
                     mobileNo: studentMobileInput.value,
-                    dateOfBirth: studentDOBInput && studentDOBInput.value ? studentDOBInput.value : undefined,
-                    simpleAddress: studentAddressInput ? studentAddressInput.value.trim() : undefined
+                    dateOfBirth: document.getElementById('edit-student-dob')?.value || undefined,
+                    simpleAddress: document.getElementById('edit-student-address')?.value.trim() || undefined
                 };
-                
                 showLoading('Updating student...');
                 response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + currentEditId, updatedData, true);
                 hideLoading();
@@ -1303,21 +1106,12 @@ async function saveEdit() {
                 }
                 break;
         }
-        
+
         closeEditModal();
     } catch (error) {
         hideLoading();
         showError(error.message);
     }
-}
-
-function getDesignationOptions(selectedDesignation) {
-    let options = '<option value="">-- Select Designation --</option>';
-    designationsData.forEach(des => {
-        const selected = des._id === selectedDesignation ? 'selected' : '';
-        options += `<option value="${des._id}" ${selected}>${des.name}</option>`;
-    });
-    return options;
 }
 
 function getClassOptions(selectedClass) {
@@ -1331,9 +1125,7 @@ function getClassOptions(selectedClass) {
 
 document.addEventListener('click', function(e) {
     const modal = document.getElementById('upload-results-modal');
-    if (e.target === modal) {
-        closeUploadModal();
-    }
+    if (e.target === modal) closeUploadModal();
 });
 
-console.log('✅ basic-info.js loaded successfully with 3 new optional fields');
+console.log('✅ basic-info.js loaded — Staff designation removed (handled in Part 2 Mapping)');
