@@ -1,4 +1,4 @@
-// mapping.js - UPDATED: Section 2 auto-subject + Section 4 multi-class teacher assignment
+// mapping.js - UPDATED: Smart merge for Section 4 - allows adding classes/subjects to existing assignments
 
 let staffData = [];
 let classesData = [];
@@ -259,22 +259,18 @@ function generateTeacherSubjectEditForm(data) {
         </div>`;
 }
 
-// ✅ FIX 1: setupTeacherSubjectEditForm now loads ALL assigned classes + their subjects
 function setupTeacherSubjectEditForm(data) {
-    // Populate designation
     const desSelect = document.getElementById('edit-ts-designation');
     populateDropdown(desSelect, designationsData, '_id', 'name');
     const teacherId = safeGet(data, 'teacherId._id', null);
     const staffMapping = staffClassMappings.find(m => m.staffId?._id === teacherId);
     if (staffMapping) desSelect.value = safeGet(staffMapping, 'designationId._id', '');
 
-    // Find ALL classes this teacher is assigned to across ALL their teacher-subject mappings
     const allTeacherClassIds = teacherSubjectMappings
         .filter(m => safeGet(m, 'teacherId._id') === teacherId)
         .map(m => safeGet(m, 'classId._id'))
         .filter(Boolean);
 
-    // Build class checkboxes — pre-check ALL classes this teacher is assigned to
     const classContainer = document.getElementById('edit-ts-class-container');
     classContainer.innerHTML = '';
 
@@ -286,11 +282,9 @@ function setupTeacherSubjectEditForm(data) {
         classContainer.appendChild(label);
     });
 
-    // ✅ Load subjects for ALL assigned classes immediately (not just currentClassId)
     reloadEditSubjects();
 }
 
-// Reload subjects when class selection changes in edit modal
 function reloadEditSubjects() {
     const selectedClassIds = Array.from(document.querySelectorAll('input[name="edit-ts-class"]:checked')).map(cb => cb.value);
     const container = document.getElementById('edit-subjects-container');
@@ -303,7 +297,6 @@ function reloadEditSubjects() {
 
     const teacherId = safeGet(currentEditData, 'teacherId._id', null);
 
-    // Collect and group subjects from all selected classes
     selectedClassIds.forEach(classId => {
         const cls = classesData.find(c => c._id === classId);
         const classMapping = classSubjectMappings.find(m => m.classId?._id === classId);
@@ -321,7 +314,6 @@ function reloadEditSubjects() {
             return;
         }
 
-        // Find currently assigned subjects for this class from existing mappings
         const existingMapping = teacherSubjectMappings.find(m =>
             safeGet(m, 'teacherId._id') === teacherId &&
             safeGet(m, 'classId._id') === classId
@@ -343,12 +335,10 @@ function reloadEditSubjects() {
 async function saveEditModal() {
     if (!currentEditMode || !currentEditId) return;
 
-    // ✅ Snapshot state BEFORE closing (closeEditModal resets these to null)
     const mode = currentEditMode;
     const id = currentEditId;
     const data = currentEditData;
 
-    // Close modal immediately so loading is visible behind it
     const modal = document.getElementById('edit-modal');
     modal.classList.remove('show');
 
@@ -361,7 +351,6 @@ async function saveEditModal() {
         console.error('Save edit error:', error);
         showError(error.message);
     } finally {
-        // Now fully reset state
         currentEditMode = null;
         currentEditId = null;
         currentEditData = null;
@@ -411,7 +400,6 @@ async function saveTeacherSubjectEdit(id, data) {
     if (selectedClassIds.length === 0) { showError('Please select at least one class'); return; }
     if (checkedSubjectInputs.length === 0) { showError('Please select at least one subject'); return; }
 
-    // ✅ Validate: every selected class that has subjects must have at least one subject checked
     const classSubjectMap = {};
     checkedSubjectInputs.forEach(input => {
         const classId = input.dataset.classId;
@@ -435,7 +423,6 @@ async function saveTeacherSubjectEdit(id, data) {
     try {
         const teacherId = safeGet(data, 'teacherId._id', null);
 
-        // Step 1: Update staffClassMapping with new designation + classes
         const staffMapping = staffClassMappings.find(m => m.staffId?._id === teacherId);
         if (staffMapping && staffMapping._id) {
             await apiPut(API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + staffMapping._id, {
@@ -444,7 +431,6 @@ async function saveTeacherSubjectEdit(id, data) {
             }, true);
         }
 
-        // Step 2: Delete ALL existing teacher-subject mappings for this teacher
         const existingMappings = teacherSubjectMappings.filter(
             m => safeGet(m, 'teacherId._id') === teacherId
         );
@@ -456,7 +442,6 @@ async function saveTeacherSubjectEdit(id, data) {
             );
         }
 
-        // Step 3: Recreate fresh records from what's currently checked
         const ops = Object.entries(classSubjectMap)
             .filter(([, subjectIds]) => subjectIds.length > 0)
             .map(([classId, subjectIds]) =>
@@ -558,42 +543,6 @@ function extractDataArray(response, fallbackKey) {
     }
     if (Array.isArray(response)) return response;
     return [];
-}
-
-
-
-// ✅ Already-assigned popup for Section 4
-function showAlreadyAssignedPopup(teacherName) {
-    const existing = document.getElementById('already-assigned-popup');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'already-assigned-popup';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10003;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);animation:fadeIn 0.2s ease-out;';
-
-    overlay.innerHTML = `
-        <div style="background:var(--white);border-radius:var(--radius-2xl);box-shadow:0 25px 80px rgba(0,0,0,0.4);max-width:460px;width:90%;padding:var(--space-10);text-align:center;animation:slideUp 0.3s ease-out;">
-            <div style="font-size:56px;margin-bottom:var(--space-4);">⚠️</div>
-            <h3 style="font-size:var(--text-xl);font-weight:800;color:var(--gray-900);margin-bottom:var(--space-3);">Already Assigned!</h3>
-            <p style="color:var(--gray-600);font-size:var(--text-base);margin-bottom:var(--space-6);line-height:1.6;">
-                <strong>${teacherName}</strong> already has an assignment.<br>
-                Please use the <strong>Edit</strong> button in the table below to update their details.
-            </p>
-            <div style="display:flex;gap:var(--space-3);justify-content:center;">
-                <button onclick="document.getElementById('already-assigned-popup').remove()" 
-                    style="padding:var(--space-3) var(--space-8);background:var(--gray-200);color:var(--gray-700);border:none;border-radius:var(--radius-xl);font-weight:600;cursor:pointer;font-size:var(--text-base);">
-                    Close
-                </button>
-                <button onclick="document.getElementById('already-assigned-popup').remove();document.querySelector('#teacher-subject-table tbody').scrollIntoView({behavior:'smooth',block:'center'});"
-                    style="padding:var(--space-3) var(--space-8);background:var(--gradient-primary);color:var(--white);border:none;border-radius:var(--radius-xl);font-weight:600;cursor:pointer;font-size:var(--text-base);">
-                    Go to Table ↓
-                </button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 function showMappingSection(sectionName) {
@@ -722,7 +671,7 @@ async function deleteDesignationLevels(designationId) {
 }
 
 // ===================================
-// 1. STAFF-CLASS MAPPING
+// 1. STAFF-CLASS MAPPING (Section 3)
 // ===================================
 
 function setupStaffClassSection() {
@@ -739,7 +688,6 @@ function setupStaffClassSection() {
         if (!cls || !cls._id) return;
         const wrapper = document.createElement('div');
         wrapper.className = 'sc-class-item';
-
         const label = document.createElement('label');
         label.innerHTML = `
             <input type="checkbox" name="sc-class" value="${cls._id}" onchange="updateClassSubjectsPreview()">
@@ -749,12 +697,10 @@ function setupStaffClassSection() {
         classesContainer.appendChild(wrapper);
     });
 
-    // Create subjects preview container below the checkbox list
     const existingPreview = document.getElementById('sc-subjects-preview');
     if (!existingPreview) {
         const form = document.getElementById('assign-staff-class-form');
         const submitBtn = form.querySelector('button[type="submit"]');
-
         const previewDiv = document.createElement('div');
         previewDiv.id = 'sc-subjects-preview';
         previewDiv.style.display = 'none';
@@ -769,7 +715,6 @@ function setupStaffClassSection() {
     }
 }
 
-// ✅ NEW: Show subject preview when classes are selected in Section 2
 function updateClassSubjectsPreview() {
     const selectedClassIds = Array.from(document.querySelectorAll('input[name="sc-class"]:checked')).map(cb => cb.value);
     const previewDiv = document.getElementById('sc-subjects-preview');
@@ -786,7 +731,6 @@ function updateClassSubjectsPreview() {
     selectedClassIds.forEach(classId => {
         const cls = classesData.find(c => c._id === classId);
         const classMapping = classSubjectMappings.find(m => m.classId?._id === classId);
-
         const classSection = document.createElement('div');
         classSection.style.cssText = 'margin-bottom:var(--space-3);';
 
@@ -811,7 +755,6 @@ function toggleAllClasses(checkbox) {
     updateClassSubjectsPreview();
 }
 
-// ✅ UPDATED: After assigning staff to class, also auto-assign all subjects for each class
 async function handleAssignStaffToClasses(e) {
     e.preventDefault();
 
@@ -823,18 +766,17 @@ async function handleAssignStaffToClasses(e) {
     if (!designationId) { showError('Please select a designation'); return; }
     if (selectedClasses.length === 0) { showError('Please select at least one class'); return; }
 
-    // ✅ Check if this staff is already assigned
+    // ✅ Check if already assigned in Section 3 — show edit reminder
     const alreadyAssigned = staffClassMappings.some(m => safeGet(m, 'staffId._id') === staffId);
     if (alreadyAssigned) {
         const staffName = staffData.find(s => s._id === staffId)?.name || 'This staff member';
-        showAlreadyAssignedPopup(staffName);
+        showAlreadyAssignedPopup(staffName, 'section3');
         return;
     }
 
     try {
         showLoading('Assigning staff to classes...');
 
-        // Step 1: Assign staff to classes
         const response = await apiPost(API_ENDPOINTS.STAFF_CLASS_MAPPING, {
             staffId, designationId, assignedClasses: selectedClasses
         }, true);
@@ -845,7 +787,6 @@ async function handleAssignStaffToClasses(e) {
             return;
         }
 
-        // Step 2: Auto-assign all subjects for each selected class
         const classesWithSubjects = selectedClasses.filter(classId => {
             const mapping = classSubjectMappings.find(m => m.classId?._id === classId);
             return mapping && mapping.subjectIds && mapping.subjectIds.length > 0;
@@ -853,20 +794,16 @@ async function handleAssignStaffToClasses(e) {
 
         if (classesWithSubjects.length > 0) {
             showLoading('Auto-assigning subjects...');
-
             const subjectAssignments = classesWithSubjects.map(classId => {
                 const mapping = classSubjectMappings.find(m => m.classId?._id === classId);
                 const subjectIds = mapping.subjectIds.map(s => s?._id || s).filter(Boolean);
                 return apiPost(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING, {
-                    teacherId: staffId,
-                    classId: classId,
-                    subjectIds: subjectIds
+                    teacherId: staffId, classId, subjectIds
                 }, true).catch(err => {
                     console.warn(`⚠️ Could not assign subjects for class ${classId}:`, err.message);
                     return null;
                 });
             });
-
             await Promise.all(subjectAssignments);
         }
 
@@ -914,37 +851,20 @@ async function deleteStaffClassMapping(id) {
     if (!confirm('Remove this staff assignment? This will also remove their subject assignments.')) return;
     try {
         showLoading('Removing...');
-
-        // Find the staffId from the mapping before deleting
         const mapping = staffClassMappings.find(m => m._id === id);
         const staffId = safeGet(mapping, 'staffId._id', null);
-
-        // Step 1: Delete all teacher-subject mappings for this staff member
         if (staffId) {
-            const teacherMappings = teacherSubjectMappings.filter(
-                m => safeGet(m, 'teacherId._id') === staffId
-            );
-            await Promise.all(
-                teacherMappings.map(m =>
-                    apiDelete(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + m._id, true)
-                )
-            );
+            const teacherMappings = teacherSubjectMappings.filter(m => safeGet(m, 'teacherId._id') === staffId);
+            await Promise.all(teacherMappings.map(m => apiDelete(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + m._id, true)));
         }
-
-        // Step 2: Delete the staff-class mapping itself
         const response = await apiDelete(API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + id, true);
-
         hideLoading();
-
-        if (response.success) {
-            showSuccess('Staff assignment and all related subject assignments removed!');
-            loadAllData();
-        }
+        if (response.success) { showSuccess('Staff assignment and all related subject assignments removed!'); loadAllData(); }
     } catch (error) { hideLoading(); showError(error.message); }
 }
 
 // ===================================
-// 2. CLASS-SUBJECT MAPPING
+// 2. CLASS-SUBJECT MAPPING (Section 2)
 // ===================================
 
 function setupClassSubjectSection() {
@@ -1012,12 +932,16 @@ async function editClassSubjectMapping(classId) {
 }
 
 // ===================================
-// 3. TEACHER-SUBJECT MAPPING (MULTI-CLASS)
+// 3. TEACHER-SUBJECT MAPPING (Section 4)
+// ✅ SMART MERGE: No more blocking popup — pre-loads existing, merges on save
 // ===================================
 
 function setupTeacherSubjectSection() {
     const teacherSelect = document.getElementById('ts-teacher');
     populateDropdown(teacherSelect, staffData, '_id', 'name');
+
+    // ✅ Auto-load existing assignments when teacher is selected
+    teacherSelect.addEventListener('change', onTeacherSelected);
 
     const designationSelect = document.getElementById('ts-designation');
     populateDropdown(designationSelect, designationsData, '_id', 'name');
@@ -1035,12 +959,82 @@ function setupTeacherSubjectSection() {
         `;
         classContainer.appendChild(label);
     });
+
+    // Create the existing-assignment banner placeholder
+    const form = document.getElementById('assign-teacher-subject-form');
+    if (!document.getElementById('ts-existing-banner')) {
+        const banner = document.createElement('div');
+        banner.id = 'ts-existing-banner';
+        banner.style.display = 'none';
+        form.insertBefore(banner, form.firstChild);
+    }
+}
+
+// ✅ NEW: Called when teacher dropdown changes — pre-loads their existing data
+function onTeacherSelected() {
+    const teacherId = document.getElementById('ts-teacher').value;
+
+    // Remove existing banner content
+    const banner = document.getElementById('ts-existing-banner');
+    if (banner) banner.style.display = 'none';
+
+    // Reset all class checkboxes and subjects
+    document.querySelectorAll('input[name="ts-class"]').forEach(cb => cb.checked = false);
+    document.getElementById('ts-subjects-container').classList.remove('show');
+
+    if (!teacherId) return;
+
+    // Check if this teacher already has any assignments
+    const staffMapping = staffClassMappings.find(m => safeGet(m, 'staffId._id') === teacherId);
+    const existingTeacherMappings = teacherSubjectMappings.filter(m => safeGet(m, 'teacherId._id') === teacherId);
+    const hasExistingAssignments = staffMapping || existingTeacherMappings.length > 0;
+
+    if (hasExistingAssignments) {
+        // ✅ Pre-fill designation from existing StaffClassMapping
+        if (staffMapping) {
+            const desId = safeGet(staffMapping, 'designationId._id', '');
+            if (desId) document.getElementById('ts-designation').value = desId;
+        }
+
+        // ✅ Pre-check ALL classes this teacher is currently assigned to
+        const assignedClassIds = (staffMapping?.assignedClasses || []).map(c => c?._id || c).filter(Boolean);
+        document.querySelectorAll('input[name="ts-class"]').forEach(cb => {
+            if (assignedClassIds.includes(cb.value)) cb.checked = true;
+        });
+
+        // ✅ Show info banner so user knows what's already assigned
+        const teacherName = staffData.find(s => s._id === teacherId)?.name || 'This person';
+        const classNames = assignedClassIds.map(id => {
+            const cls = classesData.find(c => c._id === id);
+            return cls ? formatClassName(cls) : id;
+        }).join(', ');
+
+        if (banner) {
+            banner.style.display = 'block';
+            banner.innerHTML = `
+                <div style="background:linear-gradient(135deg,#dbeafe,#ede9fe);border:2px solid #6366f1;border-radius:var(--radius-xl);padding:var(--space-5) var(--space-6);margin-bottom:var(--space-6);">
+                    <strong style="color:#3730a3;font-size:var(--text-base);display:block;margin-bottom:var(--space-2);">
+                        ℹ️ ${teacherName} already has assignments
+                    </strong>
+                    <p style="color:#4338ca;font-size:var(--text-sm);margin:0;line-height:1.6;">
+                        Currently assigned to: <strong>${classNames || 'some classes'}</strong><br>
+                        Their existing classes and subjects are pre-checked below. 
+                        <strong>You can add more classes or subjects</strong> — existing ones will not be disturbed.
+                    </p>
+                </div>
+            `;
+        }
+
+        // ✅ Trigger subject loading with existing ones pre-checked
+        handleTeacherClassSelection();
+    }
 }
 
 function handleTeacherClassSelection() {
     const selectedClassIds = Array.from(document.querySelectorAll('input[name="ts-class"]:checked')).map(cb => cb.value);
     const subjectsContainer = document.getElementById('ts-subjects-container');
     const subjectsCheckboxes = document.getElementById('ts-subjects-checkboxes');
+    const teacherId = document.getElementById('ts-teacher').value;
 
     if (selectedClassIds.length === 0) {
         subjectsContainer.classList.remove('show');
@@ -1057,7 +1051,7 @@ function handleTeacherClassSelection() {
         if (!classMapping || !classMapping.subjectIds || classMapping.subjectIds.length === 0) {
             const warning = document.createElement('div');
             warning.style.cssText = 'padding:var(--space-3);color:var(--warning-700);font-size:var(--text-sm);border-bottom:1px solid var(--gray-200);margin-bottom:var(--space-2);';
-            warning.textContent = `⚠️ ${formatClassName(cls)}: No subjects assigned yet (assign subjects in Section 3 first)`;
+            warning.textContent = `⚠️ ${formatClassName(cls)}: No subjects assigned yet (assign subjects in Section 2 first)`;
             subjectsCheckboxes.appendChild(warning);
             return;
         }
@@ -1069,12 +1063,25 @@ function handleTeacherClassSelection() {
         header.textContent = `📚 ${formatClassName(cls)}`;
         subjectsCheckboxes.appendChild(header);
 
+        // ✅ Pre-check subjects that are already assigned to this teacher for this class
+        const existingMapping = teacherId
+            ? teacherSubjectMappings.find(m =>
+                safeGet(m, 'teacherId._id') === teacherId &&
+                safeGet(m, 'classId._id') === classId
+              )
+            : null;
+        const existingSubjectIds = existingMapping
+            ? (existingMapping.subjectIds || []).map(s => s?._id).filter(Boolean)
+            : [];
+
         classMapping.subjectIds.forEach(subject => {
             if (!subject || !subject._id) return;
+            const isChecked = existingSubjectIds.includes(subject._id);
             const label = document.createElement('label');
             label.innerHTML = `
-                <input type="checkbox" name="ts-subject" value="${subject._id}" data-class-id="${classId}">
+                <input type="checkbox" name="ts-subject" value="${subject._id}" data-class-id="${classId}" ${isChecked ? 'checked' : ''}>
                 ${subject.subjectName || 'Unnamed'}
+                ${isChecked ? '<span style="font-size:0.75em;color:var(--primary-600);margin-left:4px;">(already assigned)</span>' : ''}
             `;
             subjectsCheckboxes.appendChild(label);
         });
@@ -1096,6 +1103,7 @@ function toggleAllTeacherSubjects(checkbox) {
     document.querySelectorAll('input[name="ts-subject"]').forEach(cb => cb.checked = checkbox.checked);
 }
 
+// ✅ COMPLETELY REWRITTEN: Smart merge instead of blocking popup
 async function handleAssignTeacherToSubjects(e) {
     e.preventDefault();
 
@@ -1109,50 +1117,85 @@ async function handleAssignTeacherToSubjects(e) {
     if (selectedClassIds.length === 0) { showError('Please select at least one class'); return; }
     if (checkedSubjectInputs.length === 0) { showError('Please select at least one subject'); return; }
 
-    // ✅ If already assigned from Section 3 or Section 4 — show edit reminder
-    const assignedFromSection3 = staffClassMappings.some(m => safeGet(m, 'staffId._id') === teacherId);
-    if (assignedFromSection3) {
-        const teacherName = staffData.find(s => s._id === teacherId)?.name || 'This teacher';
-        showAlreadyAssignedPopup(teacherName);
-        return;
-    }
+    // Group selected subjects by class
+    const classSubjectMap = {};
+    checkedSubjectInputs.forEach(input => {
+        const classId = input.dataset.classId;
+        if (!classSubjectMap[classId]) classSubjectMap[classId] = [];
+        classSubjectMap[classId].push(input.value);
+    });
 
-    // ✅ If already assigned from Section 4 — block with edit reminder
-    const alreadyAssigned = teacherSubjectMappings.some(m => safeGet(m, 'teacherId._id') === teacherId);
-    if (alreadyAssigned) {
-        const teacherName = staffData.find(s => s._id === teacherId)?.name || 'This teacher';
-        showAlreadyAssignedPopup(teacherName);
-        return;
+    // Validate: every selected class with subjects must have at least one subject checked
+    for (const classId of selectedClassIds) {
+        const classMapping = classSubjectMappings.find(m => m.classId?._id === classId);
+        if (classMapping && classMapping.subjectIds && classMapping.subjectIds.length > 0) {
+            if (!classSubjectMap[classId] || classSubjectMap[classId].length === 0) {
+                const cls = classesData.find(c => c._id === classId);
+                showError(`Please select at least one subject for "${formatClassName(cls)}"`);
+                return;
+            }
+        }
     }
 
     try {
-        showLoading('Assigning classes and subjects...');
+        showLoading('Saving teacher assignments...');
 
-        await apiPost(API_ENDPOINTS.STAFF_CLASS_MAPPING, {
-            staffId: teacherId,
-            designationId: designationId,
-            assignedClasses: selectedClassIds
-        }, true);
+        // ─── Step 1: Handle StaffClassMapping (Section 3 record) ───────────────
+        const existingStaffMapping = staffClassMappings.find(m => safeGet(m, 'staffId._id') === teacherId);
 
-        const classSubjectMap = {};
-        checkedSubjectInputs.forEach(input => {
-            const classId = input.dataset.classId;
-            if (!classSubjectMap[classId]) classSubjectMap[classId] = [];
-            classSubjectMap[classId].push(input.value);
+        if (existingStaffMapping) {
+            // ✅ MERGE: combine existing classes with newly selected ones
+            const existingClassIds = (existingStaffMapping.assignedClasses || []).map(c => c?._id || c).filter(Boolean);
+            const mergedClassIds = [...new Set([...existingClassIds, ...selectedClassIds])];
+
+            await apiPut(API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + existingStaffMapping._id, {
+                designationId,
+                assignedClasses: mergedClassIds
+            }, true);
+        } else {
+            // ✅ FRESH: no prior assignment — create new
+            await apiPost(API_ENDPOINTS.STAFF_CLASS_MAPPING, {
+                staffId: teacherId,
+                designationId,
+                assignedClasses: selectedClassIds
+            }, true);
+        }
+
+        // ─── Step 2: Handle TeacherSubjectMapping records ─────────────────────
+        // For each class in classSubjectMap, check if a record already exists:
+        //   - If YES → merge subjects (add new ones, keep existing)
+        //   - If NO  → create fresh record
+        const ops = Object.entries(classSubjectMap).map(async ([classId, newSubjectIds]) => {
+            const existingMapping = teacherSubjectMappings.find(m =>
+                safeGet(m, 'teacherId._id') === teacherId &&
+                safeGet(m, 'classId._id') === classId
+            );
+
+            if (existingMapping) {
+                // ✅ MERGE subjects: keep existing + add new (deduplicated)
+                const existingSubjectIds = (existingMapping.subjectIds || []).map(s => s?._id || s).filter(Boolean);
+                const mergedSubjectIds = [...new Set([...existingSubjectIds, ...newSubjectIds])];
+                return apiPut(
+                    API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + existingMapping._id,
+                    { subjectIds: mergedSubjectIds },
+                    true
+                );
+            } else {
+                // ✅ FRESH: no record for this class yet — create it
+                return apiPost(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING, {
+                    teacherId, classId, subjectIds: newSubjectIds
+                }, true);
+            }
         });
 
-        const assignments = Object.entries(classSubjectMap).map(([classId, subjectIds]) =>
-            apiPost(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING, { teacherId, classId, subjectIds }, true)
-        );
-
-        const results = await Promise.all(assignments);
+        const results = await Promise.all(ops);
         hideLoading();
 
         const allSuccess = results.every(r => r && r.success);
         const anySuccess = results.some(r => r && r.success);
 
         if (allSuccess) {
-            showSuccess('Teacher designation, classes and subjects assigned successfully!');
+            showSuccess('Teacher classes and subjects saved successfully!');
         } else if (anySuccess) {
             showSuccess('Teacher assigned to some classes. Check console for any errors.');
         } else {
@@ -1161,6 +1204,7 @@ async function handleAssignTeacherToSubjects(e) {
             return;
         }
 
+        // Reset form
         document.getElementById('assign-teacher-subject-form').reset();
         document.getElementById('ts-subjects-container').classList.remove('show');
         document.querySelectorAll('input[name="ts-class"]').forEach(cb => cb.checked = false);
@@ -1169,6 +1213,8 @@ async function handleAssignTeacherToSubjects(e) {
         if (selectAllTs) selectAllTs.checked = false;
         const selectAllClasses = document.getElementById('ts-all-classes');
         if (selectAllClasses) selectAllClasses.checked = false;
+        const banner = document.getElementById('ts-existing-banner');
+        if (banner) banner.style.display = 'none';
 
         loadAllData();
 
@@ -1198,7 +1244,7 @@ function displayTeacherSubjectMappings() {
         if (!grouped.has(teacherId)) {
             const staffMapping = staffClassMappings.find(m => m.staffId?._id === teacherId);
             grouped.set(teacherId, {
-                teacherId: teacherId,
+                teacherId,
                 teacherName: safeGet(mapping, 'teacherId.name', '-'),
                 designationName: safeGet(staffMapping, 'designationId.name', '-'),
                 classes: [],
@@ -1234,26 +1280,16 @@ async function editTeacherSubjectMapping(id) {
     if (mapping) openEditModal('teacher-subject', id, mapping);
 }
 
-// ✅ FIX 2 & 3: Delete ALL teacher-subject records at once + ALWAYS delete staff-class mapping
 async function deleteAllTeacherMappings(teacherId) {
     if (!confirm('Remove this teacher assignment? All their class and subject assignments will be deleted.')) return;
     try {
         showLoading('Removing...');
 
-        // Step 1: Delete ALL teacher-subject mappings for this teacher at once
-        const allTeacherMappings = teacherSubjectMappings.filter(
-            m => safeGet(m, 'teacherId._id') === teacherId
-        );
-
+        const allTeacherMappings = teacherSubjectMappings.filter(m => safeGet(m, 'teacherId._id') === teacherId);
         if (allTeacherMappings.length > 0) {
-            await Promise.all(
-                allTeacherMappings.map(m =>
-                    apiDelete(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + m._id, true)
-                )
-            );
+            await Promise.all(allTeacherMappings.map(m => apiDelete(API_ENDPOINTS.TEACHER_SUBJECT_MAPPING + '/' + m._id, true)));
         }
 
-        // Step 2: ALWAYS delete the staff-class mapping so Section 3 is also cleared
         const staffMapping = staffClassMappings.find(m => safeGet(m, 'staffId._id') === teacherId);
         if (staffMapping && staffMapping._id) {
             await apiDelete(API_ENDPOINTS.STAFF_CLASS_MAPPING + '/' + staffMapping._id, true);
@@ -1264,6 +1300,40 @@ async function deleteAllTeacherMappings(teacherId) {
         loadAllData();
 
     } catch (error) { hideLoading(); showError(error.message); }
+}
+
+// ✅ UPDATED: showAlreadyAssignedPopup only used for Section 3 now
+function showAlreadyAssignedPopup(staffName, section) {
+    const existing = document.getElementById('already-assigned-popup');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'already-assigned-popup';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10003;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);animation:fadeIn 0.2s ease-out;';
+
+    overlay.innerHTML = `
+        <div style="background:var(--white);border-radius:var(--radius-2xl);box-shadow:0 25px 80px rgba(0,0,0,0.4);max-width:460px;width:90%;padding:var(--space-10);text-align:center;animation:slideUp 0.3s ease-out;">
+            <div style="font-size:56px;margin-bottom:var(--space-4);">⚠️</div>
+            <h3 style="font-size:var(--text-xl);font-weight:800;color:var(--gray-900);margin-bottom:var(--space-3);">Already Assigned!</h3>
+            <p style="color:var(--gray-600);font-size:var(--text-base);margin-bottom:var(--space-6);line-height:1.6;">
+                <strong>${staffName}</strong> already has a Section 3 assignment.<br>
+                Please use the <strong>Edit</strong> button in the table below to update their details.
+            </p>
+            <div style="display:flex;gap:var(--space-3);justify-content:center;">
+                <button onclick="document.getElementById('already-assigned-popup').remove()" 
+                    style="padding:var(--space-3) var(--space-8);background:var(--gray-200);color:var(--gray-700);border:none;border-radius:var(--radius-xl);font-weight:600;cursor:pointer;font-size:var(--text-base);">
+                    Close
+                </button>
+                <button onclick="document.getElementById('already-assigned-popup').remove();document.querySelector('#staff-class-table tbody').scrollIntoView({behavior:'smooth',block:'center'});"
+                    style="padding:var(--space-3) var(--space-8);background:var(--gradient-primary);color:var(--white);border:none;border-radius:var(--radius-xl);font-weight:600;cursor:pointer;font-size:var(--text-base);">
+                    Go to Table ↓
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 // ===================================
@@ -1277,4 +1347,4 @@ function displayAllMappings() {
     displayTeacherSubjectMappings();
 }
 
-console.log('✅ mapping.js loaded - FIXED: Edit shows all classes/subjects, Delete clears all at once');
+console.log('✅ mapping.js loaded - Smart merge: Section 4 now adds to existing assignments instead of blocking');
