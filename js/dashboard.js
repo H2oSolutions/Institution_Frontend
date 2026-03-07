@@ -1,418 +1,282 @@
-// dashboard.js - WITH CENTERED OVERLAY LOADING
-
-// ===============================
-// INITIALIZATION
-// ===============================
+// dashboard.js
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard initializing...');
-    
-    // Check authentication
-    if (!checkAuth()) {
-        console.error('Authentication failed');
-        return;
-    }
-    
-    // Verify this is an institution user (not staff)
+
+    if (!checkAuth()) return;
+
     const userType = localStorage.getItem('userType');
-    
-    if (userType === 'staff') {
-        console.log('Staff user detected, redirecting to staff dashboard...');
-        window.location.href = 'staff-dashboard.html';
-        return;
-    }
-    
+    if (userType === 'staff') { window.location.href = 'staff-dashboard.html'; return; }
     if (userType !== 'institution') {
         showError('Unauthorized access. Please login as institution.');
-        setTimeout(() => {
-            window.location.href = 'login.html';
-        }, 2000);
+        setTimeout(() => window.location.href = 'login.html', 2000);
         return;
     }
-    
-    console.log('✅ Authentication verified - Institution user');
-    
-    // Load dashboard data
+
     loadDashboardData();
+    loadYearStats();
 });
 
-// ===============================
-// MAIN DASHBOARD LOADER
-// ===============================
-
+// ─────────────────────────────────────────────
+// MAIN LOADER
+// ─────────────────────────────────────────────
 async function loadDashboardData() {
     try {
         showLoading('Loading your dashboard...');
-        
-        // Show loading skeletons
         showLoadingSkeletons();
-        
-        // Fetch institution profile
+
         const response = await apiGet(API_ENDPOINTS.INSTITUTION_PROFILE, true);
-        
-        console.log('📊 Dashboard API Response:', response);
-        
-        if (!response.success) {
-            throw new Error(response.message || 'Failed to load dashboard data');
-        }
+        console.log('📊 Dashboard Response:', response);
+
+        if (!response.success) throw new Error(response.message || 'Failed to load dashboard data');
 
         const data = response.data;
+        if (!data) throw new Error('No data received from server');
 
-        if (!data) {
-            throw new Error('No data received from server');
-        }
-        
-        // Hide loading, show data with animations
         hideLoading();
         hideLoadingSkeletons();
-        
-        // Display data with staggered animation
+
         displayLogo(data.logo);
-        
         setTimeout(() => displayProfileDetails(data), 100);
         setTimeout(() => displayLastLogin(data.lastLogin), 200);
         setTimeout(() => displayStatistics(data.stats), 300);
-        
-        // Animate stats cards
         animateStatsCards();
-        
-        console.log('✅ Dashboard loaded successfully');
-        
+
+        console.log('✅ Dashboard loaded');
+
     } catch (error) {
         hideLoading();
         hideLoadingSkeletons();
-        console.error('❌ Error loading dashboard:', error);
+        console.error('❌ Dashboard load error:', error);
         showError(error.message || 'Failed to load dashboard data');
     }
 }
 
-// ===============================
-// LOADING SKELETONS
-// ===============================
+// ─────────────────────────────────────────────
+// YEAR-WISE STATS
+// ─────────────────────────────────────────────
+async function loadYearStats() {
+    try {
+        const res = await apiGet(`${API_BASE_URL}/promotion/year-stats`, true);
+        if (!res.success) return;
 
+        const {
+            stats, currentAcademicYear,
+            isPromotionLocked, lastPromotionYear, lastPromotionDate,
+            feeDefaultersCount
+        } = res.data;
+
+        renderYearCards(stats, currentAcademicYear);
+
+        animateValue(document.getElementById('stat-defaulters'), 0, feeDefaultersCount || 0, 800);
+
+        if (isPromotionLocked && lastPromotionYear) {
+            const banner   = document.getElementById('promotion-lock-banner');
+            const lockDate = lastPromotionDate
+                ? new Date(lastPromotionDate).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' })
+                : '';
+            document.getElementById('lock-banner-text').textContent =
+                `Promotion to ${lastPromotionYear} was completed${lockDate ? ' on ' + lockDate : ''}.`;
+            banner.style.display = 'flex';
+        }
+
+        if (feeDefaultersCount > 0) {
+            const banner = document.getElementById('fee-defaulter-banner');
+            document.getElementById('defaulter-banner-text').textContent =
+                `${feeDefaultersCount} unpaid fee notice${feeDefaultersCount > 1 ? 's' : ''} in ${currentAcademicYear}. Consider following up.`;
+            banner.style.display = 'flex';
+        }
+
+    } catch (error) {
+        console.warn('⚠️ Year stats load error:', error);
+        document.getElementById('yearwise-grid').innerHTML =
+            '<p style="text-align:center; color:#9ca3af; padding:20px; grid-column:1/-1;">Could not load year data.</p>';
+    }
+}
+
+function renderYearCards(stats, currentAcademicYear) {
+    const grid = document.getElementById('yearwise-grid');
+    if (!stats || !stats.length) {
+        grid.innerHTML = '<p style="text-align:center; color:#9ca3af; padding:20px; grid-column:1/-1;">No year data yet.</p>';
+        return;
+    }
+
+    grid.innerHTML = [...stats].reverse().map(s => {
+        const isCurrent = s.year === currentAcademicYear;
+        return `
+            <div class="year-card ${isCurrent ? 'current-year' : ''}">
+                <div class="year-card-header">
+                    <div class="year-title">📅 ${s.year}</div>
+                    <span class="year-badge ${isCurrent ? 'current' : 'previous'}">
+                        ${isCurrent ? '🟢 Active' : '⏪ Past'}
+                    </span>
+                </div>
+                <div class="year-stats-row">
+                    <div class="yr-stat">
+                        <div class="num green">${s.active}</div>
+                        <div class="lbl">Active</div>
+                    </div>
+                    <div class="yr-stat">
+                        <div class="num purple">${s.graduated}</div>
+                        <div class="lbl">Graduated</div>
+                    </div>
+                    <div class="yr-stat">
+                        <div class="num orange">${s.repeating}</div>
+                        <div class="lbl">Repeating</div>
+                    </div>
+                </div>
+                <div style="font-size:0.78rem; color:#9ca3af; text-align:center; margin-top:4px;">
+                    Total: <strong style="color:#374151;">${s.total}</strong> students
+                    ${s.newAdmissions > 0 ? ` &nbsp;·&nbsp; <strong style="color:#6366f1;">${s.newAdmissions} new</strong>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ─────────────────────────────────────────────
+// DISPLAY HELPERS
+// ─────────────────────────────────────────────
 function showLoadingSkeletons() {
-    // Stats cards loading state
-    const statsCards = document.querySelectorAll('.stat-card p');
-    statsCards.forEach(card => {
+    document.querySelectorAll('.stat-card p').forEach(card => {
         card.classList.add('loading-skeleton');
         card.textContent = '...';
     });
 }
-
 function hideLoadingSkeletons() {
-    const statsCards = document.querySelectorAll('.stat-card p');
-    statsCards.forEach(card => {
+    document.querySelectorAll('.stat-card p').forEach(card => {
         card.classList.remove('loading-skeleton');
     });
 }
 
-// ===============================
-// DISPLAY LOGO
-// ===============================
-
 function displayLogo(logo) {
-    const logoImg = document.getElementById('institution-logo');
-    if (logo && logoImg) {
-        logoImg.src = logo;
-        logoImg.style.display = 'block';
-        logoImg.style.animation = 'fadeInUp 0.6s ease-out';
-        
-        logoImg.onerror = function() {
-            console.warn('Failed to load logo image');
-            this.style.display = 'none';
-        };
+    const img = document.getElementById('institution-logo');
+    if (logo && img) {
+        img.src = logo; img.style.display = 'block';
+        img.onerror = function() { this.style.display = 'none'; };
     }
 }
-
-// ===============================
-// DISPLAY PROFILE DETAILS
-// ===============================
 
 function displayProfileDetails(data) {
-    // Helper function for safe display
-    const safeDisplay = (elementId, value, fallback = '-') => {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.textContent = value ?? fallback;
-            element.style.animation = 'fadeIn 0.4s ease-out';
-        }
+    const safe = (id, val, fallback = '-') => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val ?? fallback;
     };
+    safe('inst-code', data.institutionCode);
+    safe('inst-name', data.name);
 
-    // Basic Information
-    safeDisplay('inst-code', data.institutionCode);
-    safeDisplay('inst-name', data.name);
-    
-    // ✅ FIXED: Display correct institution type
-    // Priority: displayType > customType (if type is Other) > type
     let institutionType = data.type || '-';
-    
-    if (data.displayType) {
-        // If backend provides displayType, use it
-        institutionType = data.displayType;
-    } else if (data.type === 'Other' && data.customType) {
-        // If type is Other and customType exists, show customType
-        institutionType = data.customType;
+    if (data.displayType) institutionType = data.displayType;
+    else if (data.type === 'Other' && data.customType) institutionType = data.customType;
+    safe('inst-type', institutionType);
+    safe('inst-current-year', data.currentAcademicYear || '-');
+
+    if (data.address) {
+        safe('inst-state',    data.address.state);
+        safe('inst-district', data.address.district);
+        safe('inst-city',     data.address.city);
     }
-    
-    safeDisplay('inst-type', institutionType);
-    console.log('📝 Institution Type Display:', {
-        type: data.type,
-        customType: data.customType,
-        displayType: data.displayType,
-        final: institutionType
-    });
-    
-    // Address - Handle all possible null/undefined cases
-    if (data.address && typeof data.address === 'object') {
-        safeDisplay('inst-state', data.address.state);
-        safeDisplay('inst-district', data.address.district);
-        safeDisplay('inst-city', data.address.city);
-    } else {
-        console.warn('⚠️ Address data is missing or invalid:', data.address);
-        safeDisplay('inst-state', null);
-        safeDisplay('inst-district', null);
-        safeDisplay('inst-city', null);
-    }
-    
-    // Contacts - Handle all possible null/undefined cases
-    if (data.contacts && typeof data.contacts === 'object') {
-        safeDisplay('inst-mobile1', data.contacts.mobile1);
-        safeDisplay('inst-mobile2', data.contacts.mobile2);
-        safeDisplay('inst-email', data.contacts.email);
-    } else {
-        console.warn('⚠️ Contacts data is missing or invalid:', data.contacts);
-        safeDisplay('inst-mobile1', null);
-        safeDisplay('inst-mobile2', null);
-        safeDisplay('inst-email', null);
+    if (data.contacts) {
+        safe('inst-mobile1', data.contacts.mobile1);
+        safe('inst-mobile2', data.contacts.mobile2);
+        safe('inst-email',   data.contacts.email);
     }
 }
-
-// ===============================
-// DISPLAY LAST LOGIN
-// ===============================
 
 function displayLastLogin(lastLogin) {
-    const element = document.getElementById('inst-last-login');
-    if (!element) return;
-    
+    const el = document.getElementById('inst-last-login');
+    if (!el) return;
     if (lastLogin) {
         try {
-            const date = new Date(lastLogin);
-            if (isNaN(date.getTime())) {
-                element.textContent = 'Invalid date';
-            } else {
-                element.textContent = date.toLocaleString('en-IN', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            }
-        } catch (error) {
-            console.error('Error parsing last login date:', error);
-            element.textContent = 'Invalid date';
-        }
+            const d = new Date(lastLogin);
+            el.textContent = isNaN(d.getTime()) ? 'Invalid date'
+                : d.toLocaleString('en-IN', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        } catch { el.textContent = 'Invalid date'; }
     } else {
-        element.textContent = 'First login';
+        el.textContent = 'First login';
     }
-    
-    // Add fade-in animation
-    element.style.animation = 'fadeIn 0.4s ease-out';
 }
-
-// ===============================
-// DISPLAY STATISTICS
-// ===============================
 
 function displayStatistics(stats) {
-    // Helper function for safe stat display with animation
-    const safeStatDisplay = (elementId, value) => {
-        const element = document.getElementById(elementId);
-        if (element) {
-            const numValue = Number(value);
-            const finalValue = isNaN(numValue) ? 0 : numValue;
-            
-            // Animate number counting
-            animateValue(element, 0, finalValue, 1000);
-        }
+    if (!stats) return;
+    const safeStat = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) animateValue(el, 0, isNaN(Number(val)) ? 0 : Number(val), 1000);
     };
-
-    if (stats && typeof stats === 'object') {
-        safeStatDisplay('stat-staff', stats.totalStaff);
-        safeStatDisplay('stat-classes', stats.totalClasses);
-        safeStatDisplay('stat-subjects', stats.totalSubjects);
-        safeStatDisplay('stat-students', stats.totalStudents);
-    } else {
-        console.warn('⚠️ Statistics data is missing');
-        safeStatDisplay('stat-staff', 0);
-        safeStatDisplay('stat-classes', 0);
-        safeStatDisplay('stat-subjects', 0);
-        safeStatDisplay('stat-students', 0);
-    }
+    safeStat('stat-staff',    stats.totalStaff);
+    safeStat('stat-classes',  stats.totalClasses);
+    safeStat('stat-subjects', stats.totalSubjects);
+    safeStat('stat-students', stats.totalStudents);
 }
 
-// ===============================
-// ANIMATE NUMBER COUNTING
-// ===============================
-
 function animateValue(element, start, end, duration) {
-    const range = end - start;
-    const increment = range / (duration / 16); // 60fps
-    let current = start;
-    
+    if (!element) return;
+    const range     = end - start;
+    const increment = range / (duration / 16);
+    let current     = start;
     const timer = setInterval(() => {
         current += increment;
-        if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
-            current = end;
-            clearInterval(timer);
+        if ((increment >= 0 && current >= end) || (increment < 0 && current <= end) || increment === 0) {
+            current = end; clearInterval(timer);
         }
         element.textContent = Math.floor(current).toString();
     }, 16);
 }
 
-// ===============================
-// ANIMATE STATS CARDS
-// ===============================
-
 function animateStatsCards() {
-    const cards = document.querySelectorAll('.stat-card');
-    
-    cards.forEach((card, index) => {
-        setTimeout(() => {
-            card.style.animation = 'fadeInUp 0.6s ease-out';
-        }, index * 100);
+    document.querySelectorAll('.stat-card').forEach((card, i) => {
+        setTimeout(() => { card.style.animation = 'fadeInUp 0.6s ease-out'; }, i * 100);
     });
 }
 
-// ===============================
-// NAVIGATION FUNCTIONS
-// ===============================
+// ─────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────
+function goToPart1()          { window.location.href = 'part1-basic-info.html'; }
+function goToPart2()          { window.location.href = 'part2-mapping.html'; }
+function goToPart3()          { window.location.href = 'part3-credentials.html'; }
+function goToPromotion()      { window.location.href = 'promotion.html'; }
+function goToDataManagement() { window.location.href = 'data-management.html'; }
 
-function goToPart1() {
-    console.log('Navigating to Part 1...');
-    window.location.href = 'part1-basic-info.html';
-}
-
-function goToPart2() {
-    console.log('Navigating to Part 2...');
-    window.location.href = 'part2-mapping.html';
-}
-
-function goToPart3() {
-    console.log('Navigating to Part 3...');
-    window.location.href = 'part3-credentials.html';
-}
-
-// ===============================
-// UI HELPERS - WITH OVERLAY
-// ===============================
-
+// ─────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────
 function showLoading(message = 'Loading...') {
     const loading = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loading) {
-        loading.textContent = message;
-        loading.classList.add('show');
-    }
-    
-    if (overlay) {
-        overlay.classList.add('show');
-    }
+    if (loading) { loading.textContent = message; loading.classList.add('show'); }
+    if (overlay) overlay.classList.add('show');
 }
-
 function hideLoading() {
-    const loading = document.getElementById('loading');
-    const overlay = document.getElementById('message-overlay');
-    
-    if (loading) {
-        loading.classList.remove('show');
-    }
-    
-    if (overlay) {
-        overlay.classList.remove('show');
-    }
+    document.getElementById('loading')?.classList.remove('show');
+    document.getElementById('message-overlay')?.classList.remove('show');
 }
-
 function showError(message) {
-    console.error('❌', message);
     hideMessages();
-    
-    const errorDiv = document.getElementById('error-message');
-    const overlay = document.getElementById('message-overlay');
-    
-    if (errorDiv) {
-        errorDiv.textContent = message;
-        errorDiv.classList.add('show');
-        
-        if (overlay) {
-            overlay.classList.add('show');
-        }
-        
-        setTimeout(() => {
-            errorDiv.classList.remove('show');
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
-        }, 5000);
-    } else {
-        alert('Error: ' + message);
+    const el = document.getElementById('error-message');
+    if (el) {
+        el.textContent = message; el.classList.add('show');
+        document.getElementById('message-overlay')?.classList.add('show');
+        setTimeout(() => hideMessages(), 5000);
     }
 }
-
 function showSuccess(message) {
-    console.log('✅', message);
     hideMessages();
-    
-    const successDiv = document.getElementById('success-message');
-    const overlay = document.getElementById('message-overlay');
-    
-    if (successDiv) {
-        successDiv.textContent = message;
-        successDiv.classList.add('show');
-        
-        if (overlay) {
-            overlay.classList.add('show');
-        }
-        
-        setTimeout(() => {
-            successDiv.classList.remove('show');
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
-        }, 3000);
-    } else {
-        alert(message);
+    const el = document.getElementById('success-message');
+    if (el) {
+        el.textContent = message; el.classList.add('show');
+        document.getElementById('message-overlay')?.classList.add('show');
+        setTimeout(() => hideMessages(), 3000);
     }
 }
-
 function hideMessages() {
-    const errorDiv = document.getElementById('error-message');
-    const successDiv = document.getElementById('success-message');
-    const loading = document.getElementById('loading');
-    const overlay = document.getElementById('message-overlay');
-    
-    if (errorDiv) errorDiv.classList.remove('show');
-    if (successDiv) successDiv.classList.remove('show');
-    if (loading) loading.classList.remove('show');
-    if (overlay) overlay.classList.remove('show');
+    ['error-message','success-message','loading'].forEach(id => document.getElementById(id)?.classList.remove('show'));
+    document.getElementById('message-overlay')?.classList.remove('show');
 }
-
-// ===============================
-// UTILITY FUNCTIONS
-// ===============================
-
 function checkAuth() {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        console.warn('No authentication token found');
-        window.location.href = 'login.html';
-        return false;
-    }
+    if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return false; }
     return true;
 }
-
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
         localStorage.removeItem('token');
@@ -422,37 +286,18 @@ function logout() {
     }
 }
 
-// ===============================
-// KEYBOARD SHORTCUTS
-// ===============================
-
+// Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
-    // Ctrl/Cmd + 1 = Part 1
-    if ((e.ctrlKey || e.metaKey) && e.key === '1') {
-        e.preventDefault();
-        goToPart1();
-    }
-    
-    // Ctrl/Cmd + 2 = Part 2
-    if ((e.ctrlKey || e.metaKey) && e.key === '2') {
-        e.preventDefault();
-        goToPart2();
-    }
-    
-    // Ctrl/Cmd + 3 = Part 3
-    if ((e.ctrlKey || e.metaKey) && e.key === '3') {
-        e.preventDefault();
-        goToPart3();
-    }
+    if ((e.ctrlKey || e.metaKey) && e.key === '1') { e.preventDefault(); goToPart1(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '2') { e.preventDefault(); goToPart2(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === '3') { e.preventDefault(); goToPart3(); }
 });
 
-// ===============================
-// EXPORT FUNCTIONS
-// ===============================
+window.goToPart1          = goToPart1;
+window.goToPart2          = goToPart2;
+window.goToPart3          = goToPart3;
+window.goToPromotion      = goToPromotion;
+window.goToDataManagement = goToDataManagement;
+window.logout             = logout;
 
-window.goToPart1 = goToPart1;
-window.goToPart2 = goToPart2;
-window.goToPart3 = goToPart3;
-window.logout = logout;
-
-console.log('✅ Dashboard.js loaded successfully');
+console.log('✅ Dashboard.js loaded');

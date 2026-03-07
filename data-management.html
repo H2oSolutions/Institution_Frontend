@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Management | HelloSchool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #f8fafc; font-family: 'Inter', sans-serif; margin: 0; }
+
+    .page-header { background: linear-gradient(135deg,#0f172a,#1e293b); color: white; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    .page-header h1 { margin: 0; font-size: 1.4rem; font-weight: 800; color: white; }
+    .back-btn { background: rgba(255,255,255,0.12); color: white; border: 1.5px solid rgba(255,255,255,0.25); padding: 8px 20px; border-radius: 999px; font-weight: 700; cursor: pointer; font-family: 'Inter',sans-serif; font-size: 0.88rem; }
+    .back-btn:hover { background: rgba(255,255,255,0.22); }
+    .container { max-width: 1000px; margin: 0 auto; padding: 36px 20px 80px; }
+
+    /* TABS */
+    .tabs { display: flex; gap: 4px; background: #f1f5f9; padding: 4px; border-radius: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+    .tab { flex: 1; padding: 10px 16px; border-radius: 9px; border: none; font-family: 'Inter',sans-serif; font-weight: 700; font-size: 0.85rem; cursor: pointer; color: #6b7280; background: transparent; transition: all 0.2s; text-align: center; white-space: nowrap; }
+    .tab.active { background: white; color: #111827; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* CARDS */
+    .card { background: white; border-radius: 16px; padding: 24px 26px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); border: 1.5px solid #f1f5f9; margin-bottom: 16px; }
+    .card-title { font-size: 1rem; font-weight: 800; color: #111827; margin: 0 0 16px 0; padding-bottom: 10px; border-bottom: 2px solid #f1f5f9; }
+
+    /* ALERTS */
+    .alert { border-radius: 10px; padding: 12px 16px; font-weight: 600; font-size: 0.85rem; margin-bottom: 16px; }
+    .alert-warning { background: #fef3c7; border: 1.5px solid #f59e0b; color: #92400e; }
+    .alert-danger  { background: #fee2e2; border: 1.5px solid #dc2626; color: #991b1b; }
+    .alert-success { background: #d1fae5; border: 1.5px solid #10b981; color: #065f46; }
+    .alert-info    { background: #eff6ff; border: 1.5px solid #3b82f6; color: #1e40af; }
+
+    /* FORMS */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: 700; color: #4b5563; margin-bottom: 5px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-group input,
+    .form-group select { width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 9px; font-size: 0.9rem; font-family: 'Inter',sans-serif; background: white; transition: border-color 0.2s; }
+    .form-group input:focus,
+    .form-group select:focus { outline: none; border-color: #6366f1; }
+
+    /* SEARCH RESULTS */
+    .search-results { border: 1.5px solid #e5e7eb; border-radius: 10px; max-height: 260px; overflow-y: auto; display: none; margin-top: 6px; }
+    .search-result-item { padding: 11px 16px; cursor: pointer; border-bottom: 1px solid #f3f4f6; transition: background 0.12s; display: flex; justify-content: space-between; align-items: center; }
+    .search-result-item:hover { background: #f5f3ff; }
+    .search-result-item:last-child { border-bottom: none; }
+    .sri-name  { font-weight: 700; color: #111827; font-size: 0.9rem; }
+    .sri-meta  { font-size: 0.78rem; color: #9ca3af; margin-top: 2px; }
+    .sri-class { font-size: 0.78rem; font-weight: 700; color: #6366f1; background: #eef2ff; padding: 2px 10px; border-radius: 999px; }
+    .sri-grad  { font-size: 0.78rem; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 2px 10px; border-radius: 999px; }
+
+    /* SELECTED STUDENT */
+    .selected-student { background: #f0fdf4; border: 1.5px solid #10b981; border-radius: 10px; padding: 12px 16px; display: none; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .selected-student.show { display: flex; }
+    .ss-info .ss-name  { font-weight: 800; color: #111827; }
+    .ss-info .ss-class { font-size: 0.82rem; color: #10b981; font-weight: 600; margin-top: 2px; }
+    .ss-clear { background: none; border: none; color: #9ca3af; font-size: 1.2rem; cursor: pointer; }
+    .ss-clear:hover { color: #dc2626; }
+
+    /* GRADUATED STUDENTS LIST */
+    .grad-list { border: 1.5px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-top: 12px; }
+    .grad-list-header { background: #f9fafb; padding: 10px 16px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; display: flex; justify-content: space-between; }
+    .grad-item { padding: 13px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer; transition: background 0.12s; display: flex; justify-content: space-between; align-items: center; }
+    .grad-item:hover { background: #fef2f2; }
+    .grad-item:last-child { border-bottom: none; }
+    .grad-item.selected-row { background: #fff1f2; border-left: 3px solid #dc2626; }
+    .grad-name   { font-weight: 700; color: #111827; font-size: 0.9rem; }
+    .grad-meta   { font-size: 0.78rem; color: #9ca3af; margin-top: 2px; }
+    .grad-badge  { font-size: 0.75rem; font-weight: 700; color: #dc2626; background: #fee2e2; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .grad-empty  { padding: 32px; text-align: center; color: #9ca3af; font-size: 0.9rem; }
+
+    /* RESTORE PANEL */
+    .restore-panel { background: #fff7ed; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 18px 20px; margin-top: 16px; display: none; }
+    .restore-panel.show { display: block; }
+    .restore-panel-title { font-weight: 800; color: #92400e; margin-bottom: 14px; font-size: 0.95rem; }
+
+    /* DATA TABLE */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th { text-align: left; padding: 10px 14px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; background: #f9fafb; border-bottom: 2px solid #f1f5f9; }
+    .data-table td { padding: 11px 14px; font-size: 0.88rem; border-bottom: 1px solid #f3f4f6; color: #374151; }
+    .data-table tr:hover td { background: #fafafa; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .badge-current { background: #d1fae5; color: #065f46; font-weight: 700; font-size: 0.75rem; padding: 2px 10px; border-radius: 999px; }
+    .badge-old     { background: #fee2e2; color: #991b1b; font-weight: 700; font-size: 0.75rem; padding: 2px 10px; border-radius: 999px; }
+
+    /* DATA TYPE CHECKS */
+    .dtype-checks { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 14px 0; }
+    .dtype-check { display: flex; align-items: center; gap: 8px; background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 9px; padding: 10px 12px; cursor: pointer; transition: all 0.15s; }
+    .dtype-check:hover   { border-color: #6366f1; background: #f5f3ff; }
+    .dtype-check input   { accent-color: #6366f1; width: 15px; height: 15px; cursor: pointer; }
+    .dtype-check .dlabel { font-weight: 700; color: #374151; font-size: 0.82rem; }
+    .dtype-check .dcount { font-size: 0.72rem; color: #9ca3af; }
+    .dtype-check .dcount.red { color: #dc2626; font-weight: 700; }
+
+    /* BUTTONS */
+    .btn { padding: 10px 24px; border-radius: 10px; font-size: 0.9rem; font-weight: 700; cursor: pointer; font-family: 'Inter',sans-serif; border: none; transition: all 0.2s; }
+    .btn-primary  { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: white; }
+    .btn-primary:hover  { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(99,102,241,0.35); }
+    .btn-success  { background: linear-gradient(135deg,#10b981,#059669); color: white; }
+    .btn-success:hover  { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(16,185,129,0.35); }
+    .btn-danger   { background: linear-gradient(135deg,#dc2626,#b91c1c); color: white; }
+    .btn-danger:hover   { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(220,38,38,0.3); }
+    .btn-outline  { background: white; color: #6366f1; border: 2px solid #6366f1; }
+    .btn-outline:hover  { background: #f5f3ff; }
+    .btn-sm { padding: 6px 14px; font-size: 0.8rem; border-radius: 8px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* LOADING */
+    #loading-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+    #loading-overlay.show { display: flex; }
+    .spinner-box { background: white; padding: 32px 48px; border-radius: 16px; text-align: center; }
+    .spin-icon { font-size: 40px; display: block; margin-bottom: 10px; animation: spin 1.3s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      .form-grid, .dtype-checks { grid-template-columns: 1fr 1fr; }
+      .tabs { flex-direction: column; }
+    }
+    @media (max-width: 400px) {
+      .form-grid, .dtype-checks { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner-box">
+    <span class="spin-icon">⏳</span>
+    <div style="font-weight:700;color:#374151;" id="loading-text">Processing...</div>
+  </div>
+</div>
+
+<div class="page-header">
+  <h1>⚙️ Data Management</h1>
+  <button class="back-btn" onclick="window.location.href='dashboard.html'">← Dashboard</button>
+</div>
+
+<div class="container">
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('transfer')">🔄 Transfer Student</button>
+    <button class="tab" onclick="switchTab('bulk')">📦 Bulk Transfer</button>
+    <button class="tab" onclick="switchTab('restore')">↩️ Restore Student</button>
+    <button class="tab" onclick="switchTab('cleanup')">🗑️ Data Cleanup</button>
+    <button class="tab" onclick="switchTab('overview')">📊 Data Overview</button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TRANSFER STUDENT
+  ══════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-transfer">
+    <div class="card">
+      <div class="card-title">🔄 Move Individual Student to Any Class</div>
+      <div class="alert alert-info">
+        💡 Use this to transfer a student at <strong>any time during the year</strong> —
+        not just during promotion. Useful for correcting wrong class assignment, section changes, late admissions, etc.
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Search Student</label>
+        <input type="text" id="transfer-search" placeholder="Type student name or father's name..." oninput="searchStudents(this.value)" autocomplete="off">
+        <div class="search-results" id="transfer-results"></div>
+      </div>
+      <div class="selected-student" id="selected-student-badge">
+        <div class="ss-info">
+          <div class="ss-name"  id="ss-name">-</div>
+          <div class="ss-class" id="ss-class">-</div>
+        </div>
+        <button class="ss-clear" onclick="clearSelectedStudent()">✕</button>
+      </div>
+      <div id="transfer-form" style="display:none;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Transfer To Class</label>
+            <select id="transfer-to-class"><option value="">— Select Class —</option></select>
+          </div>
+          <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="transfer-reason" placeholder="e.g. Section change, wrong entry...">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="doTransfer()">🔄 Transfer Student</button>
+      </div>
+    </div>
+    <div class="card" id="transfer-history-card" style="display:none;">
+      <div class="card-title">📋 Transfer Result</div>
+      <div id="transfer-result"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       BULK TRANSFER
+  ══════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-bulk">
+    <div class="card">
+      <div class="card-title">📦 Move All Students of One Class to Another</div>
+      <div class="alert alert-warning">
+        ⚠️ This moves <strong>ALL active students</strong> from one class to another at once.
+        Useful when a class is merged, renamed, or restructured.
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>From Class (source)</label>
+          <select id="bulk-from"><option value="">— Select Source Class —</option></select>
+        </div>
+        <div class="form-group">
+          <label>To Class (destination)</label>
+          <select id="bulk-to"><option value="">— Select Destination Class —</option></select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Reason</label>
+        <input type="text" id="bulk-reason" placeholder="e.g. Class merged, school restructuring...">
+      </div>
+      <button class="btn btn-danger" onclick="doBulkTransfer()">📦 Transfer All Students</button>
+    </div>
+    <div class="card" id="bulk-result-card" style="display:none;">
+      <div class="card-title">📋 Bulk Transfer Result</div>
+      <div id="bulk-result"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       RESTORE GRADUATED STUDENT  ✅ NEW
+  ══════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-restore">
+    <div class="card">
+      <div class="card-title">↩️ Restore Graduated Student</div>
+      <div class="alert alert-warning">
+        ⚠️ Use this only when a student was <strong>accidentally marked as Graduated</strong>.
+        This will make them active again and place them back in the class you choose.
+      </div>
+
+      <!-- Search filter -->
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Search Graduated Students</label>
+        <input type="text" id="restore-search" placeholder="Type name or father's name to filter..." oninput="filterGraduatedList(this.value)">
+      </div>
+
+      <!-- Graduated students list -->
+      <div class="grad-list" id="grad-list">
+        <div class="grad-list-header">
+          <span>Graduated Students</span>
+          <span id="grad-count-label" style="color:#dc2626;">Loading...</span>
+        </div>
+        <div id="grad-list-body">
+          <div class="grad-empty">Loading graduated students...</div>
+        </div>
+      </div>
+
+      <!-- Restore panel — shows after selecting a student -->
+      <div class="restore-panel" id="restore-panel">
+        <div class="restore-panel-title">↩️ Restore: <span id="restore-student-name">-</span></div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Restore to Class *</label>
+            <select id="restore-to-class"><option value="">— Select Class —</option></select>
+          </div>
+          <div class="form-group">
+            <label>Reason (optional)</label>
+            <input type="text" id="restore-reason" placeholder="e.g. Accidentally graduated, data entry error...">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-success" onclick="doRestore()">↩️ Restore Student</button>
+          <button class="btn btn-outline btn-sm" onclick="clearRestoreSelection()">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result card -->
+    <div class="card" id="restore-result-card" style="display:none;">
+      <div class="card-title">📋 Restore Result</div>
+      <div id="restore-result"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       DATA CLEANUP
+  ══════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-cleanup">
+    <div class="card">
+      <div class="card-title">🗑️ Delete Old Academic Year Data</div>
+      <div class="alert alert-warning">
+        ⚠️ Deleting data is <strong>permanent and cannot be undone.</strong>
+        The current active academic year is fully protected.
+      </div>
+      <div class="form-grid" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Select Academic Year to Clean</label>
+          <select id="cleanup-year" onchange="loadYearCounts()">
+            <option value="">— Select Year —</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+          <div id="year-protection-badge" style="display:none;"></div>
+        </div>
+      </div>
+      <div id="cleanup-type-section" style="display:none;">
+        <div style="font-weight:700;color:#374151;font-size:0.88rem;margin-bottom:10px;">Select data types to delete:</div>
+        <div class="dtype-checks">
+          <label class="dtype-check"><input type="checkbox" id="del-attendance">    <div><div class="dlabel">📋 Attendance</div>    <div class="dcount" id="cnt-attendance">0 records</div></div></label>
+          <label class="dtype-check"><input type="checkbox" id="del-assignments">   <div><div class="dlabel">📝 Assignments</div>   <div class="dcount" id="cnt-assignments">0 records</div></div></label>
+          <label class="dtype-check"><input type="checkbox" id="del-notices">       <div><div class="dlabel">📢 Notices</div>       <div class="dcount" id="cnt-notices">0 records</div></div></label>
+          <label class="dtype-check"><input type="checkbox" id="del-feeNotices">    <div><div class="dlabel">💰 Fee Notices</div>    <div class="dcount" id="cnt-feeNotices">0 records</div></div></label>
+          <label class="dtype-check"><input type="checkbox" id="del-examSchedules"> <div><div class="dlabel">📅 Exam Schedules</div><div class="dcount" id="cnt-examSchedules">0 records</div></div></label>
+          <label class="dtype-check"><input type="checkbox" id="del-complaints">    <div><div class="dlabel">💬 Complaints</div>    <div class="dcount" id="cnt-complaints">0 records</div></div></label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-outline" onclick="selectAllDel()">Select All</button>
+          <button class="btn btn-outline" onclick="clearAllDel()">Clear All</button>
+          <button class="btn btn-danger"  onclick="doCleanup()">🗑️ Delete Selected Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       OVERVIEW
+  ══════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-overview">
+    <div class="card">
+      <div class="card-title">📊 Data Overview by Academic Year</div>
+      <div id="overview-content"><p style="text-align:center;color:#9ca3af;padding:20px;">Loading overview...</p></div>
+    </div>
+  </div>
+
+</div><!-- end .container -->
+
+<script src="js/config-v2.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/api.js"></script>
+<script>
+
+let allClassesList    = [];
+let selectedStudent   = null;
+let selectedGraduated = null;    // for restore tab
+let allGraduatedList  = [];      // full list fetched once
+let filteredGradList  = [];      // filtered by search
+let currentActiveYear = null;
+let previewData       = null;
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!checkAuth()) return;
+  await Promise.all([ loadAllClasses(), loadPreviewData(), loadGraduatedStudents() ]);
+});
+
+// ──────────────────────────────────────────
+// CLASSES
+// ──────────────────────────────────────────
+async function loadAllClasses() {
+  try {
+    const res = await apiGet(`${API_BASE_URL}/classes`, true);
+    if (!res.success) return;
+    allClassesList = res.data.filter(c => c.isActive);
+    populateClassDropdowns();
+  } catch (e) { console.error(e); }
+}
+
+function populateClassDropdowns() {
+  const opts = `<option value="">— Select —</option>` +
+    allClassesList.map(c =>
+      `<option value="${c._id}">${c.className}${c.nickname?' ('+c.nickname+')':''}</option>`
+    ).join('');
+  ['transfer-to-class','bulk-from','bulk-to','restore-to-class'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// ──────────────────────────────────────────
+// TAB SWITCHING
+// ──────────────────────────────────────────
+function switchTab(name) {
+  const panels = ['transfer','bulk','restore','cleanup','overview'];
+  document.querySelectorAll('.tab').forEach((t, i) =>
+    t.classList.toggle('active', panels[i] === name)
+  );
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(`tab-${name}`)?.classList.add('active');
+}
+
+// ──────────────────────────────────────────
+// TRANSFER STUDENT
+// ──────────────────────────────────────────
+let searchTimeout;
+async function searchStudents(query) {
+  clearTimeout(searchTimeout);
+  const results = document.getElementById('transfer-results');
+  if (query.length < 2) { results.style.display = 'none'; return; }
+  searchTimeout = setTimeout(async () => {
+    try {
+      const res = await apiGet(`${API_BASE_URL}/students?search=${encodeURIComponent(query)}&limit=10&isActive=true`, true);
+      if (!res.success || !res.data.length) { results.style.display = 'none'; return; }
+      results.innerHTML = res.data.map(s => `
+        <div class="search-result-item" onclick="selectStudent('${s._id}','${esc(s.name)}','${esc(s.fatherName)}','${s.classId?._id||s.classId}','${esc(s.classId?.className||'Unknown')}')">
+          <div>
+            <div class="sri-name">${s.name}</div>
+            <div class="sri-meta">Father: ${s.fatherName}</div>
+          </div>
+          <span class="sri-class">${s.classId?.className||'No Class'}</span>
+        </div>`).join('');
+      results.style.display = 'block';
+    } catch (e) { console.error(e); }
+  }, 350);
+}
+
+function esc(str) { return (str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+function selectStudent(id, name, father, classId, className) {
+  selectedStudent = { id, name, father, classId, className };
+  document.getElementById('transfer-results').style.display = 'none';
+  document.getElementById('transfer-search').value          = name;
+  document.getElementById('ss-name').textContent            = `${name} (Father: ${father})`;
+  document.getElementById('ss-class').textContent           = `Currently in: ${className}`;
+  document.getElementById('selected-student-badge').classList.add('show');
+  document.getElementById('transfer-form').style.display    = 'block';
+}
+
+function clearSelectedStudent() {
+  selectedStudent = null;
+  document.getElementById('transfer-search').value = '';
+  document.getElementById('selected-student-badge').classList.remove('show');
+  document.getElementById('transfer-form').style.display = 'none';
+}
+
+async function doTransfer() {
+  if (!selectedStudent) { alert('Please select a student first.'); return; }
+  const toClassId = document.getElementById('transfer-to-class').value;
+  const reason    = document.getElementById('transfer-reason').value.trim();
+  if (!toClassId) { alert('Please select the destination class.'); return; }
+  if (toClassId === selectedStudent.classId) { alert('Student is already in this class.'); return; }
+
+  const targetClass = allClassesList.find(c => c._id === toClassId);
+  if (!confirm(`Transfer Confirmation\n\nStudent: ${selectedStudent.name}\nFrom: ${selectedStudent.className}\nTo: ${targetClass?.className}\nReason: ${reason||'Not specified'}\n\nContinue?`)) return;
+
+  showLoading('Transferring student...');
+  try {
+    const res = await apiPost(`${API_BASE_URL}/promotion/transfer-student`,
+      { studentId: selectedStudent.id, toClassId, reason }, true);
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+    document.getElementById('transfer-history-card').style.display = 'block';
+    document.getElementById('transfer-result').innerHTML =
+      `<div class="alert alert-success">✅ <strong>${res.data.studentName}</strong> transferred to <strong>${res.data.toClassName}</strong></div>`;
+    clearSelectedStudent();
+    document.getElementById('transfer-reason').value = '';
+  } catch (e) {
+    hideLoading();
+    alert('Transfer failed: ' + e.message);
+  }
+}
+
+// ──────────────────────────────────────────
+// BULK TRANSFER
+// ──────────────────────────────────────────
+async function doBulkTransfer() {
+  const fromId = document.getElementById('bulk-from').value;
+  const toId   = document.getElementById('bulk-to').value;
+  const reason = document.getElementById('bulk-reason').value.trim();
+  if (!fromId || !toId) { alert('Please select both source and destination classes.'); return; }
+  if (fromId === toId)  { alert('Source and destination cannot be the same.'); return; }
+
+  const from = allClassesList.find(c => c._id === fromId);
+  const to   = allClassesList.find(c => c._id === toId);
+  if (!confirm(`BULK TRANSFER WARNING\n\nThis will move ALL students from:\n"${from?.className}" → "${to?.className}"\n\nReason: ${reason||'Not specified'}\n\nContinue?`)) return;
+
+  showLoading('Processing bulk transfer...');
+  try {
+    const res = await apiPost(`${API_BASE_URL}/promotion/bulk-transfer`,
+      { fromClassId: fromId, toClassId: toId, reason }, true);
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+    document.getElementById('bulk-result-card').style.display = 'block';
+    document.getElementById('bulk-result').innerHTML =
+      `<div class="alert alert-success">✅ <strong>${res.data.transferred}</strong> students moved from <strong>${res.data.fromClass}</strong> to <strong>${res.data.toClass}</strong></div>`;
+  } catch (e) {
+    hideLoading();
+    alert('Bulk transfer failed: ' + e.message);
+  }
+}
+
+// ──────────────────────────────────────────
+// RESTORE GRADUATED STUDENT  ✅ NEW
+// ──────────────────────────────────────────
+
+// Fetch all graduated students once on page load
+async function loadGraduatedStudents() {
+  try {
+    // isActive=false fetches only inactive (graduated) students
+    const res = await apiGet(
+      `${API_BASE_URL}/students?isActive=false&limit=100`, true
+    );
+
+    if (!res.success) {
+      document.getElementById('grad-list-body').innerHTML =
+        '<div class="grad-empty">Could not load graduated students.</div>';
+      return;
+    }
+
+    // Filter to only truly graduated ones (promotionStatus = graduated)
+    allGraduatedList = (res.data || []).filter(s => s.promotionStatus === 'graduated');
+    filteredGradList = [...allGraduatedList];
+    renderGraduatedList();
+
+  } catch (e) {
+    console.error('Graduated load error:', e);
+    document.getElementById('grad-list-body').innerHTML =
+      '<div class="grad-empty">Error loading students.</div>';
+  }
+}
+
+function renderGraduatedList() {
+  const label = document.getElementById('grad-count-label');
+  const body  = document.getElementById('grad-list-body');
+
+  label.textContent = `${filteredGradList.length} student${filteredGradList.length !== 1 ? 's' : ''}`;
+
+  if (!filteredGradList.length) {
+    body.innerHTML = '<div class="grad-empty">🎓 No graduated students found.</div>';
+    return;
+  }
+
+  body.innerHTML = filteredGradList.map(s => {
+    const className  = s.classId?.className || 'Unknown Class';
+    const gradYear   = s.promotionHistory?.slice(-1)[0]?.academicYear || s.academicYear || '-';
+    const isSelected = selectedGraduated?.id === s._id;
+    return `
+      <div class="grad-item ${isSelected ? 'selected-row' : ''}" onclick="selectGraduatedStudent('${s._id}','${esc(s.name)}','${esc(s.fatherName)}','${esc(className)}','${gradYear}')">
+        <div>
+          <div class="grad-name">${s.name}</div>
+          <div class="grad-meta">Father: ${s.fatherName} &nbsp;|&nbsp; Last class: ${className}</div>
+        </div>
+        <span class="grad-badge">🎓 Graduated ${gradYear}</span>
+      </div>`;
+  }).join('');
+}
+
+function filterGraduatedList(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    filteredGradList = [...allGraduatedList];
+  } else {
+    filteredGradList = allGraduatedList.filter(s =>
+      s.name.toLowerCase().includes(q) ||
+      (s.fatherName || '').toLowerCase().includes(q)
+    );
+  }
+  renderGraduatedList();
+}
+
+function selectGraduatedStudent(id, name, father, className, gradYear) {
+  selectedGraduated = { id, name, father, className, gradYear };
+
+  // Highlight selected row
+  renderGraduatedList();
+
+  // Show restore panel
+  document.getElementById('restore-student-name').textContent =
+    `${name} (Father: ${father}) — Last class: ${className}`;
+  document.getElementById('restore-to-class').value  = '';
+  document.getElementById('restore-reason').value    = '';
+  document.getElementById('restore-panel').classList.add('show');
+
+  // Scroll to restore panel
+  document.getElementById('restore-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearRestoreSelection() {
+  selectedGraduated = null;
+  renderGraduatedList(); // remove highlight
+  document.getElementById('restore-panel').classList.remove('show');
+  document.getElementById('restore-result-card').style.display = 'none';
+}
+
+async function doRestore() {
+  if (!selectedGraduated) { alert('Please select a graduated student first.'); return; }
+  const classId = document.getElementById('restore-to-class').value;
+  const reason  = document.getElementById('restore-reason').value.trim();
+  if (!classId) { alert('Please select the class to restore the student into.'); return; }
+
+  const targetClass = allClassesList.find(c => c._id === classId);
+
+  if (!confirm(
+    `Restore Confirmation\n\n` +
+    `Student: ${selectedGraduated.name}\n` +
+    `Was graduated in: ${selectedGraduated.gradYear}\n` +
+    `Restore to class: ${targetClass?.className}\n` +
+    `Reason: ${reason || 'Not specified'}\n\n` +
+    `This will make the student active again. Continue?`
+  )) return;
+
+  showLoading('Restoring student...');
+  try {
+    const res = await apiPost(
+      `${API_BASE_URL}/promotion/undo-graduate`,
+      { studentId: selectedGraduated.id, classId, reason },
+      true
+    );
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+
+    // Show result
+    document.getElementById('restore-result-card').style.display = 'block';
+    document.getElementById('restore-result').innerHTML = `
+      <div class="alert alert-success">
+        ✅ <strong>${res.data.studentName}</strong> has been restored to
+        <strong>${res.data.restoredClass}</strong> for <strong>${res.data.restoredYear}</strong>.
+        They are now active again.
+      </div>`;
+
+    // Remove from graduated list locally so they don't appear again
+    allGraduatedList  = allGraduatedList.filter(s => s._id !== selectedGraduated.id);
+    filteredGradList  = filteredGradList.filter(s => s._id !== selectedGraduated.id);
+    selectedGraduated = null;
+    renderGraduatedList();
+    document.getElementById('restore-panel').classList.remove('show');
+
+  } catch (e) {
+    hideLoading();
+    alert('Restore failed: ' + e.message);
+  }
+}
+
+// ──────────────────────────────────────────
+// CLEANUP
+// ──────────────────────────────────────────
+async function loadPreviewData() {
+  try {
+    const res = await apiGet(`${API_BASE_URL}/promotion/data-preview`, true);
+    if (!res.success) return;
+    previewData       = res.data;
+    currentActiveYear = res.data.currentAcademicYear;
+
+    const cleanupSel = document.getElementById('cleanup-year');
+    res.data.years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value       = y.academicYear;
+      opt.textContent = y.academicYear + (y.academicYear === currentActiveYear ? ' (Current)' : '');
+      cleanupSel.appendChild(opt);
+    });
+
+    renderOverview();
+  } catch (e) { console.error('Preview load error:', e); }
+}
+
+async function loadYearCounts() {
+  const year  = document.getElementById('cleanup-year').value;
+  const sect  = document.getElementById('cleanup-type-section');
+  const badge = document.getElementById('year-protection-badge');
+
+  if (!year) { sect.style.display = 'none'; badge.style.display = 'none'; return; }
+
+  if (year === currentActiveYear) {
+    badge.style.display = 'block';
+    badge.innerHTML = `<span style="background:#fee2e2;color:#991b1b;font-weight:700;font-size:0.82rem;padding:6px 14px;border-radius:999px;">🔒 Protected — Current Active Year</span>`;
+    sect.style.display = 'none'; return;
+  }
+  badge.style.display = 'none';
+
+  const yearEntry = previewData?.years.find(y => y.academicYear === year);
+  if (!yearEntry) { sect.style.display = 'none'; return; }
+
+  const c = yearEntry.counts;
+  const types = ['attendance','assignments','notices','feeNotices','examSchedules','complaints'];
+  types.forEach(t => {
+    const cnt = document.getElementById(`cnt-${t}`);
+    if (cnt) { cnt.textContent = `${c[t]||0} records`; cnt.className = `dcount ${c[t]>0?'red':''}`; }
+    const cb = document.getElementById(`del-${t}`);
+    if (cb) cb.checked = false;
+  });
+  sect.style.display = 'block';
+}
+
+function selectAllDel() { ['attendance','assignments','notices','feeNotices','examSchedules','complaints'].forEach(t => { const cb=document.getElementById(`del-${t}`); if(cb) cb.checked=true; }); }
+function clearAllDel()   { ['attendance','assignments','notices','feeNotices','examSchedules','complaints'].forEach(t => { const cb=document.getElementById(`del-${t}`); if(cb) cb.checked=false; }); }
+
+async function doCleanup() {
+  const year = document.getElementById('cleanup-year').value;
+  if (!year) { alert('Please select a year.'); return; }
+  const types    = ['attendance','assignments','notices','feeNotices','examSchedules','complaints'];
+  const selected = types.filter(t => document.getElementById(`del-${t}`)?.checked);
+  if (!selected.length) { alert('Please select at least one data type.'); return; }
+
+  const labels = { attendance:'Attendance',assignments:'Assignments',notices:'Notices',feeNotices:'Fee Notices',examSchedules:'Exam Schedules',complaints:'Complaints' };
+  if (!confirm(`PERMANENT DELETE — CANNOT BE UNDONE\n\nYear: ${year}\nDeleting:\n${selected.map(t=>'  • '+labels[t]).join('\n')}\n\nAre you absolutely sure?`)) return;
+
+  showLoading('Deleting data...');
+  try {
+    const res = await apiDeleteFn('/promotion/cleanup', { academicYear: year, deleteTypes: selected }, true);
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+    alert(`✅ Cleanup complete!\n\n${Object.entries(res.data.deleted).map(([k,v])=>`${labels[k]||k}: ${v} deleted`).join('\n')}\n\nTotal: ${res.data.totalDeleted} deleted`);
+    await loadPreviewData();
+    loadYearCounts();
+  } catch (e) {
+    hideLoading();
+    alert('Cleanup failed: ' + e.message);
+  }
+}
+
+// ──────────────────────────────────────────
+// OVERVIEW
+// ──────────────────────────────────────────
+function renderOverview() {
+  const container = document.getElementById('overview-content');
+  if (!previewData?.years?.length) {
+    container.innerHTML = '<p style="text-align:center;color:#9ca3af;padding:20px;">No data found.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Year</th><th>Status</th><th>Attendance</th><th>Assignments</th>
+          <th>Notices</th><th>Fee Notices</th><th>Exam Sch.</th><th>Complaints</th><th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${previewData.years.map(y => {
+          const c = y.counts, isCur = y.academicYear === currentActiveYear;
+          return `<tr>
+            <td><strong>${y.academicYear}</strong></td>
+            <td><span class="${isCur?'badge-current':'badge-old'}">${isCur?'🟢 Active':'🔴 Old'}</span></td>
+            <td>${c.attendance}</td><td>${c.assignments}</td><td>${c.notices}</td>
+            <td>${c.feeNotices}</td><td>${c.examSchedules}</td><td>${c.complaints}</td>
+            <td><strong>${c.total}</strong></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ──────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('loading-text').textContent = msg;
+  document.getElementById('loading-overlay').classList.add('show');
+}
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('show');
+}
+function checkAuth() {
+  if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return false; }
+  return true;
+}
+async function apiDeleteFn(endpoint, body, auth) {
+  const h = { 'Content-Type': 'application/json' };
+  if (auth) h['Authorization'] = 'Bearer ' + localStorage.getItem('token');
+  const res = await fetch(API_BASE_URL + endpoint, { method: 'DELETE', headers: h, body: JSON.stringify(body) });
+  return res.json();
+}
+
+</script>
+</body>
+</html>

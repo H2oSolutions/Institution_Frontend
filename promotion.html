@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Academic Year Promotion | HelloSchool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { background: #f8fafc; font-family: 'Inter', sans-serif; margin: 0; }
+
+    .page-header {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white; padding: 18px 32px;
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 4px 24px rgba(99,102,241,0.35);
+    }
+    .page-header h1 { margin: 0; font-size: 1.4rem; font-weight: 800; color: white; }
+    .back-btn {
+      background: rgba(255,255,255,0.18); color: white;
+      border: 2px solid rgba(255,255,255,0.35);
+      padding: 8px 20px; border-radius: 999px; font-weight: 700;
+      cursor: pointer; font-family: 'Inter', sans-serif; font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.3); }
+    .container { max-width: 1020px; margin: 0 auto; padding: 32px 20px 80px; }
+
+    /* STEPPER */
+    .stepper { display: flex; align-items: center; justify-content: center; margin-bottom: 40px; flex-wrap: wrap; }
+    .step { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .step-circle { width: 42px; height: 42px; border-radius: 50%; background: #e5e7eb; color: #9ca3af; font-weight: 800; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.3s; border: 3px solid transparent; }
+    .step-circle.active   { background: #6366f1; color: white; border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(99,102,241,0.2); }
+    .step-circle.done     { background: #10b981; color: white; border-color: #059669; }
+    .step-label { font-size: 0.73rem; font-weight: 700; color: #9ca3af; text-align: center; max-width: 80px; }
+    .step-label.active    { color: #6366f1; }
+    .step-label.done      { color: #10b981; }
+    .step-line { width: 70px; height: 3px; background: #e5e7eb; margin-bottom: 22px; transition: background 0.3s; }
+    .step-line.done       { background: #10b981; }
+
+    /* CARDS */
+    .card { background: white; border-radius: 18px; padding: 26px 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); border: 1.5px solid #f1f5f9; margin-bottom: 18px; }
+    .card-title { font-size: 1.05rem; font-weight: 800; color: #111827; margin: 0 0 18px 0; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; display: flex; align-items: center; gap: 8px; }
+
+    /* ALERTS */
+    .alert { border-radius: 12px; padding: 14px 18px; font-weight: 600; font-size: 0.88rem; margin-bottom: 18px; }
+    .alert-warning { background: #fef3c7; border: 1.5px solid #f59e0b; color: #92400e; }
+    .alert-info    { background: #eff6ff; border: 1.5px solid #3b82f6; color: #1e40af; }
+    .alert-danger  { background: #fee2e2; border: 1.5px solid #dc2626; color: #991b1b; }
+    .alert-success { background: #d1fae5; border: 1.5px solid #10b981; color: #065f46; }
+
+    /* INPUTS */
+    .year-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 4px; }
+    .form-group label { display: block; font-weight: 700; color: #4b5563; margin-bottom: 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    .form-group input,
+    .form-group select { width: 100%; padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 0.95rem; font-family: 'Inter', sans-serif; transition: border-color 0.2s; background: white; }
+    .form-group input:focus,
+    .form-group select:focus { outline: none; border-color: #6366f1; }
+
+    /* CLASS MAPPING */
+    .map-row { display: grid; grid-template-columns: 1.4fr 32px 1.4fr auto; align-items: center; gap: 12px; background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; transition: border-color 0.2s; }
+    .map-row:hover { border-color: #c7d2fe; }
+    .map-row.final-row { border-color: #fca5a5; background: #fff5f5; }
+    .class-info .cname  { font-weight: 800; color: #111827; font-size: 0.95rem; }
+    .class-info .ccount { font-size: 0.78rem; color: #9ca3af; margin-top: 2px; }
+    .arrow { text-align: center; font-size: 1.1rem; color: #6366f1; }
+    select.map-select, select.dest-select, select.status-select { width: 100%; padding: 8px 10px; border: 1.5px solid #e5e7eb; border-radius: 9px; font-size: 0.85rem; font-family: 'Inter', sans-serif; background: white; transition: border-color 0.2s; cursor: pointer; }
+    select.map-select:focus,
+    select.dest-select:focus,
+    select.status-select:focus { outline: none; border-color: #6366f1; }
+    select.map-select:disabled,
+    select.dest-select:disabled { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+    .final-check { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #dc2626; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .final-check input { width: 15px; height: 15px; cursor: pointer; accent-color: #dc2626; }
+
+    /* STUDENT ROWS */
+    .class-block { margin-bottom: 20px; border: 1.5px solid #e5e7eb; border-radius: 14px; overflow: hidden; }
+    .class-block-header { background: linear-gradient(90deg, #6366f1, #8b5cf6); color: white; padding: 13px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .class-block-header h3  { margin: 0; font-size: 0.95rem; font-weight: 800; }
+    .class-block-header span{ font-size: 0.8rem; opacity: 0.85; }
+
+    .bulk-bar { background: #f0f4ff; border-bottom: 1px solid #e0e7ff; padding: 8px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .bulk-bar span { font-size: 0.8rem; font-weight: 700; color: #4f46e5; }
+    .bulk-btn { font-size: 0.78rem; font-weight: 700; padding: 5px 14px; border-radius: 999px; border: 1.5px solid; cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.15s; }
+    .bulk-btn.promoted  { background: #d1fae5; color: #065f46; border-color: #10b981; }
+    .bulk-btn.promoted:hover  { background: #a7f3d0; }
+    .bulk-btn.repeat    { background: #fef3c7; color: #92400e; border-color: #f59e0b; }
+    .bulk-btn.repeat:hover    { background: #fde68a; }
+    .bulk-btn.graduated { background: #fee2e2; color: #991b1b; border-color: #dc2626; }
+    .bulk-btn.graduated:hover { background: #fecaca; }
+
+    .student-row { display: grid; grid-template-columns: 1.8fr 1.4fr 0.9fr; align-items: center; gap: 12px; padding: 11px 20px; border-bottom: 1px solid #f3f4f6; transition: background 0.12s; }
+    .student-row:hover { background: #fafafa; }
+    .student-row:last-child { border-bottom: none; }
+    .s-name   { font-weight: 700; color: #111827; font-size: 0.9rem; }
+    .s-father { font-size: 0.76rem; color: #9ca3af; margin-top: 1px; }
+    .s-roll   { font-size: 0.72rem; color: #c4b5fd; margin-top: 1px; }
+
+    select.dest-select.promoted  { border-color: #10b981; }
+    select.dest-select.repeat    { border-color: #f59e0b; background: #fffbeb; }
+    select.dest-select.graduated { border-color: #dc2626; background: #fff1f2; }
+
+    .search-wrap { margin-bottom: 16px; position: relative; }
+    .search-wrap input { width: 100%; padding: 10px 16px 10px 40px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.9rem; font-family: 'Inter', sans-serif; }
+    .search-wrap input:focus { outline: none; border-color: #6366f1; }
+    .search-wrap::before { content: '🔍'; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 0.85rem; }
+
+    /* SUMMARY */
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+    .sum-card { text-align: center; padding: 20px 12px; border-radius: 14px; border: 2px solid; }
+    .sum-card.promoted  { background: #d1fae5; border-color: #10b981; color: #065f46; }
+    .sum-card.repeat    { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+    .sum-card.graduated { background: #fee2e2; border-color: #dc2626; color: #991b1b; }
+    .sum-card .num { font-size: 2.4rem; font-weight: 900; line-height: 1; }
+    .sum-card .lbl { font-size: 0.82rem; font-weight: 700; margin-top: 4px; }
+
+    /* CLEANUP */
+    .year-cleanup-card { border: 1.5px solid #e5e7eb; border-radius: 14px; overflow: hidden; margin-bottom: 14px; transition: border-color 0.2s; }
+    .year-cleanup-card:hover { border-color: #c7d2fe; }
+    .year-cleanup-header { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #fafafa; border-bottom: 1.5px solid #f1f5f9; }
+    .year-cleanup-header:hover { background: #f3f4ff; }
+    .year-cleanup-title { font-weight: 800; color: #111827; font-size: 0.95rem; }
+    .year-cleanup-badge { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+    .year-cleanup-badge.current { background: #d1fae5; color: #065f46; }
+    .year-cleanup-badge.old     { background: #fee2e2; color: #991b1b; }
+    .year-cleanup-body { padding: 16px 20px; display: none; }
+    .year-cleanup-body.open { display: block; }
+    .data-types-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+    .data-type-box { border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: all 0.15s; position: relative; }
+    .data-type-box:hover  { border-color: #6366f1; background: #f5f3ff; }
+    .data-type-box.selected { border-color: #6366f1; background: #eef2ff; }
+    .data-type-box.selected::after { content: '✓'; position: absolute; top: 6px; right: 8px; color: #6366f1; font-weight: 900; font-size: 0.85rem; }
+    .data-type-box .dtype-name  { font-weight: 700; color: #374151; font-size: 0.85rem; }
+    .data-type-box .dtype-count { font-size: 0.78rem; color: #9ca3af; margin-top: 2px; }
+    .data-type-box .dtype-count.has-data { color: #dc2626; font-weight: 700; }
+
+    /* BUTTONS */
+    .btn { padding: 11px 26px; border-radius: 11px; font-size: 0.95rem; font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(99,102,241,0.4); }
+    .btn-outline  { background: white; color: #6366f1; border: 2px solid #6366f1; }
+    .btn-outline:hover  { background: #f5f3ff; }
+    .btn-danger   { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; }
+    .btn-danger:hover   { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(220,38,38,0.35); }
+    .btn-success  { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+    .btn-success:hover  { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; flex-wrap: wrap; }
+
+    /* SUCCESS SCREEN */
+    #success-screen { display: none; text-align: center; padding: 60px 20px; }
+    #success-screen.show { display: block; }
+    .success-icon  { font-size: 80px; margin-bottom: 16px; animation: popIn 0.5s ease-out; }
+    .success-title { font-size: 2rem; font-weight: 900; color: #065f46; margin-bottom: 8px; }
+    .success-sub   { color: #6b7280; font-size: 0.95rem; margin-bottom: 32px; line-height: 1.6; }
+
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+
+    /* LOADING */
+    #loading-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9999; justify-content: center; align-items: center; }
+    #loading-overlay.show { display: flex; }
+    .spinner-box { background: white; padding: 36px 52px; border-radius: 18px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.2); }
+    .spinner-icon { font-size: 44px; display: block; margin-bottom: 12px; animation: spin 1.4s linear infinite; }
+    .spinner-text { font-weight: 700; font-size: 1.05rem; color: #374151; }
+    .spinner-sub  { font-size: 0.82rem; color: #9ca3af; margin-top: 4px; }
+
+    @keyframes spin   { to { transform: rotate(360deg); } }
+    @keyframes popIn  { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+    @media (max-width: 640px) {
+      .year-row, .summary-grid, .data-types-grid { grid-template-columns: 1fr 1fr; }
+      .map-row { grid-template-columns: 1fr; }
+      .arrow   { display: none; }
+      .student-row { grid-template-columns: 1fr 1fr; }
+      .step-line { width: 36px; }
+    }
+    @media (max-width: 420px) {
+      .year-row, .summary-grid, .data-types-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <div class="spinner-box">
+    <span class="spinner-icon">⏳</span>
+    <div class="spinner-text" id="loading-text">Processing...</div>
+    <div class="spinner-sub">Please do not close this page</div>
+  </div>
+</div>
+
+<div class="page-header">
+  <h1>🎓 Academic Year Promotion</h1>
+  <button class="back-btn" onclick="window.location.href='dashboard.html'">← Dashboard</button>
+</div>
+
+<div class="container">
+
+  <div class="stepper" id="stepper">
+    <div class="step"><div class="step-circle active" id="c1">1</div><div class="step-label active" id="l1">Setup</div></div>
+    <div class="step-line" id="ln1"></div>
+    <div class="step"><div class="step-circle" id="c2">2</div><div class="step-label" id="l2">Students</div></div>
+    <div class="step-line" id="ln2"></div>
+    <div class="step"><div class="step-circle" id="c3">3</div><div class="step-label" id="l3">Confirm</div></div>
+    <div class="step-line" id="ln3"></div>
+    <div class="step"><div class="step-circle" id="c4">4</div><div class="step-label" id="l4">Cleanup</div></div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step-panel active" id="step-1">
+    <div class="alert alert-warning">
+      ⚠️ <strong>Important:</strong> Promotion moves all students to their next class.
+      All old data is safely preserved. Unpaid fees are automatically carried forward to the new year.
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Academic Years</div>
+      <div class="year-row">
+        <div class="form-group"><label>Current Academic Year</label><input type="text" id="current-year" placeholder="e.g. 2024-25"></div>
+        <div class="form-group"><label>New Academic Year</label><input type="text" id="new-year" placeholder="e.g. 2025-26"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📚 Default Class Mapping</div>
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        💡 Set the default destination for each class. Override individual students in Step 2.
+        Tick <strong>Final Year</strong> for graduating classes (e.g. Class 12).
+      </div>
+      <div id="map-container"><p style="text-align:center; color:#9ca3af; padding:20px;">Loading classes...</p></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep2()">Next: Review Students →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step-panel" id="step-2">
+    <div class="card" style="margin-bottom:14px; padding:18px 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div style="font-weight:800; color:#111827; font-size:1rem;">👨‍🎓 Review Every Student</div>
+          <div style="font-size:0.83rem; color:#6b7280; margin-top:4px;">
+            Pre-filled from your mapping. Change anyone individually.
+            <strong style="color:#10b981;">Promoted</strong> = next class &nbsp;·&nbsp;
+            <strong style="color:#d97706;">Repeat</strong> = stays same class &nbsp;·&nbsp;
+            <strong style="color:#dc2626;">Graduated</strong> = leaves school
+          </div>
+        </div>
+        <span id="student-count-badge" style="background:#eef2ff; color:#4f46e5; font-weight:700; font-size:0.8rem; padding:4px 12px; border-radius:999px;">0 students</span>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="student-search" placeholder="Search student by name or father's name..." oninput="filterStudents(this.value)">
+    </div>
+    <div id="students-container"><p style="text-align:center; color:#9ca3af; padding:40px;">Loading students...</p></div>
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goToStepNav(1)">← Back</button>
+      <button class="btn btn-primary" onclick="goToStep3()">Next: Review Summary →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step-panel" id="step-3">
+    <div class="card">
+      <div class="card-title">📊 Promotion Summary</div>
+      <div class="summary-grid">
+        <div class="sum-card promoted"><div class="num" id="sum-promoted">0</div><div class="lbl">✅ Promoted</div></div>
+        <div class="sum-card repeat"><div class="num" id="sum-repeat">0</div><div class="lbl">🔁 Repeating</div></div>
+        <div class="sum-card graduated"><div class="num" id="sum-graduated">0</div><div class="lbl">🎓 Graduated</div></div>
+      </div>
+      <div id="sum-details" style="font-size:0.9rem; color:#6b7280; padding:8px 0; line-height:1.8;"></div>
+      <div class="alert alert-danger" style="margin-top:12px; margin-bottom:0;">
+        🚨 <strong>Final warning:</strong> Once promotion starts, students will be moved.
+        Unpaid fees from this year will be automatically carried to the new year.
+      </div>
+    </div>
+    <div class="card" id="repeat-card" style="display:none;">
+      <div class="card-title">🔁 Students Repeating (Review)</div>
+      <div id="repeat-list"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="goToStepNav(2)">← Back</button>
+      <button class="btn btn-danger" id="promote-btn" onclick="doPromotion()">🚀 Start Promotion</button>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="step-panel" id="step-4">
+    <div class="alert alert-success">
+      ✅ <strong>Promotion complete!</strong>
+      Below you can optionally delete old year data to free up space. This is completely optional.
+    </div>
+    <div class="card">
+      <div class="card-title">🗑️ Old Data Cleanup</div>
+      <p style="color:#6b7280; font-size:0.88rem; margin-bottom:20px;">
+        Select which year's data to delete and what types.
+        <strong>Current active year is protected — it cannot be deleted.</strong>
+      </p>
+      <div id="cleanup-container"><p style="text-align:center; color:#9ca3af; padding:30px;">Loading data summary...</p></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-success" onclick="window.location.href='dashboard.html'">✅ All Done — Go to Dashboard</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div id="success-screen">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">Promotion Complete!</div>
+    <div class="success-sub" id="success-details"></div>
+    <button class="btn btn-primary" onclick="goToStepNav(4)" style="margin:0 auto; display:inline-flex;">🗑️ Cleanup Old Data (Optional)</button>
+    &nbsp;
+    <button class="btn btn-outline" onclick="window.location.href='dashboard.html'" style="margin-top:12px;">← Skip & Go to Dashboard</button>
+  </div>
+
+</div>
+
+<script src="js/config-v2.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/api.js"></script>
+<script>
+
+let allClasses    = [];
+let classMappings = {};
+let studentData   = {};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!checkAuth()) return;
+  prefillYears();
+  await loadClasses();
+});
+
+function prefillYears() {
+  const now = new Date(), m = now.getMonth() + 1, y = now.getFullYear();
+  const cur = m >= 4 ? `${y}-${String(y+1).slice(2)}`   : `${y-1}-${String(y).slice(2)}`;
+  const nxt = m >= 4 ? `${y+1}-${String(y+2).slice(2)}` : `${y}-${String(y+1).slice(2)}`;
+  document.getElementById('current-year').value = cur;
+  document.getElementById('new-year').value      = nxt;
+}
+
+async function loadClasses() {
+  try {
+    const res = await apiGet(`${API_BASE_URL}/promotion/classes-with-students`, true);
+
+    if (!res.success) throw new Error(res.message);
+    allClasses = res.data;
+    renderMappings();
+  } catch (e) {
+    document.getElementById('map-container').innerHTML =
+      `<div class="alert alert-danger">Failed to load classes: ${e.message}</div>`;
+  }
+}
+
+function renderMappings() {
+  const c = document.getElementById('map-container');
+  if (!allClasses.length) { c.innerHTML = '<p style="text-align:center;color:#9ca3af;padding:20px;">No active classes found.</p>'; return; }
+  const opts = allClasses.map(x => `<option value="${x.classId}">${x.className}${x.nickname ? ' ('+x.nickname+')' : ''}</option>`).join('');
+  c.innerHTML = allClasses.map(cls => `
+    <div class="map-row" id="maprow-${cls.classId}">
+      <div class="class-info">
+        <div class="cname">${cls.className}${cls.nickname ? ' — '+cls.nickname : ''}</div>
+        <div class="ccount">${cls.studentCount} student${cls.studentCount !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="arrow">→</div>
+      <select class="map-select" id="mto-${cls.classId}" onchange="onMapChange('${cls.classId}')">
+        <option value="">— Select next class —</option>${opts}
+      </select>
+      <label class="final-check">
+        <input type="checkbox" id="fin-${cls.classId}" onchange="onFinalChange('${cls.classId}')">
+        Final Year
+      </label>
+    </div>
+  `).join('');
+}
+
+function onFinalChange(cid) {
+  const isFinal = document.getElementById(`fin-${cid}`).checked;
+  document.getElementById(`mto-${cid}`).disabled = isFinal;
+  if (isFinal) document.getElementById(`mto-${cid}`).value = '';
+  document.getElementById(`maprow-${cid}`).classList.toggle('final-row', isFinal);
+}
+function onMapChange(cid) {
+  if (document.getElementById(`mto-${cid}`).value) {
+    document.getElementById(`fin-${cid}`).checked = false;
+    document.getElementById(`maprow-${cid}`).classList.remove('final-row');
+  }
+}
+
+function goToStep2() {
+  const cy = document.getElementById('current-year').value.trim();
+  const ny = document.getElementById('new-year').value.trim();
+  if (!cy || !ny) return alert('Please enter both academic years.');
+  if (cy === ny)  return alert('Current and new year cannot be the same.');
+
+  classMappings = {};
+  for (const cls of allClasses) {
+    classMappings[cls.classId] = {
+      toClassId: document.getElementById(`mto-${cls.classId}`).value,
+      isFinal:   document.getElementById(`fin-${cls.classId}`).checked
+    };
+  }
+
+  studentData = {};
+  for (const cls of allClasses) {
+    const m = classMappings[cls.classId];
+    for (const s of cls.students) {
+      let status = 'promoted', toClass = m.toClassId;
+      if (m.isFinal)  { status = 'graduated'; toClass = null; }
+      else if (!toClass) { status = 'repeat'; toClass = cls.classId; }
+      studentData[s._id] = {
+        studentId: s._id, name: s.name, father: s.fatherName, rollNo: s.rollNo,
+        fromClassId: cls.classId,
+        fromClass: cls.className + (cls.nickname ? ' ('+cls.nickname+')' : ''),
+        toClassId: toClass, status, note: ''
+      };
+    }
+  }
+  renderStudents();
+  goToStepNav(2);
+}
+
+function renderStudents() {
+  const container = document.getElementById('students-container');
+  const opts = allClasses.map(x => `<option value="${x.classId}">${x.className}${x.nickname ? ' ('+x.nickname+')' : ''}</option>`).join('');
+  let html = '', total = 0;
+
+  for (const cls of allClasses) {
+    if (!cls.students.length) continue;
+    total += cls.students.length;
+    html += `
+      <div class="class-block" data-class="${cls.classId}">
+        <div class="class-block-header">
+          <h3>${cls.className}${cls.nickname ? ' ('+cls.nickname+')' : ''}</h3>
+          <span>${cls.studentCount} student${cls.studentCount !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="bulk-bar">
+          <span>Set all:</span>
+          <button class="bulk-btn promoted"  onclick="bulkSetClass('${cls.classId}','promoted')">✅ All Promoted</button>
+          <button class="bulk-btn repeat"    onclick="bulkSetClass('${cls.classId}','repeat')">🔁 All Repeat</button>
+          <button class="bulk-btn graduated" onclick="bulkSetClass('${cls.classId}','graduated')">🎓 All Graduated</button>
+        </div>
+    `;
+    for (const s of cls.students) {
+      const sd = studentData[s._id];
+      html += `
+        <div class="student-row" data-student="${s._id}"
+             data-name="${s.name.toLowerCase()}"
+             data-father="${(s.fatherName||'').toLowerCase()}">
+          <div>
+            <div class="s-name">${s.name}</div>
+            <div class="s-father">Father: ${s.fatherName}</div>
+            ${s.rollNo ? `<div class="s-roll">Roll No: ${s.rollNo}</div>` : ''}
+          </div>
+          <select class="dest-select ${sd.status}" id="d-${s._id}"
+            onchange="onDestChange('${s._id}')"
+            ${sd.status === 'graduated' ? 'disabled' : ''}>
+            <option value="">— Graduated —</option>${opts}
+          </select>
+          <select class="status-select" id="st-${s._id}" onchange="onStatusChange('${s._id}')">
+            <option value="promoted"  ${sd.status==='promoted'  ? 'selected':''}>✅ Promoted</option>
+            <option value="repeat"    ${sd.status==='repeat'    ? 'selected':''}>🔁 Repeat</option>
+            <option value="graduated" ${sd.status==='graduated' ? 'selected':''}>🎓 Graduated</option>
+          </select>
+        </div>
+      `;
+    }
+    html += '</div>';
+  }
+
+  container.innerHTML = html || '<p style="text-align:center;color:#9ca3af;padding:40px;">No students found.</p>';
+
+  for (const cls of allClasses) {
+    for (const s of cls.students) {
+      const sd = studentData[s._id];
+      if (sd?.toClassId) {
+        const el = document.getElementById(`d-${s._id}`);
+        if (el) el.value = sd.toClassId;
+      }
+    }
+  }
+  document.getElementById('student-count-badge').textContent = `${total} students`;
+}
+
+function onStatusChange(sid) {
+  const status = document.getElementById(`st-${sid}`).value;
+  const dest   = document.getElementById(`d-${sid}`);
+  const sd     = studentData[sid];
+  sd.status    = status;
+  if (status === 'graduated') { dest.disabled = true; dest.value = ''; sd.toClassId = null; }
+  else if (status === 'repeat') { dest.disabled = false; dest.value = sd.fromClassId; sd.toClassId = sd.fromClassId; }
+  else { dest.disabled = false; }
+  dest.className = `dest-select ${status}`;
+}
+
+function onDestChange(sid) {
+  studentData[sid].toClassId = document.getElementById(`d-${sid}`).value || null;
+  const sd = studentData[sid];
+  if (sd.status === 'repeat' && sd.toClassId !== sd.fromClassId) {
+    sd.status = 'promoted';
+    document.getElementById(`st-${sid}`).value = 'promoted';
+    document.getElementById(`d-${sid}`).className = 'dest-select promoted';
+  }
+}
+
+function bulkSetClass(classId, status) {
+  const cls = allClasses.find(c => c.classId === classId);
+  if (!cls) return;
+  for (const s of cls.students) {
+    const sd = studentData[s._id]; if (!sd) continue;
+    sd.status = status;
+    const stEl = document.getElementById(`st-${s._id}`);
+    const dEl  = document.getElementById(`d-${s._id}`);
+    if (stEl) stEl.value = status;
+    if (status === 'graduated') {
+      if (dEl) { dEl.disabled = true; dEl.value = ''; }
+      sd.toClassId = null;
+    } else if (status === 'repeat') {
+      if (dEl) { dEl.disabled = false; dEl.value = sd.fromClassId; dEl.className = 'dest-select repeat'; }
+      sd.toClassId = sd.fromClassId;
+    } else {
+      if (dEl) { dEl.disabled = false; dEl.className = 'dest-select promoted'; }
+    }
+  }
+}
+
+function filterStudents(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('.student-row[data-student]').forEach(row => {
+    const name = row.dataset.name || '', father = row.dataset.father || '';
+    row.style.display = (!q || name.includes(q) || father.includes(q)) ? '' : 'none';
+  });
+}
+
+function goToStep3() {
+  for (const cls of allClasses) {
+    for (const s of cls.students) {
+      const stEl = document.getElementById(`st-${s._id}`);
+      const dEl  = document.getElementById(`d-${s._id}`);
+      if (stEl) studentData[s._id].status    = stEl.value;
+      if (dEl)  studentData[s._id].toClassId = dEl.value || null;
+    }
+  }
+  let promoted = 0, repeat = 0, graduated = 0;
+  const repeatStudents = [];
+  Object.values(studentData).forEach(sd => {
+    if (sd.status === 'promoted')  promoted++;
+    if (sd.status === 'repeat')  { repeat++; repeatStudents.push(sd); }
+    if (sd.status === 'graduated') graduated++;
+  });
+  document.getElementById('sum-promoted').textContent  = promoted;
+  document.getElementById('sum-repeat').textContent    = repeat;
+  document.getElementById('sum-graduated').textContent = graduated;
+  const cy = document.getElementById('current-year').value;
+  const ny = document.getElementById('new-year').value;
+  document.getElementById('sum-details').innerHTML = `Year changing: <strong>${cy}</strong> → <strong>${ny}</strong><br>Total students: <strong>${promoted+repeat+graduated}</strong>`;
+  if (repeatStudents.length) {
+    document.getElementById('repeat-card').style.display = 'block';
+    document.getElementById('repeat-list').innerHTML = repeatStudents.map(sd =>
+      `<div style="padding:8px 0; border-bottom:1px solid #f3f4f6; font-size:0.88rem;">
+        <strong>${sd.name}</strong>
+        <span style="color:#9ca3af; margin-left:8px;">Father: ${sd.father}</span>
+        <span style="background:#fef3c7; color:#92400e; font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; margin-left:8px;">🔁 Repeating in ${sd.fromClass}</span>
+      </div>`
+    ).join('');
+  } else {
+    document.getElementById('repeat-card').style.display = 'none';
+  }
+  goToStepNav(3);
+}
+
+async function doPromotion() {
+  const cy = document.getElementById('current-year').value.trim();
+  const ny = document.getElementById('new-year').value.trim();
+  const p  = document.getElementById('sum-promoted').textContent;
+  const r  = document.getElementById('sum-repeat').textContent;
+  const g  = document.getElementById('sum-graduated').textContent;
+
+  const ok = confirm(`FINAL CONFIRMATION\n\nYear: ${cy} → ${ny}\nPromoted: ${p}\nRepeating: ${r}\nGraduated: ${g}\n\nUnpaid fees from ${cy} will be carried forward to ${ny}.\n\nContinue?`);
+  if (!ok) return;
+
+  const payload = {
+    currentAcademicYear: cy,
+    newAcademicYear:     ny,
+    studentPromotions: Object.values(studentData).map(sd => ({
+      studentId: sd.studentId, toClassId: sd.toClassId, status: sd.status, note: sd.note || ''
+    }))
+  };
+
+  showLoading('Promoting students...');
+  document.getElementById('promote-btn').disabled = true;
+
+  try {
+    const res = await apiPost(`${API_BASE_URL}/promotion/promote`, payload, true);
+
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+
+    const d = res.data;
+    document.getElementById('stepper').style.display = 'none';
+    document.getElementById('step-3').classList.remove('active');
+    document.getElementById('success-screen').classList.add('show');
+    document.getElementById('success-details').innerHTML =
+      `<strong>${d.promoted}</strong> promoted &nbsp;·&nbsp; <strong>${d.repeat}</strong> repeating &nbsp;·&nbsp; <strong>${d.graduated}</strong> graduated` +
+      (d.carriedForward > 0 ? `<br><span style="color:#f59e0b; font-weight:700;">💰 ${d.carriedForward} unpaid fee(s) carried forward</span>` : '') +
+      `<br><span style="color:#10b981; font-weight:700; font-size:1rem;">New year: ${d.newAcademicYear}</span>` +
+      (d.failedCount > 0 ? `<br><span style="color:#dc2626; font-weight:700;">${d.failedCount} error(s) — check console</span>` : '');
+  } catch (e) {
+    hideLoading();
+    document.getElementById('promote-btn').disabled = false;
+    // Check if locked
+    if (e.message && e.message.includes('already completed')) {
+      alert(`🔒 PROMOTION LOCKED\n\n${e.message}\n\nIf you need to re-run, use the unlock API.`);
+    } else {
+      alert('Promotion failed: ' + e.message);
+    }
+  }
+}
+
+// Cleanup (Step 4)
+let cleanupData = null;
+
+async function loadCleanupData() {
+  const container = document.getElementById('cleanup-container');
+  try {
+    showLoading('Loading data summary...');
+    const res = await apiGet(`${API_BASE_URL}/promotion/data-preview`, true);
+
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+    cleanupData = res.data;
+    renderCleanup();
+  } catch (e) {
+    hideLoading();
+    container.innerHTML = `<div class="alert alert-danger">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function renderCleanup() {
+  const container = document.getElementById('cleanup-container');
+  const { years, currentAcademicYear } = cleanupData;
+  if (!years.length) { container.innerHTML = '<p style="text-align:center; color:#9ca3af; padding:20px;">No data found.</p>'; return; }
+  container.innerHTML = years.map(y => {
+    const isCurrent = y.academicYear === currentAcademicYear;
+    const c = y.counts;
+    return `
+      <div class="year-cleanup-card" id="ycard-${y.academicYear}">
+        <div class="year-cleanup-header" onclick="toggleYear('${y.academicYear}')">
+          <div><div class="year-cleanup-title">📅 ${y.academicYear}</div><div style="font-size:0.78rem;color:#9ca3af;margin-top:2px;">${c.total} total records</div></div>
+          <span class="year-cleanup-badge ${isCurrent ? 'current' : 'old'}">${isCurrent ? '🟢 Active Year' : '🔴 Old Data'}</span>
+        </div>
+        <div class="year-cleanup-body" id="ybody-${y.academicYear}">
+          ${isCurrent
+            ? `<div class="alert alert-info">This is your current active academic year. You cannot delete its data.</div>`
+            : `<div class="data-types-grid">
+                ${makeBox(y.academicYear,'attendance',   '📋 Attendance',     c.attendance)}
+                ${makeBox(y.academicYear,'assignments',  '📝 Assignments',    c.assignments)}
+                ${makeBox(y.academicYear,'notices',      '📢 Notices',        c.notices)}
+                ${makeBox(y.academicYear,'feeNotices',   '💰 Fee Notices',    c.feeNotices)}
+                ${makeBox(y.academicYear,'examSchedules','📅 Exam Schedules', c.examSchedules)}
+                ${makeBox(y.academicYear,'complaints',   '💬 Complaints',     c.complaints)}
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                <button class="btn btn-outline" style="padding:7px 14px;font-size:0.82rem;" onclick="selAll('${y.academicYear}')">Select All</button>
+                <button class="btn btn-outline" style="padding:7px 14px;font-size:0.82rem;" onclick="clrAll('${y.academicYear}')">Clear All</button>
+                <button class="btn btn-danger"  style="padding:7px 14px;font-size:0.82rem;" onclick="deleteSelected('${y.academicYear}')">🗑️ Delete Selected</button>
+              </div>`
+          }
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function makeBox(year, type, label, count) {
+  return `<div class="data-type-box" id="dtbox-${year}-${type}" onclick="this.classList.toggle('selected')">
+    <div class="dtype-name">${label}</div>
+    <div class="dtype-count ${count>0?'has-data':''}">${count} records</div>
+  </div>`;
+}
+function toggleYear(year) { document.getElementById(`ybody-${year}`)?.classList.toggle('open'); }
+function selAll(year) { ['attendance','assignments','notices','feeNotices','examSchedules','complaints'].forEach(t => document.getElementById(`dtbox-${year}-${t}`)?.classList.add('selected')); }
+function clrAll(year) { ['attendance','assignments','notices','feeNotices','examSchedules','complaints'].forEach(t => document.getElementById(`dtbox-${year}-${t}`)?.classList.remove('selected')); }
+
+async function deleteSelected(year) {
+  const types = ['attendance','assignments','notices','feeNotices','examSchedules','complaints'];
+  const selected = types.filter(t => document.getElementById(`dtbox-${year}-${t}`)?.classList.contains('selected'));
+  if (!selected.length) { alert('Please select at least one data type.'); return; }
+  const labels = { attendance:'Attendance',assignments:'Assignments',notices:'Notices',feeNotices:'Fee Notices',examSchedules:'Exam Schedules',complaints:'Complaints' };
+  const ok = confirm(`DELETE CONFIRMATION\n\nYear: ${year}\nDeleting:\n${selected.map(t=>'  • '+labels[t]).join('\n')}\n\nThis CANNOT be undone. Continue?`);
+  if (!ok) return;
+  showLoading('Deleting data...');
+  try {
+    const res = await apiDeleteFn('/promotion/cleanup', { academicYear: year, deleteTypes: selected }, true);
+    hideLoading();
+    if (!res.success) throw new Error(res.message);
+    alert(`✅ Cleanup done!\n\n${Object.entries(res.data.deleted).map(([k,v])=>`${labels[k]||k}: ${v} deleted`).join('\n')}\n\nTotal: ${res.data.totalDeleted} deleted`);
+    await loadCleanupData();
+  } catch (e) {
+    hideLoading();
+    alert('Cleanup failed: ' + e.message);
+  }
+}
+
+function goToStepNav(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById(`step-${i}`)?.classList.remove('active');
+    const circle = document.getElementById(`c${i}`);
+    const label  = document.getElementById(`l${i}`);
+    if (circle) circle.className = `step-circle ${i<n?'done':(i===n?'active':'')}`;
+    if (label)  label.className  = `step-label  ${i<n?'done':(i===n?'active':'')}`;
+    if (i<4) { const line = document.getElementById(`ln${i}`); if (line) line.className = `step-line ${i<n?'done':''}`; }
+  });
+  document.getElementById(`step-${n}`)?.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (n === 4) loadCleanupData();
+}
+
+function showLoading(msg='Processing...') { document.getElementById('loading-text').textContent=msg; document.getElementById('loading-overlay').classList.add('show'); }
+function hideLoading() { document.getElementById('loading-overlay').classList.remove('show'); }
+function checkAuth() { if (!localStorage.getItem('token')) { window.location.href='login.html'; return false; } return true; }
+
+async function apiDeleteFn(endpoint, body, auth) {
+  const h = { 'Content-Type': 'application/json' };
+  if (auth) h['Authorization'] = 'Bearer ' + localStorage.getItem('token');
+  const res = await fetch(API_BASE_URL + endpoint, { method: 'DELETE', headers: h, body: JSON.stringify(body) });
+  return res.json();
+}
+</script>
+</body>
+</html>

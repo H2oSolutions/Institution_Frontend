@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fee Management | Institution Management System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+:root{
+  --brand:#6366f1;--brand2:#8b5cf6;
+  --brand-grad:linear-gradient(135deg,#6366f1,#8b5cf6);
+  --surface:#fff;--surface2:#f8fafc;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --green:#10b981;--green-bg:#f0fdf4;--green-border:#bbf7d0;
+  --red:#ef4444;--red-bg:#fef2f2;--red-border:#fecaca;
+  --amber:#f59e0b;--amber-bg:#fffbeb;--amber-border:#fde68a;
+  --blue:#3b82f6;--orange:#ea580c;
+  --shadow:0 2px 16px rgba(0,0,0,.06);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--text);min-height:100vh}
+
+/* HEADER */
+.fm-header{background:var(--brand-grad);color:#fff;padding:15px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:200;box-shadow:0 4px 24px rgba(99,102,241,.3)}
+.fm-back-btn{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.25);color:#fff;border-radius:999px;padding:6px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s}
+.fm-back-btn:hover{background:rgba(255,255,255,.25)}
+.fm-header h1{font-size:clamp(1rem,2.5vw,1.35rem);font-weight:900;margin:0}
+.fm-header-badge{background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.3);border-radius:999px;padding:4px 13px;font-size:12px;font-weight:800;letter-spacing:.06em}
+
+/* CONTAINER + TABS */
+.fm-container{max-width:1180px;margin:0 auto;padding:22px 18px 80px}
+.fm-tabs{display:flex;gap:3px;background:#fff;border-radius:15px;padding:4px;box-shadow:var(--shadow);margin-bottom:22px;border:1.5px solid var(--border)}
+.fm-tab{flex:1;padding:10px 10px;border-radius:10px;border:none;background:transparent;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;color:var(--text3);transition:.2s;display:flex;align-items:center;justify-content:center;gap:6px}
+.fm-tab:hover{background:#f8fafc;color:var(--text2)}
+.fm-tab.active{background:var(--brand-grad);color:#fff;box-shadow:0 4px 14px rgba(99,102,241,.3)}
+.fm-tab-num{width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.25);font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fm-tab:not(.active) .fm-tab-num{background:#e2e8f0;color:#94a3b8}
+
+/* CARDS */
+.fm-card{background:#fff;border-radius:16px;padding:22px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:16px;animation:fadeUp .3s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fm-card-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.fm-card-sub{font-size:12px;color:var(--text3);margin-bottom:18px;font-weight:500;line-height:1.5}
+
+/* FORM */
+.fm-label{display:block;font-size:11px;font-weight:800;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em}
+.fm-input,.fm-select{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:10px 13px;font-family:inherit;font-size:14px;color:var(--text);transition:.2s;outline:none}
+.fm-input:focus,.fm-select:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+.fm-input::placeholder{color:var(--text3)}
+.fm-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.fm-form-group{margin-bottom:15px}
+
+/* BUTTONS */
+.btn-primary{background:var(--brand-grad);color:#fff;border:none;border-radius:9px;padding:10px 20px;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(99,102,241,.35)}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-secondary{background:#f1f5f9;color:var(--text2);border:1.5px solid var(--border);border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:.2s}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1.5px solid var(--red-border);border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:.2s}
+.btn-danger:hover{background:#fee2e2}
+.btn-edit{background:#eff6ff;color:var(--blue);border:1.5px solid #bfdbfe;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:.2s}
+.btn-edit:hover{background:#dbeafe}
+.btn-green{background:var(--green-bg);color:#059669;border:1.5px solid var(--green-border);border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:.2s}
+.btn-green:hover{background:#dcfce7}
+
+/* DOTS */
+.dot-blue{background:#3b82f6}.dot-green{background:#10b981}.dot-orange{background:#f97316}
+.dot-purple{background:#8b5cf6}.dot-red{background:#ef4444}.dot-teal{background:#14b8a6}
+.color-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;display:inline-block}
+
+/* CHIPS */
+.chip-grid{display:flex;flex-wrap:wrap;gap:6px}
+.c-chip{display:flex;align-items:center;gap:5px;background:var(--surface2);border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;cursor:pointer;user-select:none;font-size:12px;font-weight:700;color:var(--text2);transition:.15s}
+.c-chip:hover,.c-chip.selected{border-color:var(--brand);color:#4f46e5;background:#eef2ff}
+.c-chip.all-c{background:#fefce8;border-color:var(--amber-border);color:#92400e}
+.c-chip.all-c.selected{background:#fef9c3;border-color:var(--amber)}
+.c-chip .cb{width:13px;height:13px;border-radius:3px;border:2px solid #cbd5e1;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s}
+.c-chip.selected .cb,.c-chip.all-c.selected .cb{background:var(--brand);border-color:var(--brand)}
+.c-chip.selected .cb::after,.c-chip.all-c.selected .cb::after{content:'✓';font-size:8px;color:#fff;font-weight:900}
+.c-chip.all-c.selected .cb{background:var(--amber);border-color:var(--amber)}
+.month-grid{display:flex;flex-wrap:wrap;gap:5px}
+.m-chip{padding:5px 10px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface2);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer;user-select:none;transition:.15s}
+.m-chip:hover,.m-chip.selected{border-color:var(--brand);color:#4f46e5;background:#eef2ff}
+.m-chip.all-m{background:#fefce8;border-color:var(--amber-border);color:#92400e}
+.m-chip.all-m.selected{background:#fef9c3;border-color:var(--amber);color:#78350f}
+
+/* FEE HEAD LIST */
+.fh-list{display:flex;flex-direction:column;gap:6px}
+.fh-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:11px 15px;display:flex;align-items:center;gap:10px;transition:.18s}
+.fh-item:hover{border-color:#c7d2fe;background:#eef2ff}
+.fh-name{flex:1;font-size:14px;font-weight:800}
+.fh-desc{font-size:11px;color:var(--text3);font-weight:600}
+.fh-actions{display:flex;gap:5px}
+
+/* TRANSPORT */
+.route-card{background:#fff;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:10px;transition:.2s}
+.route-card:hover{border-color:#c7d2fe}
+.route-header{padding:15px 17px;display:flex;align-items:center;gap:11px;cursor:pointer;background:linear-gradient(135deg,rgba(99,102,241,.03),rgba(139,92,246,.03))}
+.route-icon{width:38px;height:38px;border-radius:10px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.route-info{flex:1}
+.route-name{font-size:14px;font-weight:800;margin-bottom:2px}
+.route-path{font-size:11px;font-weight:600;color:var(--text3);display:flex;align-items:center;gap:5px}
+.route-path .arrow{color:var(--brand)}
+.route-badges{display:flex;gap:6px;flex-wrap:wrap}
+.rb{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800}
+.rb-amount{background:#eef2ff;color:#4f46e5}
+.rb-buses{background:var(--green-bg);color:#059669}
+.rb-students{background:#fff7ed;color:#c2410c}
+.route-actions{display:flex;gap:5px}
+.route-chevron{color:var(--text3);font-size:12px;transition:.25s;margin-left:3px}
+.route-card.expanded .route-chevron{transform:rotate(180deg)}
+.route-body{display:none;padding:0 17px 17px;border-top:1.5px solid var(--border)}
+.route-card.expanded .route-body{display:block}
+.sec-title{font-size:11px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin:13px 0 8px;display:flex;align-items:center;gap:6px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.bus-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:8px;margin-bottom:11px}
+.bus-card{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:12px;transition:.18s}
+.bus-card:hover{border-color:#c7d2fe;background:#eef2ff}
+.bus-num{font-size:13px;font-weight:900;color:var(--brand);margin-bottom:6px;font-family:'JetBrains Mono',monospace}
+.bus-num-empty{font-size:12px;font-weight:700;color:var(--text3);margin-bottom:6px;font-style:italic}
+.bus-detail{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:3px}
+.add-bus-btn{border:2px dashed #c7d2fe;border-radius:10px;background:#f8faff;padding:10px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px;font-weight:800;color:var(--brand);cursor:pointer;font-family:inherit;width:100%;transition:.2s}
+.add-bus-btn:hover{background:#eef2ff;border-color:var(--brand)}
+.stu-chip-sm{background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;color:var(--text2);display:inline-flex;align-items:center;gap:4px;margin:2px}
+.stu-av-sm{width:17px;height:17px;border-radius:4px;background:var(--brand-grad);color:#fff;font-size:8px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.stu-chip-remove{cursor:pointer;color:var(--red);font-size:9px;margin-left:2px;font-weight:900}
+.add-route-box{background:linear-gradient(135deg,#f8faff,#fefce8);border:2px dashed #c7d2fe;border-radius:14px;padding:18px;margin-bottom:16px}
+
+/* FEE BUILDER */
+.fb-card{border:1.5px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:9px;transition:.2s}
+.fb-card.on{border-color:#c7d2fe}
+.fb-header{padding:13px 16px;display:flex;align-items:center;gap:11px;background:#fff;cursor:pointer}
+.fb-header:hover{background:#fafbff}
+.fb-title{flex:1;font-size:14px;font-weight:800}
+.fb-summary{font-size:11px;color:var(--text3);font-weight:700;text-align:right}
+.fb-summary.ok{color:var(--green)}
+.fb-body{display:none;padding:15px 16px 17px;border-top:1.5px solid var(--border);background:#fafbff}
+.fb-card.on .fb-body{display:block}
+.toggle-wrap{display:flex;align-items:center}
+.toggle-sw{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle-sw input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;inset:0;background:#e2e8f0;border-radius:999px;cursor:pointer;transition:.2s}
+.slider::before{content:'';position:absolute;left:3px;bottom:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.toggle-sw input:checked+.slider{background:var(--brand)}
+.toggle-sw input:checked+.slider::before{transform:translateX(18px)}
+
+/* PREVIEW TABLE */
+.preview-table-wrap{overflow-x:auto;border-radius:11px;border:1.5px solid var(--border);margin-bottom:16px}
+.fee-table{width:100%;border-collapse:collapse;font-size:13px}
+.fee-table th{background:var(--brand-grad);color:#fff;padding:10px 13px;text-align:left;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.fee-table th:first-child{border-radius:9px 0 0 0}.fee-table th:last-child{border-radius:0 9px 0 0}
+.fee-table td{padding:10px 13px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.fee-table tr:last-child td{border-bottom:none}
+.fee-table tr:hover td{background:#fafbff}
+.class-badge{background:#eef2ff;color:#4f46e5;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:800;cursor:pointer;transition:.15s;display:inline-block}
+.class-badge:hover{background:#c7d2fe}
+.month-tag{display:inline-block;background:var(--green-bg);border:1px solid var(--green-border);color:#16a34a;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:800;margin:1px}
+.amount-mono{font-family:'JetBrains Mono',monospace;font-weight:600}
+.total-mono{font-family:'JetBrains Mono',monospace;font-weight:900;color:#059669;font-size:14px}
+.transport-note{background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:8px 12px;font-size:12px;color:#c2410c;font-weight:700;display:flex;align-items:center;gap:7px}
+
+/* FEE STATUS */
+.status-filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:flex-end}
+.status-filters .fm-form-group{margin-bottom:0;flex:1;min-width:120px}
+.search-wrap{position:relative;flex:2;min-width:170px}
+.search-wrap .fm-input{padding-left:34px}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none}
+.stu-row{background:#fff;border:1.5px solid var(--border);border-radius:13px;overflow:hidden;margin-bottom:7px;transition:.2s}
+.stu-row:hover{border-color:#c7d2fe}
+.stu-summary{padding:13px 16px;display:flex;align-items:center;gap:11px;cursor:pointer}
+.stu-av{width:37px;height:37px;border-radius:9px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;flex-shrink:0}
+.stu-info{flex:1;min-width:0}
+.stu-name{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stu-sub{font-size:11px;color:var(--text3);font-weight:600;margin-top:1px}
+.stu-badges{display:flex;gap:6px;flex-wrap:wrap}
+.s-badge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;white-space:nowrap}
+.sb-paid{background:var(--green-bg);color:#059669;border:1px solid var(--green-border)}
+.sb-due{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.sb-zero{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
+.stu-chevron{color:var(--text3);font-size:11px;transition:.25s;flex-shrink:0}
+.stu-row.expanded .stu-chevron{transform:rotate(180deg)}
+.stu-detail{display:none;padding:17px;border-top:1.5px solid var(--border);background:linear-gradient(135deg,#f8faff,#fafffe)}
+.stu-row.expanded .stu-detail{display:block}
+.stu-detail-header{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap}
+.stu-detail-av{width:48px;height:48px;border-radius:12px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;color:#fff;flex-shrink:0}
+.stu-full-name{font-size:16px;font-weight:900;margin-bottom:2px}
+.stu-detail-sub{font-size:11px;color:var(--text3);font-weight:600;display:flex;flex-wrap:wrap;gap:8px}
+.stu-sum-badges{display:flex;gap:7px;flex-wrap:wrap;margin-left:auto}
+.sum-box{border-radius:10px;padding:8px 13px;text-align:right;border:1.5px solid}
+.sum-box .sl{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;margin-bottom:1px}
+.sum-box .sv{font-size:14px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.sum-paid{background:var(--green-bg);border-color:var(--green-border)}.sum-paid .sl{color:#86efac}.sum-paid .sv{color:#059669}
+.sum-due{background:var(--red-bg);border-color:var(--red-border)}.sum-due .sl{color:#fca5a5}.sum-due .sv{color:var(--red)}
+.sum-total{background:#eef2ff;border-color:#c7d2fe}.sum-total .sl{color:#a5b4fc}.sum-total .sv{color:var(--brand)}
+.fee-section{margin-bottom:16px}
+.fee-sec-head{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.fee-sec-head::after{content:'';flex:1;height:1px;background:var(--border)}
+.fee-sec-dot{width:7px;height:7px;border-radius:50%}
+.months-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.mp-tile{border-radius:9px;padding:8px 11px;min-width:78px;border:1.5px solid;cursor:pointer;transition:.2s;position:relative;user-select:none}
+.mp-tile.unpaid{background:var(--amber-bg);border-color:var(--amber-border);color:#92400e}
+.mp-tile.unpaid:hover{background:#fef9c3;border-color:var(--amber);transform:translateY(-2px)}
+.mp-tile.paid{background:var(--green-bg);border-color:var(--green-border);color:#065f46;cursor:default}
+.mp-tile.paid::after{content:'✓';position:absolute;top:4px;right:5px;font-size:9px;font-weight:900;color:#16a34a}
+.mp-tile.t-unpaid{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.mp-tile.t-unpaid:hover{background:#ffedd5;border-color:#fb923c;transform:translateY(-2px)}
+.mp-tile.t-paid{background:var(--green-bg);border-color:var(--green-border);color:#065f46;cursor:default}
+.mp-tile.t-paid::after{content:'✓';position:absolute;top:4px;right:5px;font-size:9px;font-weight:900;color:#16a34a}
+.mp-month{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;opacity:.7;margin-bottom:2px}
+.mp-amount{font-size:12px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.mp-status{font-size:9px;font-weight:700;margin-top:1px;opacity:.8}
+.mp-date{font-size:8px;font-weight:600;opacity:.65;margin-top:1px}
+.paid-actions{display:flex;gap:3px;margin-top:3px}
+.pab{border:none;background:rgba(0,0,0,.05);border-radius:4px;padding:2px 5px;font-size:9px;font-weight:800;cursor:pointer;font-family:inherit;color:inherit;transition:.15s}
+.pab:hover{background:rgba(0,0,0,.1)}
+.pab.del{background:rgba(239,68,68,.1);color:var(--red)}
+.pab.del:hover{background:rgba(239,68,68,.2)}
+.transport-row{display:flex;align-items:center;gap:9px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:8px;padding:8px 12px;margin-bottom:11px;flex-wrap:wrap}
+.transport-row .tl{font-size:12px;font-weight:700;color:#c2410c;flex:1;min-width:100px}
+.transport-row select{background:#fff;border:1.5px solid #fed7aa;border-radius:7px;padding:5px 9px;font-family:inherit;font-size:12px;font-weight:700;color:#9a3412;outline:none;flex:1;min-width:150px}
+
+/* MODALS */
+.modal-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);backdrop-filter:blur(5px);align-items:center;justify-content:center;padding:14px}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:18px;padding:26px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.18);animation:fadeUp .3s ease;scrollbar-width:thin}
+.modal-box.wide{max-width:700px}
+.modal-box.xl{max-width:860px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.modal-head h3{font-size:16px;font-weight:900}
+.modal-close{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:7px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;font-family:inherit;flex-shrink:0}
+.modal-close:hover{background:#e2e8f0}
+.modal-sub{font-size:12px;color:var(--text3);font-weight:500;margin-bottom:18px}
+.modal-actions{display:flex;gap:8px;margin-top:14px}
+.modal-actions button{flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:none;transition:.2s}
+.btn-confirm{background:linear-gradient(135deg,#059669,#10b981);color:#fff}
+.btn-confirm:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(16,185,129,.35)}
+.btn-confirm:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-cancel{background:#f1f5f9;color:var(--text2)}
+.btn-cancel:hover{background:#e2e8f0}
+.btn-confirm-primary{background:var(--brand-grad);color:#fff}
+.btn-confirm-primary:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(99,102,241,.35)}
+.btn-confirm-danger{background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff}
+.btn-confirm-danger:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(239,68,68,.35)}
+.pay-amt-box{background:linear-gradient(135deg,var(--green-bg),#dcfce7);border:2px solid var(--green-border);border-radius:12px;padding:13px;text-align:center;margin-bottom:14px}
+.pay-amt-box .pal{font-size:11px;color:#16a34a;font-weight:900;text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px}
+.pay-amt-box .pav{font-size:22px;font-weight:900;color:#065f46;font-family:'JetBrains Mono',monospace}
+.textarea-field{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;resize:none;outline:none;color:var(--text)}
+.textarea-field:focus{border-color:var(--brand)}
+
+/* Class breakdown modal */
+.cls-bk-table{width:100%;border-collapse:collapse;font-size:13px}
+.cls-bk-table th{background:var(--brand-grad);color:#fff;padding:9px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.cls-bk-table th:first-child{border-radius:8px 0 0 0}.cls-bk-table th:last-child{border-radius:0 8px 0 0}
+.cls-bk-table td{padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle;font-weight:600}
+.cls-bk-table tr:last-child td{border-bottom:none}
+.cls-bk-table tr:hover td{background:#fafbff}
+.cls-bk-table .mono{font-family:'JetBrains Mono',monospace;font-weight:700}
+.cls-bk-table .total-cell{font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--brand)}
+.transport-cell{color:var(--orange);font-weight:800}
+
+/* UTILS */
+.fm-empty{text-align:center;padding:36px 18px;color:var(--text3);font-size:13px;font-weight:600}
+.fm-empty .ei{font-size:32px;margin-bottom:7px}
+.fm-spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fm-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#1e293b;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.22);transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:99999;white-space:nowrap}
+.fm-toast.show{transform:translateX(-50%) translateY(0)}
+.fm-toast.success{background:linear-gradient(135deg,#059669,#10b981)}
+.fm-toast.error{background:linear-gradient(135deg,#dc2626,#ef4444)}
+.fm-info{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:9px;padding:9px 13px;font-size:12px;color:#1d4ed8;font-weight:600;margin-bottom:14px;display:flex;align-items:flex-start;gap:6px}
+.fm-warn{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:9px;padding:9px 13px;font-size:12px;color:#c2410c;font-weight:600;margin-bottom:14px}
+.builder-empty{text-align:center;padding:24px;font-size:13px;color:var(--text3);font-weight:600;background:var(--surface2);border-radius:11px;border:1.5px dashed var(--border)}
+
+@media(max-width:768px){
+  .fm-header{padding:11px 13px}.fm-container{padding:12px 11px 60px}
+  .fm-grid-2{grid-template-columns:1fr}.fm-tabs{gap:2px}
+  .fm-tab{padding:8px 5px;font-size:11px}.stu-badges{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="fm-header">
+  <div style="display:flex;align-items:center;gap:11px">
+    <button class="fm-back-btn" onclick="history.back()">← Back</button>
+    <h1>💰 Fee Management</h1>
+  </div>
+  <div class="fm-header-badge">✦ Premium</div>
+</div>
+
+<div class="fm-container">
+
+  <div class="fm-tabs">
+    <button class="fm-tab active" id="tab1-btn" onclick="switchTab(1)"><div class="fm-tab-num">1</div>🏷️ Fee Heads</button>
+    <button class="fm-tab" id="tab2-btn" onclick="switchTab(2)"><div class="fm-tab-num">2</div>🚌 Transport</button>
+    <button class="fm-tab" id="tab3-btn" onclick="switchTab(3)"><div class="fm-tab-num">3</div>📋 Fee Setup</button>
+    <button class="fm-tab" id="tab4-btn" onclick="switchTab(4)"><div class="fm-tab-num">4</div>📊 Fee Status</button>
+  </div>
+
+  <!-- ═══ TAB 1: FEE HEADS ═══ -->
+  <div id="tab1">
+    <div class="fm-card" id="fh-form-card">
+      <div class="fm-card-title">🏷️ <span id="fh-form-title">Create Fee Head</span></div>
+      <div class="fm-card-sub">Fee categories like Tuition, Exam Fees, Library, etc. Transport is separate — managed in Tab 2.</div>
+      <div class="fm-grid-2">
+        <div class="fm-form-group"><label class="fm-label">Fee Head Name *</label><input type="text" id="fh-name" class="fm-input" placeholder="e.g. Tuition Fees"></div>
+        <div class="fm-form-group"><label class="fm-label">Description (optional)</label><input type="text" id="fh-desc" class="fm-input" placeholder="Short note"></div>
+      </div>
+      <div class="fm-form-group">
+        <label class="fm-label">Colour Tag</label>
+        <div style="display:flex;gap:11px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-blue" checked style="accent-color:#3b82f6"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6"></span>Blue</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-green" style="accent-color:#10b981"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10b981"></span>Green</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-orange" style="accent-color:#f97316"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f97316"></span>Orange</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-purple" style="accent-color:#8b5cf6"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#8b5cf6"></span>Purple</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-red" style="accent-color:#ef4444"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444"></span>Red</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)"><input type="radio" name="fh-color" value="dot-teal" style="accent-color:#14b8a6"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#14b8a6"></span>Teal</label>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-primary" id="fh-save-btn" onclick="saveFeeHead()">+ Add Fee Head</button>
+        <button class="btn-secondary" id="fh-cancel-btn" onclick="cancelEditFH()" style="display:none">Cancel</button>
+      </div>
+    </div>
+    <div class="fm-card">
+      <div class="fm-card-title">📋 All Fee Heads</div>
+      <div class="fm-card-sub">Deleting hides the fee head but keeps all past payment records safe.</div>
+      <div class="fh-list" id="fh-list"><div class="fm-empty"><div class="ei">⏳</div>Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB 2: TRANSPORT ═══ -->
+  <div id="tab2" style="display:none">
+    <div class="add-route-box">
+      <div style="font-size:12px;font-weight:900;color:var(--brand);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">🚌 Add New Route</div>
+      <div class="fm-grid-2" style="margin-bottom:11px">
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Route Name *</label><input type="text" id="rt-name" class="fm-input" placeholder="e.g. City Centre Route"></div>
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (₹) *</label><input type="number" id="rt-amount" class="fm-input" placeholder="e.g. 1500" min="1"></div>
+      </div>
+      <div class="fm-grid-2" style="margin-bottom:12px">
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">From *</label><input type="text" id="rt-from" class="fm-input" placeholder="e.g. Bus Stand"></div>
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">To *</label><input type="text" id="rt-to" class="fm-input" placeholder="e.g. School Gate"></div>
+      </div>
+      <button class="btn-primary" id="add-route-btn" onclick="addRoute()">🚌 Add Route</button>
+    </div>
+    <div id="routes-list"><div class="fm-card"><div class="fm-empty"><div class="ei">⏳</div>Loading...</div></div></div>
+  </div>
+
+  <!-- ═══ TAB 3: FEE SETUP ═══ -->
+  <div id="tab3" style="display:none">
+
+    <div class="fm-card">
+      <div class="fm-card-title">📅 Session & Start Month</div>
+      <div class="fm-card-sub">Choose the session. On load, any saved structure will auto-fill below.</div>
+      <div class="fm-grid-2">
+        <div class="fm-form-group">
+          <label class="fm-label">Session *</label>
+          <select id="fs-session" class="fm-select" onchange="onSessionChange()">
+            <option value="">— Select Session —</option>
+            <option value="2024-25">2024 - 2025</option>
+            <option value="2025-26" selected>2025 - 2026</option>
+            <option value="2026-27">2026 - 2027</option>
+          </select>
+        </div>
+        <div class="fm-form-group">
+          <label class="fm-label">Session Starts In *</label>
+          <select id="fs-start-month" class="fm-select" onchange="onStartMonthChange()">
+            <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+            <option value="3" selected>April</option><option value="4">May</option><option value="5">June</option>
+            <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+            <option value="9">October</option><option value="10">November</option><option value="11">December</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="fm-card">
+      <div class="fm-card-title">➕ Regular Fee Entries</div>
+      <div class="fm-card-sub">Toggle ON the fee heads to include. Fill amount, select classes and due months.</div>
+      <div id="reg-builder-list"><div class="builder-empty">⏳ Loading fee heads...</div></div>
+
+      <!-- Transport auto-note -->
+      <div class="transport-note" style="margin-top:16px" id="transport-auto-note">
+        🚌 <span id="transport-note-text">Transport fees will auto-include based on route assignments.</span>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:18px">
+        <button class="btn-primary" id="save-structure-btn" onclick="saveFeeStructure()">💾 Save Fee Structure</button>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="fm-card" id="preview-card" style="display:none">
+      <div class="fm-card-title">📊 Fee Structure Preview</div>
+      <div class="fm-card-sub">Click any <b>class badge</b> to see all students and their full fee breakdown.</div>
+      <div class="preview-table-wrap">
+        <table class="fee-table" id="preview-table"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ TAB 4: FEE STATUS ═══ -->
+  <div id="tab4" style="display:none">
+    <div class="fm-card">
+      <div class="fm-card-title">🔍 Find Students</div>
+      <div class="fm-card-sub">Select session + class. Click a student row to see their full fee card with all months.</div>
+      <div class="status-filters">
+        <div class="fm-form-group">
+          <label class="fm-label">Session</label>
+          <select id="st-session" class="fm-select" onchange="loadFeeStatus()">
+            <option value="2025-26">2025 - 2026</option>
+            <option value="2024-25">2024 - 2025</option>
+          </select>
+        </div>
+        <div class="fm-form-group">
+          <label class="fm-label">Class</label>
+          <select id="st-class" class="fm-select" onchange="loadFeeStatus()">
+            <option value="">— All Classes —</option>
+          </select>
+        </div>
+        <div class="search-wrap fm-form-group">
+          <label class="fm-label">Search</label>
+          <span class="search-icon">🔍</span>
+          <input type="text" id="st-search" class="fm-input" placeholder="Name, roll number..." oninput="filterStudents()">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--text2)"><div style="width:20px;height:20px;border-radius:5px;background:var(--amber-bg);border:1.5px solid var(--amber-border)"></div>Tap to mark paid</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--text2)"><div style="width:20px;height:20px;border-radius:5px;background:var(--green-bg);border:1.5px solid var(--green-border)"></div>Paid ✓ — tap ✏️ to edit / 🗑️ to delete</div>
+      </div>
+    </div>
+    <div id="stu-list-container"><div class="fm-card"><div class="fm-empty"><div class="ei">👆</div>Select session and class to load students.</div></div></div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- Edit Route -->
+<div class="modal-overlay" id="edit-route-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>✏️ Edit Route</h3><button class="modal-close" onclick="closeModal('edit-route-modal')">✕</button></div>
+    <p class="modal-sub">Update route details.</p>
+    <input type="hidden" id="er-id">
+    <div class="fm-grid-2" style="margin-bottom:11px">
+      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Route Name *</label><input type="text" id="er-name" class="fm-input"></div>
+      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (₹) *</label><input type="number" id="er-amount" class="fm-input" min="1"></div>
+    </div>
+    <div class="fm-grid-2">
+      <div class="fm-form-group"><label class="fm-label">From *</label><input type="text" id="er-from" class="fm-input"></div>
+      <div class="fm-form-group"><label class="fm-label">To *</label><input type="text" id="er-to" class="fm-input"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('edit-route-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="er-save-btn" onclick="saveEditRoute()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bus Modal -->
+<div class="modal-overlay" id="bus-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="bus-modal-title">🚐 Add Bus</h3><button class="modal-close" onclick="closeModal('bus-modal')">✕</button></div>
+    <p class="modal-sub">Bus number is optional — driver name + contact is required.</p>
+    <input type="hidden" id="bm-route-id"><input type="hidden" id="bm-bus-id">
+    <div class="fm-grid-2" style="margin-bottom:11px">
+      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Bus Number (optional)</label><input type="text" id="bm-num" class="fm-input" placeholder="e.g. UP-32-AB-1234" style="font-family:'JetBrains Mono',monospace;text-transform:uppercase"></div>
+      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Capacity</label><input type="number" id="bm-capacity" class="fm-input" placeholder="e.g. 40" min="1"></div>
+    </div>
+    <div class="fm-grid-2">
+      <div class="fm-form-group"><label class="fm-label">Driver Name *</label><input type="text" id="bm-driver" class="fm-input" placeholder="Full name"></div>
+      <div class="fm-form-group"><label class="fm-label">Driver Contact *</label><input type="tel" id="bm-contact" class="fm-input" placeholder="10-digit mobile" maxlength="10"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('bus-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="bm-save-btn" onclick="saveBus()">✓ Save Bus</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Students Modal -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal-box wide">
+    <div class="modal-head"><h3>👥 Assign Students to Route</h3><button class="modal-close" onclick="closeModal('assign-modal')">✕</button></div>
+    <p class="modal-sub" id="assign-modal-sub">Select students who travel on this route.</p>
+    <input type="hidden" id="am-route-id">
+    <div style="display:flex;gap:9px;margin-bottom:11px;flex-wrap:wrap">
+      <div class="fm-form-group" style="flex:1;margin-bottom:0;min-width:120px"><label class="fm-label">Class</label><select id="am-class" class="fm-select" onchange="filterAssignStudents()"><option value="">All Classes</option></select></div>
+      <div class="fm-form-group" style="flex:2;margin-bottom:0;min-width:160px"><label class="fm-label">Search</label><input type="text" id="am-search" class="fm-input" placeholder="Name or roll no..." oninput="filterAssignStudents()"></div>
+    </div>
+    <div class="fm-info">ℹ️ A student already on another route will be moved here when you save.</div>
+    <div id="assign-student-list" style="max-height:310px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"><div class="fm-empty"><div class="ei">⏳</div>Loading...</div></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('assign-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="am-save-btn" onclick="saveAssignments()">✓ Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Class Fee Breakdown Modal -->
+<div class="modal-overlay" id="cls-breakdown-modal">
+  <div class="modal-box xl">
+    <div class="modal-head"><h3 id="cbm-title">📊 Class Fee Breakdown</h3><button class="modal-close" onclick="closeModal('cls-breakdown-modal')">✕</button></div>
+    <p class="modal-sub" id="cbm-sub"></p>
+    <div style="overflow-x:auto;border-radius:9px;border:1.5px solid var(--border)">
+      <table class="cls-bk-table" id="cls-bk-table"><thead></thead><tbody></tbody></table>
+    </div>
+    <div style="margin-top:11px;font-size:11px;color:var(--text3);font-weight:600">🚌 Transport fee shown only for students assigned to a route · Tap <b>Fee Status</b> tab to manage payments</div>
+  </div>
+</div>
+
+<!-- Edit Fee Entry Modal -->
+<div class="modal-overlay" id="edit-entry-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>✏️ Edit Fee Entry</h3><button class="modal-close" onclick="closeModal('edit-entry-modal')">✕</button></div>
+    <p class="modal-sub" id="eem-sub"></p>
+    <input type="hidden" id="eem-fh-id">
+    <div class="fm-form-group"><label class="fm-label">Amount (₹ per month)</label><input type="number" id="eem-amount" class="fm-input" min="1"></div>
+    <div class="fm-form-group"><label class="fm-label">Applicable Classes</label><div class="chip-grid" id="eem-classes"></div></div>
+    <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Due Months</label><div class="month-grid" id="eem-months"></div></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('edit-entry-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="eem-save-btn" onclick="saveEditEntry()">💾 Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pay Modal -->
+<div class="modal-overlay" id="pay-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="pay-modal-title">💳 Mark Payment</h3><button class="modal-close" onclick="closeModal('pay-modal')">✕</button></div>
+    <p class="modal-sub" id="pay-modal-sub"></p>
+    <div class="pay-amt-box"><div class="pal">Amount</div><div class="pav" id="pay-modal-amount">₹0</div></div>
+    <div class="fm-form-group"><label class="fm-label">Remark (optional)</label><textarea class="textarea-field" id="pay-remark" rows="2" placeholder="e.g. Cash / Online / Partial..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('pay-modal')">Cancel</button>
+      <button class="btn-confirm" id="pay-confirm-btn" onclick="confirmPayment()">✓ Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Payment Modal -->
+<div class="modal-overlay" id="edit-pay-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>✏️ Edit Payment</h3><button class="modal-close" onclick="closeModal('edit-pay-modal')">✕</button></div>
+    <p class="modal-sub" id="epm-sub"></p>
+    <input type="hidden" id="epm-id">
+    <div class="fm-form-group"><label class="fm-label">Amount Paid (₹)</label><input type="number" id="epm-amount" class="fm-input" min="1"></div>
+    <div class="fm-form-group"><label class="fm-label">Remark</label><textarea class="textarea-field" id="epm-remark" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('edit-pay-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="epm-save-btn" onclick="saveEditPayment()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Payment Modal -->
+<div class="modal-overlay" id="del-pay-modal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>🗑️ Delete Payment</h3><button class="modal-close" onclick="closeModal('del-pay-modal')">✕</button></div>
+    <p class="modal-sub" id="dpm-sub"></p>
+    <input type="hidden" id="dpm-id">
+    <div class="fm-warn">⚠️ This will mark the month as <b>unpaid</b> permanently.</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('del-pay-modal')">Cancel</button>
+      <button class="btn-confirm-danger" id="dpm-confirm-btn" onclick="confirmDeletePayment()">🗑️ Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="fm-toast" id="fm-toast"></div>
+
+<script src="js/config-v2.js"></script>
+<script src="js/api.js"></script>
+<script>
+'use strict';
+
+// ═══════════════ ENDPOINTS ═══════════════
+const API = {
+  FEE_HEADS:        `${API_BASE_URL}/fee/heads`,
+  FEE_STRUCTURE:    `${API_BASE_URL}/fee/structure`,
+  FEE_STATUS:       `${API_BASE_URL}/fee/status`,
+  FEE_PAY:          `${API_BASE_URL}/fee/pay`,
+  TRANSPORT_ROUTES: `${API_BASE_URL}/transport/routes`,
+  TRANSPORT_BUSES:  `${API_BASE_URL}/transport/buses`,
+  TRANSPORT_ASSIGN: `${API_BASE_URL}/transport/assign`,
+};
+
+const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ═══════════════ STATE ═══════════════
+let feeHeads        = [];
+let classes         = [];
+let allStudents     = [];
+let transportRoutes = [];
+let routeBusCache   = {};
+let routeStuCache   = {};
+
+// Fee Setup builder: fbs[feeHeadId] = { name, color, enabled, amount, classIds[], dueMonths[] }
+let fbs = {};
+let startMonth = 3;
+
+// Edit-entry state
+let eemFhId = null;
+let eemClassIds = [];
+let eemMonths   = [];
+
+// Fee Status
+let feeStatusData    = [];
+let filteredStatus   = [];
+let expandedStudentId = null;
+let fhEditId          = null;
+
+// ── PAY REGISTRY (avoids JSON in onclick) ──
+const PAY_REG = {};
+let payIdx = 0;
+function regPay(data) {
+  const k = 'p' + (payIdx++);
+  PAY_REG[k] = data;
+  return k;
+}
+let pendingPayKey = null;
+
+// ═══════════════ BOOT ═══════════════
+(async () => {
+  await Promise.all([loadFeeHeads(), loadClasses(), loadTransportRoutes()]);
+})();
+
+// ═══════════════ LOADERS ═══════════════
+async function loadFeeHeads() {
+  try {
+    const res = await apiGet(API.FEE_HEADS, true);
+    feeHeads = res.data || [];
+    renderFeeHeadList();
+  } catch(e) {
+    document.getElementById('fh-list').innerHTML = `<div class="fm-empty"><div class="ei">❌</div>${escH(e.message)}</div>`;
+  }
+}
+
+async function loadClasses() {
+  try {
+    const res = await apiGet(API_ENDPOINTS.CLASSES, true);
+    classes = (res.data || []).filter(c => c.isActive !== false);
+    populateClassDropdowns();
+  } catch(e) { toast('Failed to load classes', 'error'); }
+}
+
+async function loadTransportRoutes() {
+  try {
+    const res = await apiGet(API.TRANSPORT_ROUTES, true);
+    transportRoutes = res.data || [];
+    renderRoutesList();
+  } catch(e) {
+    document.getElementById('routes-list').innerHTML = `<div class="fm-card"><div class="fm-empty"><div class="ei">❌</div>${escH(e.message)}</div></div>`;
+  }
+}
+
+async function loadAllStudents() {
+  if (allStudents.length) return;
+  try {
+    const res = await apiGet(`${API_ENDPOINTS.STUDENTS}?limit=500`, true);
+    allStudents = res.data || [];
+  } catch(e) { toast('Failed to load students', 'error'); }
+}
+
+// ═══════════════ TABS ═══════════════
+function switchTab(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById(`tab${i}`).style.display = i===n ? 'block' : 'none';
+    document.getElementById(`tab${i}-btn`).classList.toggle('active', i===n);
+  });
+  if (n===3) initFeeSetupTab();
+  if (n===4) populateClassDropdowns();
+}
+
+// ═══════════════════════════════════════
+//  TAB 1 — FEE HEADS
+// ═══════════════════════════════════════
+function renderFeeHeadList() {
+  const el = document.getElementById('fh-list');
+  if (!feeHeads.length) { el.innerHTML=`<div class="fm-empty"><div class="ei">🏷️</div>No fee heads yet.</div>`; return; }
+  el.innerHTML = feeHeads.map(fh => `
+    <div class="fh-item">
+      <span class="color-dot ${fh.color}"></span>
+      <div style="flex:1">
+        <div class="fh-name">${escH(fh.name)}</div>
+        ${fh.description ? `<div class="fh-desc">${escH(fh.description)}</div>` : ''}
+      </div>
+      <div class="fh-actions">
+        <button class="btn-edit" onclick="editFH('${fh._id}')">✏️ Edit</button>
+        <button class="btn-danger" onclick="deleteFH('${fh._id}')">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveFeeHead() {
+  const name  = document.getElementById('fh-name').value.trim();
+  const desc  = document.getElementById('fh-desc').value.trim();
+  const color = document.querySelector('input[name="fh-color"]:checked')?.value || 'dot-blue';
+  if (!name) { toast('Name required','error'); return; }
+  const btn = document.getElementById('fh-save-btn');
+  setLoading(btn,true);
+  try {
+    if (fhEditId) {
+      await apiPut(`${API.FEE_HEADS}/${fhEditId}`, {name,description:desc,color}, true);
+      toast('Updated ✓'); cancelEditFH();
+    } else {
+      await apiPost(API.FEE_HEADS, {name,description:desc,color}, true);
+      toast('Fee head added ✓');
+      document.getElementById('fh-name').value='';
+      document.getElementById('fh-desc').value='';
+    }
+    await loadFeeHeads();
+  } catch(e) { toast(e.message,'error'); }
+  finally { setLoading(btn,false); btn.innerHTML = fhEditId ? '✓ Save Changes' : '+ Add Fee Head'; }
+}
+
+function editFH(id) {
+  const fh = feeHeads.find(f=>f._id===id); if(!fh) return;
+  fhEditId=id;
+  document.getElementById('fh-name').value=fh.name;
+  document.getElementById('fh-desc').value=fh.description||'';
+  const r=document.querySelector(`input[name="fh-color"][value="${fh.color}"]`);
+  if(r) r.checked=true;
+  document.getElementById('fh-form-title').textContent='Edit Fee Head';
+  document.getElementById('fh-save-btn').innerHTML='✓ Save Changes';
+  document.getElementById('fh-cancel-btn').style.display='inline-flex';
+  document.getElementById('fh-form-card').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function cancelEditFH() {
+  fhEditId=null;
+  document.getElementById('fh-name').value='';
+  document.getElementById('fh-desc').value='';
+  document.getElementById('fh-form-title').textContent='Create Fee Head';
+  document.getElementById('fh-save-btn').innerHTML='+ Add Fee Head';
+  document.getElementById('fh-cancel-btn').style.display='none';
+}
+
+async function deleteFH(id) {
+  if(!confirm('Delete this fee head?')) return;
+  try { await apiDelete(`${API.FEE_HEADS}/${id}`,true); toast('Deleted'); await loadFeeHeads(); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+// ═══════════════════════════════════════
+//  TAB 2 — TRANSPORT
+// ═══════════════════════════════════════
+async function addRoute() {
+  const name=document.getElementById('rt-name').value.trim();
+  const from=document.getElementById('rt-from').value.trim();
+  const to=document.getElementById('rt-to').value.trim();
+  const amount=parseInt(document.getElementById('rt-amount').value)||0;
+  if(!name||!from||!to){toast('Name, From, To required','error');return;}
+  if(!amount||amount<1){toast('Enter valid amount','error');return;}
+  const btn=document.getElementById('add-route-btn');
+  setLoading(btn,true);
+  try {
+    await apiPost(API.TRANSPORT_ROUTES,{name,from,to,amount},true);
+    toast('Route added ✓');
+    ['rt-name','rt-from','rt-to','rt-amount'].forEach(id=>document.getElementById(id).value='');
+    await loadTransportRoutes();
+  } catch(e) { toast(e.message,'error'); }
+  finally { setLoading(btn,false); btn.innerHTML='🚌 Add Route'; }
+}
+
+function renderRoutesList() {
+  const el=document.getElementById('routes-list');
+  if(!transportRoutes.length){el.innerHTML=`<div class="fm-card"><div class="fm-empty"><div class="ei">🚌</div>No routes yet.</div></div>`;return;}
+  el.innerHTML=transportRoutes.map(rt=>`
+    <div class="route-card" id="rc-${rt._id}">
+      <div class="route-header" onclick="toggleRoute('${rt._id}')">
+        <div class="route-icon">🚌</div>
+        <div class="route-info">
+          <div class="route-name">${escH(rt.name)}</div>
+          <div class="route-path"><span>📍 ${escH(rt.from)}</span><span class="arrow">→</span><span>📍 ${escH(rt.to)}</span></div>
+        </div>
+        <div class="route-badges">
+          <span class="rb rb-amount">₹${rt.amount?.toLocaleString()}/mo</span>
+          <span class="rb rb-buses" id="rbc-${rt._id}">🚐 ...</span>
+          <span class="rb rb-students" id="rsc-${rt._id}">👥 ...</span>
+        </div>
+        <div class="route-actions" onclick="event.stopPropagation()">
+          <button class="btn-edit" onclick="openEditRouteModal('${rt._id}')">✏️ Edit</button>
+          <button class="btn-danger" onclick="deleteRoute('${rt._id}')">🗑</button>
+        </div>
+        <div class="route-chevron">▼</div>
+      </div>
+      <div class="route-body" id="rb-${rt._id}"><div class="fm-empty" style="padding:14px 0">⏳ Loading...</div></div>
+    </div>`).join('');
+  transportRoutes.forEach(rt=>loadRouteStats(rt._id));
+}
+
+async function loadRouteStats(routeId) {
+  try {
+    const [br,sr]=await Promise.all([
+      apiGet(`${API.TRANSPORT_BUSES}?routeId=${routeId}`,true),
+      apiGet(`${API.TRANSPORT_ASSIGN}?routeId=${routeId}`,true)
+    ]);
+    routeBusCache[routeId]=br.data||[];
+    routeStuCache[routeId]=sr.data||[];
+    const bc=document.getElementById(`rbc-${routeId}`);
+    const sc=document.getElementById(`rsc-${routeId}`);
+    if(bc) bc.textContent=`🚐 ${routeBusCache[routeId].length} bus${routeBusCache[routeId].length!==1?'es':''}`;
+    if(sc) sc.textContent=`👥 ${routeStuCache[routeId].length} student${routeStuCache[routeId].length!==1?'s':''}`;
+  } catch(e) { console.error('loadRouteStats:',e); }
+}
+
+function toggleRoute(rid) {
+  const card=document.getElementById(`rc-${rid}`);
+  if(card.classList.toggle('expanded')) renderRouteBody(rid);
+}
+
+function renderRouteBody(rid) {
+  const buses=routeBusCache[rid]||[];
+  const stus=routeStuCache[rid]||[];
+  let html=`<div class="sec-title">🚐 Buses</div>`;
+  if(buses.length){
+    html+=`<div class="bus-grid">`+buses.map(b=>`
+      <div class="bus-card">
+        ${b.busNumber?`<div class="bus-num">${escH(b.busNumber)}</div>`:`<div class="bus-num-empty">No Bus No.</div>`}
+        <div class="bus-detail">👨‍✈️ ${escH(b.driverName)}</div>
+        <div class="bus-detail">📞 ${escH(b.driverContact)}</div>
+        ${b.capacity?`<div class="bus-detail">💺 ${b.capacity} seats</div>`:''}
+        <div style="display:flex;gap:5px;margin-top:8px">
+          <button class="btn-edit" onclick="openBusModal('${rid}','${b._id}')">✏️</button>
+          <button class="btn-danger" onclick="deleteBus('${b._id}','${rid}')">🗑</button>
+        </div>
+      </div>`).join('')+`</div>`;
+  } else {
+    html+=`<div style="font-size:12px;color:var(--text3);font-weight:600;padding:5px 0 11px">No buses added.</div>`;
+  }
+  html+=`<button class="add-bus-btn" onclick="openBusModal('${rid}',null)">+ Add Bus</button>`;
+  html+=`<div class="sec-title" style="margin-top:16px">👥 Assigned Students</div>`;
+  if(stus.length){
+    html+=`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:9px">`+
+      stus.map(s=>`<div class="stu-chip-sm"><div class="stu-av-sm">${(s.student?.name||'?').charAt(0).toUpperCase()}</div>${escH(s.student?.name||'?')}<span style="color:var(--text3);font-size:10px">${escH(s.student?.class?.className||'')}</span><span class="stu-chip-remove" onclick="removeAssignment('${s._id}','${rid}')">✕</span></div>`).join('')+`</div>`;
+  } else {
+    html+=`<div style="font-size:12px;color:var(--text3);font-weight:600;padding:5px 0 9px">No students assigned.</div>`;
+  }
+  html+=`<button class="btn-green" onclick="openAssignModal('${rid}')">+ Assign Students</button>`;
+  document.getElementById(`rb-${rid}`).innerHTML=html;
+}
+
+function openEditRouteModal(id) {
+  const rt=transportRoutes.find(r=>r._id===id); if(!rt) return;
+  document.getElementById('er-id').value=id;
+  document.getElementById('er-name').value=rt.name;
+  document.getElementById('er-amount').value=rt.amount;
+  document.getElementById('er-from').value=rt.from;
+  document.getElementById('er-to').value=rt.to;
+  openModal('edit-route-modal');
+}
+
+async function saveEditRoute() {
+  const id=document.getElementById('er-id').value;
+  const name=document.getElementById('er-name').value.trim();
+  const amount=parseInt(document.getElementById('er-amount').value)||0;
+  const from=document.getElementById('er-from').value.trim();
+  const to=document.getElementById('er-to').value.trim();
+  if(!name||!from||!to||!amount){toast('All fields required','error');return;}
+  const btn=document.getElementById('er-save-btn');
+  setLoading(btn,true);
+  try {
+    await apiPut(`${API.TRANSPORT_ROUTES}/${id}`,{name,amount,from,to},true);
+    toast('Route updated ✓'); closeModal('edit-route-modal');
+    await loadTransportRoutes();
+  } catch(e) { toast(e.message,'error'); }
+  finally { setLoading(btn,false); btn.innerHTML='💾 Save'; }
+}
+
+async function deleteRoute(id) {
+  if(!confirm('Delete this route? All buses and assignments will be removed.')) return;
+  try { await apiDelete(`${API.TRANSPORT_ROUTES}/${id}`,true); toast('Route deleted'); await loadTransportRoutes(); }
+  catch(e) { toast(e.message,'error'); }
+}
+
+function openBusModal(rid,busId) {
+  document.getElementById('bm-route-id').value=rid;
+  document.getElementById('bm-bus-id').value=busId||'';
+  if(busId){
+    const b=(routeBusCache[rid]||[]).find(x=>x._id===busId);
+    document.getElementById('bm-num').value=b?.busNumber||'';
+    document.getElementById('bm-capacity').value=b?.capacity||'';
+    document.getElementById('bm-driver').value=b?.driverName||'';
+    document.getElementById('bm-contact').value=b?.driverContact||'';
+    document.getElementById('bus-modal-title').textContent='✏️ Edit Bus';
+  } else {
+    ['bm-num','bm-capacity','bm-driver','bm-contact'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('bus-modal-title').textContent='🚐 Add Bus';
+  }
+  openModal('bus-modal');
+}
+
+async function saveBus() {
+  const rid=document.getElementById('bm-route-id').value;
+  const bid=document.getElementById('bm-bus-id').value;
+  const busNumber=document.getElementById('bm-num').value.trim().toUpperCase()||null;
+  const capacity=parseInt(document.getElementById('bm-capacity').value)||null;
+  const driverName=document.getElementById('bm-driver').value.trim();
+  const driverContact=document.getElementById('bm-contact').value.trim();
+  if(!driverName||!driverContact){toast('Driver name and contact required','error');return;}
+  const btn=document.getElementById('bm-save-btn');
+  setLoading(btn,true);
+  try {
+    if(bid) await apiPut(`${API.TRANSPORT_BUSES}/${bid}`,{busNumber,capacity,driverName,driverContact},true);
+    else    await apiPost(API.TRANSPORT_BUSES,{routeId:rid,busNumber,capacity,driverName,driverContact},true);
+    toast(bid?'Bus updated ✓':'Bus added ✓');
+    closeModal('bus-modal');
+    await loadRouteStats(rid);
+    if(document.getElementById(`rc-${rid}`)?.classList.contains('expanded')) renderRouteBody(rid);
+  } catch(e) { toast(e.message,'error'); }
+  finally { setLoading(btn,false); btn.innerHTML='✓ Save Bus'; }
+}
+
+async function deleteBus(bid,rid) {
+  if(!confirm('Delete this bus?')) return;
+  try {
+    await apiDelete(`${API.TRANSPORT_BUSES}/${bid}`,true);
+    toast('Bus deleted');
+    await loadRouteStats(rid);
+    if(document.getElementById(`rc-${rid}`)?.classList.contains('expanded')) renderRouteBody(rid);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function openAssignModal(rid) {
+  await loadAllStudents();
+  document.getElementById('am-route-id').value=rid;
+  const rt=transportRoutes.find(r=>r._id===rid);
+  document.getElementById('assign-modal-sub').textContent=`Assigning to: ${rt?.name||'Route'}`;
+  document.getElementById('am-class').innerHTML='<option value="">All Classes</option>'+
+    classes.map(c=>`<option value="${c._id}">${escH(c.className)}</option>`).join('');
+  document.getElementById('am-search').value='';
+  filterAssignStudents();
+  openModal('assign-modal');
+}
+
+function filterAssignStudents() {
+  const cls=document.getElementById('am-class').value;
+  const search=document.getElementById('am-search').value.toLowerCase().trim();
+  const rid=document.getElementById('am-route-id').value;
+  const assigned=(routeStuCache[rid]||[]).map(a=>String(a.studentId||a.student?._id));
+  let list=[...allStudents];
+  if(cls) list=list.filter(s=>{
+    const cid=s.classId?._id?String(s.classId._id):String(s.classId||'');
+    return cid===String(cls);
+  });
+  if(search) list=list.filter(s=>s.name?.toLowerCase().includes(search)||String(s.rollNo||'').includes(search));
+  const el=document.getElementById('assign-student-list');
+  if(!list.length){el.innerHTML=`<div class="fm-empty"><div class="ei">🔍</div>No students found.</div>`;return;}
+  el.innerHTML=list.map(s=>{
+    const isOn=assigned.includes(String(s._id));
+    const cn=s.classId?.className||s.class?.className||'—';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 11px;border:1.5px solid ${isOn?'#c7d2fe':'var(--border)'};border-radius:9px;cursor:pointer;background:${isOn?'#eef2ff':'#fff'}">
+      <input type="checkbox" value="${s._id}" ${isOn?'checked':''} style="accent-color:var(--brand);width:15px;height:15px;flex-shrink:0">
+      <div style="width:30px;height:30px;border-radius:8px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;flex-shrink:0">${s.name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(s.name)}</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:600">${escH(cn)}${s.rollNo?` · Roll ${s.rollNo}`:''}</div>
+      </div>
+      ${isOn?`<span style="font-size:10px;font-weight:800;color:var(--brand);background:#eef2ff;border-radius:4px;padding:1px 6px;flex-shrink:0">On Route</span>`:''}
+    </label>`;
+  }).join('');
+}
+
+async function saveAssignments() {
+  const rid=document.getElementById('am-route-id').value;
+  const session=document.getElementById('st-session')?.value||'2025-26';
+  const checked=[...document.querySelectorAll('#assign-student-list input[type=checkbox]:checked')].map(i=>i.value);
+  const btn=document.getElementById('am-save-btn');
+  setLoading(btn,true);
+  try {
+    await apiPost(API.TRANSPORT_ASSIGN,{routeId:rid,studentIds:checked,session},true);
+    toast(`${checked.length} student(s) saved ✓`);
+    closeModal('assign-modal');
+    routeStuCache[rid]=null;
+    await loadRouteStats(rid);
+    if(document.getElementById(`rc-${rid}`)?.classList.contains('expanded')) renderRouteBody(rid);
+  } catch(e) { toast(e.message,'error'); }
+  finally { setLoading(btn,false); btn.innerHTML='✓ Save'; }
+}
+
+async function removeAssignment(aid,rid) {
+  if(!confirm('Remove from route?')) return;
+  try {
+    await apiDelete(`${API.TRANSPORT_ASSIGN}/${aid}`,true);
+    toast('Removed');
+    routeStuCache[rid]=null;
+    await loadRouteStats(rid);
+    renderRouteBody(rid);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ═══════════════════════════════════════
+//  TAB 3 — FEE SETUP
+// ═══════════════════════════════════════
+async function initFeeSetupTab() {
+  initBuilderState();
+  renderFeeBuilder();
+  updateTransportNote();
+  const session=document.getElementById('fs-session').value;
+  if(session) await loadExistingStructure(session);
+}
+
+function getSessionMonths() {
+  return Array.from({length:12},(_,i)=>(startMonth+i)%12);
+}
+
+function initBuilderState() {
+  feeHeads.forEach(fh => {
+    if(!fbs[fh._id]) fbs[fh._id]={name:fh.name,color:fh.color,enabled:false,amount:'',classIds:[],dueMonths:[]};
+  });
+}
+
+async function onSessionChange() {
+  const session=document.getElementById('fs-session').value;
+  if(!session) return;
+  Object.keys(fbs).forEach(k=>{fbs[k].enabled=false;fbs[k].amount='';fbs[k].classIds=[];fbs[k].dueMonths=[];});
+  renderFeeBuilder();
+  buildPreview();
+  await loadExistingStructure(session);
+}
+
+function onStartMonthChange() {
+  startMonth=parseInt(document.getElementById('fs-start-month').value)||3;
+  feeHeads.forEach(fh=>{ if(fbs[fh._id]?.enabled) renderFBMonths(fh._id); });
+  buildPreview();
+}
+
+async function loadExistingStructure(session) {
+  try {
+    const res=await apiGet(`${API.FEE_STRUCTURE}?session=${encodeURIComponent(session)}`,true);
+    if(res.data){
+      const s=res.data;
+      if(s.startMonth!==undefined){startMonth=s.startMonth;document.getElementById('fs-start-month').value=s.startMonth;}
+      (s.entries||[]).forEach(e=>{
+        const id=String(e.feeHeadId?._id||e.feeHeadId);
+        if(fbs[id]){fbs[id].enabled=true;fbs[id].amount=e.amount;fbs[id].classIds=(e.classIds||[]).map(c=>String(c?._id||c));fbs[id].dueMonths=[...(e.dueMonths||[])];}
+      });
+      renderFeeBuilder(); buildPreview(); toast('Structure loaded ✓');
+    }
+  } catch(e) { console.error('loadExistingStructure:',e); }
+}
+
+function updateTransportNote() {
+  const count=transportRoutes.reduce((n,rt)=>{
+    const stus=(routeStuCache[rt._id]||[]).filter(s=>s);
+    return n+stus.length;
+  },0);
+  const el=document.getElementById('transport-note-text');
+  if(!el) return;
+  if(!transportRoutes.length){el.textContent='No transport routes created. Add routes in Tab 2 first.';return;}
+  const routeNames=transportRoutes.map(r=>`${escH(r.name)} (₹${r.amount}/mo)`).join(', ');
+  el.innerHTML=`Transport fees auto-added for assigned students: <b>${routeNames}</b>.`;
+}
+
+// ── Builder ──
+function renderFeeBuilder() {
+  const el=document.getElementById('reg-builder-list');
+  if(!feeHeads.length){el.innerHTML=`<div class="builder-empty">No fee heads yet. Add some in <b>Fee Heads (Tab 1)</b>.</div>`;return;}
+  el.innerHTML=feeHeads.map(fh=>{
+    const s=fbs[fh._id]||{};
+    const sum=fbSummary(fh._id);
+    return `
+    <div class="fb-card ${s.enabled?'on':''}" id="fbc-${fh._id}">
+      <div class="fb-header" onclick="toggleFBCard('${fh._id}')">
+        <label class="toggle-wrap" onclick="event.stopPropagation()">
+          <div class="toggle-sw">
+            <input type="checkbox" id="fbtog-${fh._id}" ${s.enabled?'checked':''} onchange="onFBToggle('${fh._id}',this.checked)">
+            <div class="slider"></div>
+          </div>
+        </label>
+        <span class="color-dot ${fh.color}"></span>
+        <div class="fb-title">${escH(fh.name)}</div>
+        <div class="fb-summary ${s.enabled&&sum?'ok':''}" id="fbsum-${fh._id}">${sum||(s.enabled?'Configure below ↓':'Off')}</div>
+      </div>
+      <div class="fb-body" ${s.enabled?'':'style="display:none"'}>
+        <div class="fm-grid-2" style="margin-bottom:13px">
+          <div class="fm-form-group" style="margin-bottom:0">
+            <label class="fm-label">Amount (₹/month)</label>
+            <input type="number" id="fbamt-${fh._id}" class="fm-input" placeholder="e.g. 1500" min="1" value="${s.amount||''}"
+              oninput="fbs['${fh._id}'].amount=parseInt(this.value)||'';updateFBSummary('${fh._id}');buildPreview()">
+          </div>
+        </div>
+        <div class="fm-form-group"><label class="fm-label">Applicable Classes *</label><div class="chip-grid" id="fbcls-${fh._id}"></div></div>
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Due Months *</label><div class="month-grid" id="fbmon-${fh._id}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  feeHeads.forEach(fh=>{ if(fbs[fh._id]?.enabled){renderFBClasses(fh._id);renderFBMonths(fh._id);} });
+}
+
+function toggleFBCard(id) {
+  if(!fbs[id]?.enabled) return;
+  const b=document.querySelector(`#fbc-${id} .fb-body`);
+  if(b) b.style.display=b.style.display==='none'?'block':'none';
+}
+
+function onFBToggle(id,checked) {
+  if(!fbs[id]) return;
+  fbs[id].enabled=checked;
+  document.getElementById(`fbc-${id}`)?.classList.toggle('on',checked);
+  const b=document.querySelector(`#fbc-${id} .fb-body`);
+  if(b) b.style.display=checked?'block':'none';
+  const su=document.getElementById(`fbsum-${id}`);
+  if(su){const s=fbSummary(id);su.textContent=s||(checked?'Configure below ↓':'Off');su.className=`fb-summary ${checked&&s?'ok':''}`;}
+  if(checked){renderFBClasses(id);renderFBMonths(id);}
+  buildPreview();
+}
+
+function renderFBClasses(id) {
+  const el=document.getElementById(`fbcls-${id}`); if(!el) return;
+  const s=fbs[id]||{};
+  const allSel=classes.length>0&&s.classIds.length===classes.length;
+  el.innerHTML=`<div class="c-chip all-c ${allSel?'selected':''}" onclick="fbToggleAllCls('${id}')"><div class="cb"></div>All</div>`+
+    classes.map(c=>{const sel=s.classIds.includes(String(c._id));return`<div class="c-chip ${sel?'selected':''}" onclick="fbToggleCls('${id}','${c._id}')"><div class="cb"></div>${escH(c.className)}</div>`;}).join('');
+}
+
+function fbToggleCls(id,cid) {
+  const s=fbs[id];if(!s)return;
+  const idx=s.classIds.indexOf(String(cid));
+  if(idx>-1)s.classIds.splice(idx,1);else s.classIds.push(String(cid));
+  renderFBClasses(id);updateFBSummary(id);buildPreview();
+}
+
+function fbToggleAllCls(id) {
+  const s=fbs[id];if(!s)return;
+  s.classIds=s.classIds.length===classes.length?[]:classes.map(c=>String(c._id));
+  renderFBClasses(id);updateFBSummary(id);buildPreview();
+}
+
+function renderFBMonths(id) {
+  const el=document.getElementById(`fbmon-${id}`); if(!el) return;
+  const s=fbs[id]||{};
+  const months=getSessionMonths();
+  el.innerHTML=`<div class="m-chip all-m ${s.dueMonths.length===12?'selected':''}" onclick="fbToggleAllMon('${id}')">All</div>`+
+    months.map(m=>`<div class="m-chip ${s.dueMonths.includes(m)?'selected':''}" onclick="fbToggleMon('${id}',${m})">${SHORT_MONTHS[m]}</div>`).join('');
+}
+
+function fbToggleMon(id,m) {
+  const s=fbs[id];if(!s)return;
+  const idx=s.dueMonths.indexOf(m);
+  if(idx>-1)s.dueMonths.splice(idx,1);else s.dueMonths.push(m);
+  renderFBMonths(id);updateFBSummary(id);buildPreview();
+}
+
+function fbToggleAllMon(id) {
+  const s=fbs[id];if(!s)return;
+  s.dueMonths=s.dueMonths.length===12?[]:[...getSessionMonths()];
+  renderFBMonths(id);updateFBSummary(id);buildPreview();
+}
+
+function fbSummary(id) {
+  const s=fbs[id];if(!s||!s.enabled)return'';
+  if(!s.amount||!s.classIds.length||!s.dueMonths.length)return'';
+  const cls=s.classIds.length===classes.length?'All Classes':`${s.classIds.length} class${s.classIds.length>1?'es':''}`;
+  return`₹${Number(s.amount).toLocaleString()} · ${cls} · ${s.dueMonths.length}mo`;
+}
+
+function updateFBSummary(id) {
+  const el=document.getElementById(`fbsum-${id}`);if(!el)return;
+  const s=fbSummary(id);
+  el.textContent=s||(fbs[id]?.enabled?'Configure below ↓':'Off');
+  el.className=`fb-summary ${s?'ok':''}`;
+}
+
+// ── Preview Table (with edit/delete + class click modal) ──
+function buildPreview() {
+  const active=feeHeads.filter(fh=>fbs[fh._id]?.enabled&&fbs[fh._id]?.amount&&fbs[fh._id]?.classIds?.length&&fbs[fh._id]?.dueMonths?.length);
+  const pc=document.getElementById('preview-card');
+  if(!active.length){pc.style.display='none';return;}
+  pc.style.display='block';
+
+  // Build classMap: cid → fhid → {amount,months}
+  const classMap={};
+  active.forEach(fh=>{
+    const s=fbs[fh._id];
+    s.classIds.forEach(cid=>{
+      if(!classMap[cid])classMap[cid]={};
+      classMap[cid][fh._id]={amount:s.amount,months:s.dueMonths};
+    });
+  });
+
+  const thead=document.querySelector('#preview-table thead');
+  const tbody=document.querySelector('#preview-table tbody');
+  thead.innerHTML=`<tr><th>Class</th>${active.map(fh=>`<th>${escH(fh.name)}</th>`).join('')}<th>Transport</th><th>Actions</th></tr>`;
+
+  const session=document.getElementById('fs-session').value;
+  let rows='';
+  Object.entries(classMap).forEach(([cid,fhMap])=>{
+    const cls=classes.find(c=>String(c._id)===cid);
+    const cells=active.map(fh=>{
+      const d=fhMap[fh._id];
+      if(!d)return`<td style="color:var(--text3);font-size:12px">—</td>`;
+      return`<td class="amount-mono">₹${Number(d.amount).toLocaleString()} × ${d.months.length}<br>${d.months.map(m=>`<span class="month-tag">${SHORT_MONTHS[m]}</span>`).join('')}</td>`;
+    }).join('');
+    const rtNote=transportRoutes.length?`<td style="font-size:11px;color:var(--orange);font-weight:700">Auto (per student)</td>`:`<td style="color:var(--text3);font-size:11px">—</td>`;
+    const clsName=cls?.className||cid;
+    rows+=`<tr>
+      <td><span class="class-badge" onclick="openClassBreakdown('${cid}','${escA(clsName)}','${session}')" title="Click to see students">${escH(clsName)}</span></td>
+      ${cells}${rtNote}
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn-edit" onclick="openEditEntryModal('${cid}','${escA(clsName)}')" title="Edit fees for this class">✏️</button>
+          <button class="btn-danger" onclick="removeClassFromEntries('${cid}','${escA(clsName)}')" title="Remove class from fee structure">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML=rows||`<tr><td colspan="99" style="text-align:center;color:var(--text3);padding:13px;font-size:12px">Toggle on fee heads above to see preview.</td></tr>`;
+}
+
+// Open edit-entry modal for a class → shows all fee heads active for that class
+function openEditEntryModal(cid, clsName) {
+  eemFhId  = null; // we're editing by class
+  const activeFHsForClass = feeHeads.filter(fh => fbs[fh._id]?.enabled && (fbs[fh._id]?.classIds||[]).includes(String(cid)));
+  if(!activeFHsForClass.length){toast('No fee heads configured for this class','error');return;}
+  // For simplicity show the first active fh — user edits per fee-head toggle in the builder
+  // Better: open the builder card for that class's fee heads
+  // Actually most useful: just scroll user to the builder. Let's show a modal to pick amount + months per fee head for this class
+  document.getElementById('eem-sub').textContent=`Editing fees for class: ${clsName}`;
+  // Build mini fee-head list in modal
+  const clsEl=document.getElementById('eem-classes');
+  const monEl=document.getElementById('eem-months');
+  // Repurpose modal to show per-fh editing — build a mini table
+  const container=document.getElementById('eem-classes').parentElement.parentElement;
+  // Replace modal content with a per-fh form
+  const fhRows=activeFHsForClass.map(fh=>{
+    const s=fbs[fh._id];
+    const months=getSessionMonths();
+    return`<div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+        <span class="color-dot ${fh.color}"></span>
+        <span style="font-size:13px;font-weight:800">${escH(fh.name)}</span>
+      </div>
+      <div class="fm-grid-2" style="margin-bottom:10px">
+        <div><label class="fm-label">Amount (₹/mo)</label>
+          <input type="number" id="eem-amt-${fh._id}" class="fm-input" value="${s.amount||''}" min="1"
+            oninput="fbs['${fh._id}'].amount=parseInt(this.value)||'';buildPreview()">
+        </div>
+      </div>
+      <label class="fm-label">Due Months</label>
+      <div class="month-grid" style="margin-top:5px">
+        ${months.map(m=>`<div class="m-chip ${s.dueMonths.includes(m)?'selected':''}" onclick="eemToggleMon('${fh._id}',${m},this)">${SHORT_MONTHS[m]}</div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('eem-amount').style.display='none';
+  clsEl.parentElement.style.display='none';
+  monEl.parentElement.style.display='none';
+  // Inject rows into modal
+  let dynArea=document.getElementById('eem-dyn-area');
+  if(!dynArea){
+    dynArea=document.createElement('div');
+    dynArea.id='eem-dyn-area';
+    document.getElementById('eem-amount').parentElement.after(dynArea);
+  }
+  dynArea.innerHTML=fhRows;
+  openModal('edit-entry-modal');
+}
+
+function eemToggleMon(fhId,m,el){
+  const s=fbs[fhId];if(!s)return;
+  const idx=s.dueMonths.indexOf(m);
+  if(idx>-1){s.dueMonths.splice(idx,1);el.classList.remove('selected');}
+  else{s.dueMonths.push(m);el.classList.add('selected');}
+  updateFBSummary(fhId);buildPreview();
+}
+
+function saveEditEntry() {
+  // Already updated live via oninput/onclick — just close & re-render builder
+  renderFeeBuilder();
+  buildPreview();
+  closeModal('edit-entry-modal');
+  toast('Fee entry updated ✓');
+}
+
+function removeClassFromEntries(cid, clsName) {
+  if(!confirm(`Remove class "${clsName}" from all fee entries?`)) return;
+  feeHeads.forEach(fh=>{
+    if(fbs[fh._id]){
+      fbs[fh._id].classIds=fbs[fh._id].classIds.filter(id=>id!==String(cid));
+    }
+  });
+  renderFeeBuilder();buildPreview();
+  toast(`${clsName} removed from fee structure`);
+}
+
+// Class breakdown modal
+async function openClassBreakdown(cid, clsName, session) {
+  document.getElementById('cbm-title').textContent=`📊 ${clsName} — Fee Breakdown`;
+  document.getElementById('cbm-sub').textContent=`Session: ${session} · Click Fee Status tab to mark payments`;
+  const thead=document.querySelector('#cls-bk-table thead');
+  const tbody=document.querySelector('#cls-bk-table tbody');
+  // Headers
+  const activeFHs=feeHeads.filter(fh=>fbs[fh._id]?.enabled&&(fbs[fh._id]?.classIds||[]).includes(String(cid)));
+  thead.innerHTML=`<tr><th>Student</th>${activeFHs.map(fh=>`<th>${escH(fh.name)}</th>`).join('')}<th>Transport</th><th>Total/Year</th></tr>`;
+  tbody.innerHTML=`<tr><td colspan="99" style="text-align:center;color:var(--text3);padding:14px">⏳ Loading students...</td></tr>`;
+  openModal('cls-breakdown-modal');
+
+  try {
+    // Load students for this class
+    let stuRes;
+    if(allStudents.length){
+      stuRes={data:allStudents.filter(s=>{const cIdVal=s.classId?._id?String(s.classId._id):String(s.classId||'');return cIdVal===String(cid);})};
+    } else {
+      stuRes=await apiGet(`${API_ENDPOINTS.STUDENTS}?classId=${cid}&limit=200`,true);
+    }
+    const students=stuRes.data||[];
+
+    // Build assign map from cached route data (avoids bad API call without routeId)
+    // If cache is empty for any route, fetch it first
+    const routesNeedingFetch = transportRoutes.filter(rt => !routeStuCache[rt._id]);
+    if (routesNeedingFetch.length) {
+      await Promise.all(routesNeedingFetch.map(rt => loadRouteStats(rt._id)));
+    }
+    const assignMap = {};
+    transportRoutes.forEach(rt => {
+      (routeStuCache[rt._id] || []).forEach(a => {
+        const sid = String(a.studentId || a.student?._id);
+        assignMap[sid] = { ...a, routeId: rt._id, routeName: rt.name, routeAmount: rt.amount };
+      });
+    });
+
+    if(!students.length){tbody.innerHTML=`<tr><td colspan="99" style="text-align:center;color:var(--text3);padding:14px;font-size:12px">No students in this class.</td></tr>`;return;}
+
+    tbody.innerHTML=students.map(stu=>{
+      let total=0;
+      const cells=activeFHs.map(fh=>{
+        const s=fbs[fh._id];
+        const yearAmt=s.amount*s.dueMonths.length;
+        total+=yearAmt;
+        return`<td class="mono">₹${Number(s.amount).toLocaleString()}/mo<br><span style="font-size:10px;color:var(--text3)">${s.dueMonths.length} months = ₹${yearAmt.toLocaleString()}</span></td>`;
+      }).join('');
+
+      const assign=assignMap[String(stu._id)];
+      let transportCell='<td style="color:var(--text3);font-size:11px;font-weight:600">—</td>';
+      if(assign){
+        const tAmt=assign.routeAmount||0;
+        total+=tAmt*12;
+        transportCell=`<td class="transport-cell">₹${tAmt.toLocaleString()}/mo<br><span style="font-size:10px;color:var(--text3)">${escH(assign.routeName||'')}</span></td>`;
+      }
+
+      return`<tr>
+        <td style="font-weight:700">${escH(stu.name)}${stu.rollNo?`<br><span style="font-size:10px;color:var(--text3)">Roll ${stu.rollNo}</span>`:''}</td>
+        ${cells}${transportCell}
+        <td class="total-cell">₹${total.toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+  } catch(e){tbody.innerHTML=`<tr><td colspan="99" style="text-align:center;color:var(--red);padding:14px;font-size:12px">${escH(e.message)}</td></tr>`;}
+}
+
+async function saveFeeStructure() {
+  const session=document.getElementById('fs-session').value;
+  const sm=parseInt(document.getElementById('fs-start-month').value)||3;
+  if(!session){toast('Select a session first','error');return;}
+
+  const entries=[];
+  for(const fh of feeHeads){
+    const s=fbs[fh._id];if(!s?.enabled)continue;
+    if(!s.amount||s.amount<1){toast(`Enter amount for "${fh.name}"`, 'error');return;}
+    if(!s.classIds.length){toast(`Select classes for "${fh.name}"`, 'error');return;}
+    if(!s.dueMonths.length){toast(`Select due months for "${fh.name}"`, 'error');return;}
+    entries.push({feeHeadId:fh._id,amount:s.amount,classIds:s.classIds,dueMonths:s.dueMonths});
+  }
+
+  // ── AUTO-ADD TRANSPORT ENTRIES ──
+  // For every route that exists, include transport entry using route amount + all session months
+  const transportEntries=transportRoutes.map(rt=>({
+    routeId:rt._id,
+    amount:rt.amount,
+    dueMonths:getSessionMonths()
+  }));
+
+  if(!entries.length&&!transportEntries.length){toast('Enable at least one fee head','error');return;}
+
+  const btn=document.getElementById('save-structure-btn');
+  setLoading(btn,true);
+  try {
+    await apiPost(API.FEE_STRUCTURE,{session,startMonth:sm,entries,transportEntries},true);
+    toast('Fee structure saved ✓');
+  } catch(e){toast(e.message,'error');}
+  finally{setLoading(btn,false);btn.innerHTML='💾 Save Fee Structure';}
+}
+
+// ═══════════════════════════════════════
+//  TAB 4 — FEE STATUS
+// ═══════════════════════════════════════
+async function loadFeeStatus() {
+  const session=document.getElementById('st-session').value;
+  const classId=document.getElementById('st-class').value;
+  const el=document.getElementById('stu-list-container');
+  el.innerHTML=`<div class="fm-card"><div class="fm-empty"><div class="ei">⏳</div>Loading...</div></div>`;
+  expandedStudentId=null;
+  try {
+    let url=`${API.FEE_STATUS}?session=${encodeURIComponent(session)}`;
+    if(classId) url+=`&classId=${encodeURIComponent(classId)}`;
+    const res=await apiGet(url,true);
+    feeStatusData=res.data||[];
+    if(!feeStatusData.length){
+      el.innerHTML=`<div class="fm-card"><div class="fm-empty"><div class="ei">${res.structure?'🎓':'⚙️'}</div>${res.structure?'No students found.':'No fee structure set up yet. Use <b>Fee Setup (Tab 3)</b>.'}</div></div>`;
+      return;
+    }
+    filterStudents();
+  } catch(e){
+    el.innerHTML=`<div class="fm-card"><div class="fm-empty"><div class="ei">❌</div>${escH(e.message)}</div></div>`;
+  }
+}
+
+function filterStudents(){
+  const q=(document.getElementById('st-search')?.value||'').toLowerCase();
+  filteredStatus=q?feeStatusData.filter(s=>s.name?.toLowerCase().includes(q)||String(s.rollNo||'').includes(q)):[...feeStatusData];
+  renderStudentList();
+}
+
+function renderStudentList(){
+  const el=document.getElementById('stu-list-container');
+  if(!filteredStatus.length){el.innerHTML=`<div class="fm-card"><div class="fm-empty"><div class="ei">🔍</div>No match.</div></div>`;return;}
+  el.innerHTML=filteredStatus.map(s=>`
+    <div class="stu-row ${expandedStudentId===s.studentId?'expanded':''}" id="sr-${s.studentId}">
+      <div class="stu-summary" onclick="toggleStudent('${s.studentId}')">
+        <div class="stu-av">${s.name.charAt(0).toUpperCase()}</div>
+        <div class="stu-info">
+          <div class="stu-name">${escH(s.name)}</div>
+          <div class="stu-sub">${escH(s.class?.className||'—')}${s.rollNo?` · Roll ${s.rollNo}`:''}${s.fatherName?` · S/O ${escH(s.fatherName)}`:''}</div>
+        </div>
+        <div class="stu-badges">
+          <span class="s-badge sb-paid">✓ ₹${s.totalPaid.toLocaleString()}</span>
+          ${s.totalDue>0?`<span class="s-badge sb-due">⚠ ₹${s.totalDue.toLocaleString()} due</span>`:`<span class="s-badge sb-zero">All clear ✓</span>`}
+        </div>
+        <div class="stu-chevron">▼</div>
+      </div>
+      <div class="stu-detail" id="sd-${s.studentId}">${buildStudentDetail(s)}</div>
+    </div>`).join('');
+}
+
+function toggleStudent(sid){
+  if(expandedStudentId===sid){document.getElementById(`sr-${sid}`)?.classList.remove('expanded');expandedStudentId=null;}
+  else{
+    if(expandedStudentId)document.getElementById(`sr-${expandedStudentId}`)?.classList.remove('expanded');
+    expandedStudentId=sid;
+    document.getElementById(`sr-${sid}`)?.classList.add('expanded');
+    document.getElementById(`sr-${sid}`)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+}
+
+function buildStudentDetail(stu){
+  const session=document.getElementById('st-session').value;
+  let html=`
+    <div class="stu-detail-header">
+      <div class="stu-detail-av">${stu.name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div class="stu-full-name">${escH(stu.name)}</div>
+        <div class="stu-detail-sub">
+          <span>📚 ${escH(stu.class?.className||'—')}</span>
+          ${stu.rollNo?`<span>🔢 Roll ${stu.rollNo}</span>`:''}
+          ${stu.fatherName?`<span>👨‍👦 S/O ${escH(stu.fatherName)}</span>`:''}
+          ${stu.phone?`<span>📞 ${stu.phone}</span>`:''}
+        </div>
+      </div>
+      <div class="stu-sum-badges">
+        <div class="sum-box sum-paid"><div class="sl">Paid</div><div class="sv">₹${stu.totalPaid.toLocaleString()}</div></div>
+        <div class="sum-box sum-due"><div class="sl">Due</div><div class="sv">₹${stu.totalDue.toLocaleString()}</div></div>
+        <div class="sum-box sum-total"><div class="sl">Total</div><div class="sv">₹${(stu.totalPaid+stu.totalDue).toLocaleString()}</div></div>
+      </div>
+    </div>`;
+
+  // Transport quick-assign
+  html+=`<div class="transport-row">
+    <div class="tl">🚌 Transport: ${stu.transport?`<b>${escH(stu.transport.routeName)}</b>`:`<span style="color:var(--text3)">Not Assigned</span>`}</div>
+    <select onchange="quickAssignTransport('${stu.studentId}',this.value,'${session}')">
+      <option value="">No Transport</option>
+      ${transportRoutes.map(rt=>`<option value="${rt._id}" ${stu.transport?.routeId===rt._id?'selected':''}>${escH(rt.name)} — ₹${rt.amount}/mo</option>`).join('')}
+    </select>
+  </div>`;
+
+  // Regular fee sections
+  (stu.entries||[]).forEach(entry=>{
+    html+=`<div class="fee-section">
+      <div class="fee-sec-head"><span class="fee-sec-dot ${entry.color}"></span>${escH(entry.feeHeadName)}</div>
+      <div class="months-wrap">${entry.months.map(m=>{
+        const k=regPay({studentId:stu.studentId,feeHeadId:entry.feeHeadId,monthIndex:m.monthIndex,amount:m.amount,type:'regular',routeId:null,session,name:stu.name,fhName:entry.feeHeadName});
+        return`<div class="mp-tile ${m.isPaid?'paid':'unpaid'}" ${!m.isPaid?`onclick="openPayByKey('${k}')"`:'tabindex="-1"'}>
+          <div class="mp-month">${SHORT_MONTHS[m.monthIndex]}</div>
+          <div class="mp-amount">₹${m.amount.toLocaleString()}</div>
+          <div class="mp-status">${m.isPaid?'Paid ✓':'Tap to Pay'}</div>
+          ${m.isPaid&&m.paidAt?`<div class="mp-date">${new Date(m.paidAt).toLocaleDateString('en-IN')}</div>`:''}
+          ${m.isPaid&&m.paymentId?`<div class="paid-actions">
+            <button class="pab" onclick="event.stopPropagation();openEditPay('${m.paymentId}',${m.amount},'${escA(entry.feeHeadName+' '+SHORT_MONTHS[m.monthIndex])}','${escA(m.remark||'')}')">✏</button>
+            <button class="pab del" onclick="event.stopPropagation();openDelPay('${m.paymentId}','${escA(entry.feeHeadName+' '+SHORT_MONTHS[m.monthIndex])}')">🗑</button>
+          </div>`:''}
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  });
+
+  // Transport fee section (auto — no user selection needed)
+  if(stu.transport?.months?.length){
+    html+=`<div class="fee-section">
+      <div class="fee-sec-head" style="color:var(--orange)">
+        🚌 Transport — ${escH(stu.transport.routeName)}
+        ${stu.transport.buses?.filter(b=>b.busNumber).length?`<span style="font-size:10px;color:var(--text3);font-weight:700">(${stu.transport.buses.filter(b=>b.busNumber).map(b=>escH(b.busNumber)).join(', ')})</span>`:''}
+      </div>
+      <div class="months-wrap">${stu.transport.months.map(m=>{
+        const k=regPay({studentId:stu.studentId,feeHeadId:null,monthIndex:m.monthIndex,amount:m.amount,type:'transport',routeId:stu.transport.routeId,session,name:stu.name,fhName:'Transport — '+stu.transport.routeName});
+        return`<div class="mp-tile ${m.isPaid?'t-paid':'t-unpaid'}" ${!m.isPaid?`onclick="openPayByKey('${k}')"`:'tabindex="-1"'}>
+          <div class="mp-month">${SHORT_MONTHS[m.monthIndex]}</div>
+          <div class="mp-amount">₹${m.amount.toLocaleString()}</div>
+          <div class="mp-status">${m.isPaid?'Paid ✓':'Tap to Pay'}</div>
+          ${m.isPaid&&m.paidAt?`<div class="mp-date">${new Date(m.paidAt).toLocaleDateString('en-IN')}</div>`:''}
+          ${m.isPaid&&m.paymentId?`<div class="paid-actions">
+            <button class="pab" onclick="event.stopPropagation();openEditPay('${m.paymentId}',${m.amount},'Transport ${SHORT_MONTHS[m.monthIndex]}','${escA(m.remark||'')}')">✏</button>
+            <button class="pab del" onclick="event.stopPropagation();openDelPay('${m.paymentId}','Transport ${SHORT_MONTHS[m.monthIndex]}')">🗑</button>
+          </div>`:''}
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
+  if(!stu.entries?.length&&!stu.transport?.months?.length){
+    html+=`<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px;font-weight:600">No fee entries for this student's class in this session.</div>`;
+  }
+  return html;
+}
+
+async function quickAssignTransport(sid,rid,session){
+  try{
+    await apiPost(API.TRANSPORT_ASSIGN,{studentId:sid,routeId:rid||null,session},true);
+    toast(rid?'Transport assigned ✓':'Transport removed');
+    await loadFeeStatus();
+  }catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════
+//  PAYMENT ACTIONS
+// ═══════════════════════════════════════
+function openPayByKey(k){
+  const d=PAY_REG[k]; if(!d) return;
+  pendingPayKey=k;
+  document.getElementById('pay-modal-title').textContent=`💳 ${d.name}`;
+  document.getElementById('pay-modal-sub').textContent=`${d.fhName} · ${MONTHS[d.monthIndex]}`;
+  document.getElementById('pay-modal-amount').textContent=`₹${Number(d.amount).toLocaleString()}`;
+  document.getElementById('pay-remark').value='';
+  openModal('pay-modal');
+}
+
+async function confirmPayment(){
+  const d=PAY_REG[pendingPayKey]; if(!d) return;
+  const remark=document.getElementById('pay-remark').value.trim();
+  const btn=document.getElementById('pay-confirm-btn');
+  setLoading(btn,true);
+  try{
+    await apiPost(API.FEE_PAY,{studentId:d.studentId,feeHeadId:d.feeHeadId,monthIndex:d.monthIndex,amount:d.amount,type:d.type,routeId:d.routeId,session:d.session,remark:remark||null},true);
+    closeModal('pay-modal');
+    toast(`₹${Number(d.amount).toLocaleString()} marked paid ✓`);
+    await loadFeeStatus();
+  }catch(e){toast(e.message,'error');}
+  finally{setLoading(btn,false);btn.innerHTML='✓ Confirm Payment';}
+}
+
+function openEditPay(pid,amount,label,remark){
+  document.getElementById('epm-id').value=pid;
+  document.getElementById('epm-sub').textContent=label;
+  document.getElementById('epm-amount').value=amount;
+  document.getElementById('epm-remark').value=remark||'';
+  openModal('edit-pay-modal');
+}
+
+async function saveEditPayment(){
+  const id=document.getElementById('epm-id').value;
+  const amount=parseInt(document.getElementById('epm-amount').value)||0;
+  const remark=document.getElementById('epm-remark').value.trim();
+  if(amount<1){toast('Enter valid amount','error');return;}
+  const btn=document.getElementById('epm-save-btn');
+  setLoading(btn,true);
+  try{
+    await apiPut(`${API.FEE_PAY}/${id}`,{amount,remark},true);
+    toast('Payment updated ✓');closeModal('edit-pay-modal');
+    await loadFeeStatus();
+  }catch(e){toast(e.message,'error');}
+  finally{setLoading(btn,false);btn.innerHTML='💾 Save';}
+}
+
+function openDelPay(pid,label){
+  document.getElementById('dpm-id').value=pid;
+  document.getElementById('dpm-sub').textContent=`Delete payment for: ${label}?`;
+  openModal('del-pay-modal');
+}
+
+async function confirmDeletePayment(){
+  const id=document.getElementById('dpm-id').value;
+  const btn=document.getElementById('dpm-confirm-btn');
+  setLoading(btn,true);
+  try{
+    await apiDelete(`${API.FEE_PAY}/${id}`,true);
+    toast('Payment deleted');closeModal('del-pay-modal');
+    await loadFeeStatus();
+  }catch(e){toast(e.message,'error');}
+  finally{setLoading(btn,false);btn.innerHTML='🗑️ Yes, Delete';}
+}
+
+// ═══════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════
+function populateClassDropdowns(){
+  const d4=document.getElementById('st-class');
+  if(d4)d4.innerHTML='<option value="">— All Classes —</option>'+classes.map(c=>`<option value="${c._id}">${escH(c.className)}</option>`).join('');
+}
+
+function openModal(id){document.getElementById(id).classList.add('show');document.body.style.overflow='hidden';}
+function closeModal(id){document.getElementById(id).classList.remove('show');document.body.style.overflow='';}
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click',function(e){if(e.target===this)closeModal(this.id);});
+});
+
+function setLoading(btn,on){btn.disabled=on;if(on)btn.innerHTML=`<span class="fm-spinner"></span>`;}
+
+function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escA(s){return String(s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
+
+let toastT;
+function toast(msg,type='success'){
+  const t=document.getElementById('fm-toast');
+  t.textContent=(type==='success'?'✓ ':'✕ ')+msg;
+  t.className=`fm-toast ${type} show`;
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),3500);
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 // basic-info.js - Part 1: Basic Information Logic
-// ✅ UPDATED: Designation removed from Staff section (now handled in Part 2 Mapping)
+// ✅ UPDATED: isActive filter + tab switch reload
 
 let currentSection = 'designations';
 let designationsData = [];
@@ -172,23 +172,23 @@ document.addEventListener('DOMContentLoaded', function() {
     loadStudents();
     loadHierarchy();
 
-    const addDesForm = document.getElementById('add-designation-form');
-    const addClassForm = document.getElementById('add-class-form');
-    const addStaffForm = document.getElementById('add-staff-form');
-    const addSubjectForm = document.getElementById('add-subject-form');
-    const addStudentForm = document.getElementById('add-student-form');
-    const bulkUploadForm = document.getElementById('bulk-upload-form');
-    const hierarchyForm = document.getElementById('hierarchy-form');
+    const addDesForm      = document.getElementById('add-designation-form');
+    const addClassForm    = document.getElementById('add-class-form');
+    const addStaffForm    = document.getElementById('add-staff-form');
+    const addSubjectForm  = document.getElementById('add-subject-form');
+    const addStudentForm  = document.getElementById('add-student-form');
+    const bulkUploadForm  = document.getElementById('bulk-upload-form');
+    const hierarchyForm   = document.getElementById('hierarchy-form');
 
-    if (addDesForm) addDesForm.addEventListener('submit', handleAddDesignation);
-    if (addClassForm) addClassForm.addEventListener('submit', handleAddClass);
-    if (addStaffForm) addStaffForm.addEventListener('submit', handleAddStaff);
+    if (addDesForm)     addDesForm.addEventListener('submit', handleAddDesignation);
+    if (addClassForm)   addClassForm.addEventListener('submit', handleAddClass);
+    if (addStaffForm)   addStaffForm.addEventListener('submit', handleAddStaff);
     if (addSubjectForm) addSubjectForm.addEventListener('submit', handleAddSubject);
     if (addStudentForm) addStudentForm.addEventListener('submit', handleAddStudent);
     if (bulkUploadForm) bulkUploadForm.addEventListener('submit', handleBulkUpload);
-    if (hierarchyForm) hierarchyForm.addEventListener('submit', handleSaveHierarchy);
+    if (hierarchyForm)  hierarchyForm.addEventListener('submit', handleSaveHierarchy);
 
-    const staffMobile = document.getElementById('staff-mobile');
+    const staffMobile   = document.getElementById('staff-mobile');
     const studentMobile = document.getElementById('student-mobile');
 
     function validatePhoneInput(input) {
@@ -213,6 +213,11 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ All event listeners attached');
 });
 
+// ===================================
+// SECTION SWITCHING
+// ✅ FIX: reload students fresh every time students tab is opened
+// ===================================
+
 function showSection(sectionName) {
     const sections = document.querySelectorAll('.section');
     sections.forEach(s => s.style.display = 'none');
@@ -221,15 +226,18 @@ function showSection(sectionName) {
     tabs.forEach(t => t.style.fontWeight = 'normal');
 
     const section = document.getElementById('section-' + sectionName);
-    const tab = document.getElementById('tab-' + sectionName);
+    const tab     = document.getElementById('tab-' + sectionName);
 
     if (section) section.style.display = 'block';
-    if (tab) tab.style.fontWeight = 'bold';
+    if (tab)     tab.style.fontWeight = 'bold';
 
     currentSection = sectionName;
 
+    // ✅ FIX: always re-fetch fresh data when switching to students tab
+    // This ensures changes made in data-management (transfers) are reflected here
     if (sectionName === 'students') {
         loadClassStatistics();
+        loadStudents();
     }
 }
 
@@ -274,7 +282,6 @@ function displayDesignations() {
             </td>
         `;
     });
-    // NOTE: No staff-designation dropdown to populate — designation is handled in Part 2 Mapping
 }
 
 async function handleAddDesignation(e) {
@@ -376,16 +383,16 @@ function displayClasses() {
     });
 
     const studentClassSelect = document.getElementById('student-class');
-    const bulkClassSelect = document.getElementById('bulk-class-select');
+    const bulkClassSelect    = document.getElementById('bulk-class-select');
 
     if (studentClassSelect) populateDropdown(studentClassSelect, classesData, '_id', data => data.nickname || data.className);
-    if (bulkClassSelect) populateDropdown(bulkClassSelect, classesData, '_id', data => data.nickname || data.className);
+    if (bulkClassSelect)    populateDropdown(bulkClassSelect,    classesData, '_id', data => data.nickname || data.className);
 }
 
 async function handleAddClass(e) {
     e.preventDefault();
     const className = document.getElementById('class-name').value.trim();
-    const nickname = document.getElementById('class-nickname').value.trim();
+    const nickname  = document.getElementById('class-nickname').value.trim();
 
     if (!className) { showError('Please enter a class name'); return; }
 
@@ -460,19 +467,17 @@ function displayStaff() {
     tbody.innerHTML = '';
 
     if (staffData.length === 0) {
-        // ✅ colspan updated from 6 to 5 (designation column removed)
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">No staff found. Add one above.</td></tr>';
         return;
     }
 
     staffData.forEach(staff => {
         const row = tbody.insertRow();
-        const classes = staff.assignedClasses ? staff.assignedClasses.map(c => c.className).join(', ') : '-';
+        const classes     = staff.assignedClasses ? staff.assignedClasses.map(c => c.className).join(', ') : '-';
         const credentials = staff.hasCredentials
             ? (staff.isCredentialActive ? 'Yes (Active)' : 'Yes (Inactive)')
             : 'No';
 
-        // ✅ Designation column removed from row
         row.innerHTML = `
             <td>${staff.name}</td>
             <td>${staff.mobileNo}</td>
@@ -489,7 +494,7 @@ function displayStaff() {
 async function handleAddStaff(e) {
     e.preventDefault();
 
-    const nameInput = document.getElementById('staff-name');
+    const nameInput   = document.getElementById('staff-name');
     const mobileInput = document.getElementById('staff-mobile');
 
     if (!nameInput || !mobileInput) {
@@ -497,10 +502,9 @@ async function handleAddStaff(e) {
         return;
     }
 
-    const name = nameInput.value.trim();
+    const name     = nameInput.value.trim();
     const mobileNo = mobileInput.value.trim();
 
-    // ✅ designationId removed from required check
     if (!name || !mobileNo) {
         showError('Please fill all required fields');
         return;
@@ -520,14 +524,9 @@ async function handleAddStaff(e) {
 
     try {
         showLoading('Adding staff...');
-
-        // ✅ designationId NOT sent — backend now accepts staff without designation
         const response = await fetch(API_ENDPOINTS.STAFF, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ name, mobileNo })
         });
 
@@ -536,8 +535,7 @@ async function handleAddStaff(e) {
 
         if (response.ok && data.success) {
             showSuccess(data.message || 'Staff added successfully!');
-            const form = document.getElementById('add-staff-form');
-            form.reset();
+            document.getElementById('add-staff-form').reset();
             const staffMobileInput = document.getElementById('staff-mobile');
             if (staffMobileInput) staffMobileInput.classList.remove('phone-valid', 'phone-invalid');
             await loadStaff();
@@ -652,12 +650,14 @@ async function deleteSubject(id) {
 
 // ===================================
 // 5. STUDENTS MANAGEMENT
+// ✅ FIX: isActive=true filter on all student fetches
 // ===================================
 
 async function loadStudents() {
     try {
         showLoading('Loading students...');
-        const response = await apiGet(API_ENDPOINTS.STUDENTS + '?limit=100', true);
+        // ✅ FIX: isActive=true ensures graduated/transferred-out students never appear here
+        const response = await apiGet(API_ENDPOINTS.STUDENTS + '?limit=100&isActive=true', true);
         hideLoading();
         if (response.success) {
             studentsData = response.data;
@@ -671,7 +671,7 @@ async function loadStudents() {
 
 async function loadAllStudents() {
     document.getElementById('search-student').value = '';
-    loadStudents();
+    loadStudents(); // uses isActive=true by default
 }
 
 function displayStudents() {
@@ -712,12 +712,12 @@ function displayStudents() {
 async function handleAddStudent(e) {
     e.preventDefault();
 
-    const nameInput = document.getElementById('student-name');
-    const fatherInput = document.getElementById('student-father');
-    const motherInput = document.getElementById('student-mother');
-    const classInput = document.getElementById('student-class');
-    const mobileInput = document.getElementById('student-mobile');
-    const dobInput = document.getElementById('student-dob');
+    const nameInput    = document.getElementById('student-name');
+    const fatherInput  = document.getElementById('student-father');
+    const motherInput  = document.getElementById('student-mother');
+    const classInput   = document.getElementById('student-class');
+    const mobileInput  = document.getElementById('student-mobile');
+    const dobInput     = document.getElementById('student-dob');
     const addressInput = document.getElementById('student-address');
 
     if (!nameInput || !fatherInput || !classInput || !mobileInput) {
@@ -725,12 +725,12 @@ async function handleAddStudent(e) {
         return;
     }
 
-    const name = nameInput.value.trim();
-    const fatherName = fatherInput.value.trim();
-    const motherName = motherInput ? motherInput.value.trim() : '';
-    const classId = classInput.value;
-    const mobileNo = mobileInput.value.trim();
-    const dateOfBirth = dobInput ? dobInput.value : '';
+    const name         = nameInput.value.trim();
+    const fatherName   = fatherInput.value.trim();
+    const motherName   = motherInput ? motherInput.value.trim() : '';
+    const classId      = classInput.value;
+    const mobileNo     = mobileInput.value.trim();
+    const dateOfBirth  = dobInput ? dobInput.value : '';
     const simpleAddress = addressInput ? addressInput.value.trim() : '';
 
     if (!name || !fatherName || !classId || !mobileNo) {
@@ -748,17 +748,17 @@ async function handleAddStudent(e) {
         const response = await apiPost(API_ENDPOINTS.STUDENTS, {
             name,
             fatherName,
-            motherName: motherName || undefined,
+            motherName:    motherName   || undefined,
             classId,
             mobileNo,
-            dateOfBirth: dateOfBirth || undefined,
+            dateOfBirth:   dateOfBirth  || undefined,
             simpleAddress: simpleAddress || undefined
         }, true);
         hideLoading();
 
         if (response.success) {
             const classResponse = await apiGet(API_ENDPOINTS.CLASSES + '/' + classId, true);
-            const totalInClass = classResponse.success ? classResponse.data.studentCount : 1;
+            const totalInClass  = classResponse.success ? classResponse.data.studentCount : 1;
 
             showBulkUploadResultsModal({
                 className: classesData.find(c => c._id === classId)?.className || 'Class',
@@ -773,6 +773,7 @@ async function handleAddStudent(e) {
             await loadStudents();
             await loadClasses();
             await loadClassStatistics();
+
         } else if (response.isDuplicate) {
             showBulkUploadResultsModal({
                 className: classesData.find(c => c._id === classId)?.className || 'Class',
@@ -799,7 +800,11 @@ async function searchStudents() {
 
     try {
         showLoading('Searching...');
-        const response = await apiGet(API_ENDPOINTS.STUDENTS + '?search=' + encodeURIComponent(searchTerm), true);
+        // ✅ FIX: keep isActive=true in search too
+        const response = await apiGet(
+            API_ENDPOINTS.STUDENTS + '?isActive=true&search=' + encodeURIComponent(searchTerm),
+            true
+        );
         hideLoading();
         if (response.success) { studentsData = response.data; displayStudents(); }
     } catch (error) {
@@ -892,24 +897,24 @@ function displayCurrentHierarchy(numLevels) {
 // ===================================
 
 let currentEditType = null;
-let currentEditId = null;
+let currentEditId   = null;
 let currentEditData = null;
 
 function openEditModal(type, id, data) {
     currentEditType = type;
-    currentEditId = id;
+    currentEditId   = id;
     currentEditData = data;
 
-    const modal = document.getElementById('edit-modal');
+    const modal      = document.getElementById('edit-modal');
     const modalTitle = document.getElementById('modal-title');
-    const modalBody = document.getElementById('modal-body');
+    const modalBody  = document.getElementById('modal-body');
 
     const titles = {
         'designation': 'Edit Designation',
-        'class': 'Edit Class',
-        'staff': 'Edit Staff Member',
-        'subject': 'Edit Subject',
-        'student': 'Edit Student'
+        'class':       'Edit Class',
+        'staff':       'Edit Staff Member',
+        'subject':     'Edit Subject',
+        'student':     'Edit Student'
     };
     modalTitle.textContent = titles[type] || 'Edit Item';
 
@@ -939,7 +944,6 @@ function openEditModal(type, id, data) {
             break;
 
         case 'staff':
-            // ✅ Designation field removed from edit modal — assigned in Part 2 Mapping
             fieldsHTML = `
                 <div class="edit-modal-field">
                     <label>Name *</label>
@@ -1020,7 +1024,7 @@ function closeEditModal() {
     const modal = document.getElementById('edit-modal');
     modal.classList.remove('show');
     currentEditType = null;
-    currentEditId = null;
+    currentEditId   = null;
     currentEditData = null;
 }
 
@@ -1043,7 +1047,7 @@ async function saveEdit() {
             case 'class':
                 updatedData = {
                     className: document.getElementById('edit-class-name').value,
-                    nickname: document.getElementById('edit-class-nickname').value || null
+                    nickname:  document.getElementById('edit-class-nickname').value || null
                 };
                 showLoading('Updating class...');
                 response = await apiPut(API_ENDPOINTS.CLASSES + '/' + currentEditId, updatedData, true);
@@ -1056,14 +1060,13 @@ async function saveEdit() {
                 break;
 
             case 'staff':
-                // ✅ designationId removed from update payload
                 const mobileInput = document.getElementById('edit-staff-mobile');
                 if (mobileInput.value.length !== 10) {
                     alert('Please enter a valid 10-digit mobile number');
                     return;
                 }
                 updatedData = {
-                    name: document.getElementById('edit-staff-name').value,
+                    name:     document.getElementById('edit-staff-name').value,
                     mobileNo: mobileInput.value
                 };
                 showLoading('Updating staff...');
@@ -1087,13 +1090,13 @@ async function saveEdit() {
                     return;
                 }
                 updatedData = {
-                    name: document.getElementById('edit-student-name').value,
-                    fatherName: document.getElementById('edit-student-father').value,
-                    motherName: document.getElementById('edit-student-mother')?.value.trim() || undefined,
-                    classId: document.getElementById('edit-student-class').value,
-                    mobileNo: studentMobileInput.value,
-                    dateOfBirth: document.getElementById('edit-student-dob')?.value || undefined,
-                    simpleAddress: document.getElementById('edit-student-address')?.value.trim() || undefined
+                    name:          document.getElementById('edit-student-name').value,
+                    fatherName:    document.getElementById('edit-student-father').value,
+                    motherName:    document.getElementById('edit-student-mother')?.value.trim()   || undefined,
+                    classId:       document.getElementById('edit-student-class').value,
+                    mobileNo:      studentMobileInput.value,
+                    dateOfBirth:   document.getElementById('edit-student-dob')?.value             || undefined,
+                    simpleAddress: document.getElementById('edit-student-address')?.value.trim()  || undefined
                 };
                 showLoading('Updating student...');
                 response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + currentEditId, updatedData, true);
@@ -1128,4 +1131,4 @@ document.addEventListener('click', function(e) {
     if (e.target === modal) closeUploadModal();
 });
 
-console.log('✅ basic-info.js loaded — Staff designation removed (handled in Part 2 Mapping)');
+console.log('✅ basic-info.js loaded — isActive filter + tab reload fixed');
