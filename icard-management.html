@@ -316,6 +316,7 @@ input[type=file]{display:none;}
 .toast.error{border-color:var(--danger);color:#fca5a5;}.toast.success{border-color:var(--success);color:#86efac;}
 @media(max-width:600px){.grid2{grid-template-columns:1fr;}.tpl-grid{grid-template-columns:repeat(3,1fr);}.fields-grid{grid-template-columns:repeat(2,1fr);}.hdr{padding:14px 18px;}.main{padding:0 14px;}}
 </style>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
 <div class="hdr">
@@ -448,7 +449,7 @@ input[type=file]{display:none;}
     </div>
     <div class="btn-row">
       <button class="btn btn-out" onclick="goStep(4)">← Edit Options</button>
-      <button class="btn btn-green" onclick="submitOrder()">✓ Confirm &amp; Submit Order</button>
+      <button class="btn btn-green" onclick="initiatePayment()" id="payBtn">💳 Pay &amp; Place Order</button>
     </div>
   </div>
 </div>
@@ -568,10 +569,138 @@ function updateCost(){
   document.getElementById('costRows').innerHTML=rowsData.map(r=>`<div class="cost-row${r.tot?' tot':''}"><span class="ck">${r.k}</span><span class="cv">${r.v}</span></div>`).join('');
 }
 function previewUp(inp,pid,iid){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{const img=document.getElementById(pid);img.src=e.target.result;img.style.display='block';document.getElementById(iid).style.display='none';};r.readAsDataURL(f);}
-function submitOrder(){
-  const oid='#ORD-'+Math.floor(100000+Math.random()*900000);
-  document.getElementById('sOrdId').textContent=oid;
-  document.getElementById('successOverlay').classList.add('show');
+// ══════════════════════════════════════════════
+// ICARD PAYMENT FLOW — Razorpay Integration
+// ══════════════════════════════════════════════
+const API = 'https://institution-backend-kkw8.onrender.com';
+
+function getAuthToken() {
+  return localStorage.getItem('token') || '';
+}
+
+function getOrderData() {
+  const qty  = parseInt(document.getElementById('cardCount')?.value || 50);
+  const q    = document.getElementById('cardQuality')?.value || 'normal';
+  const strap = document.getElementById('strapToggle')?.checked || false;
+  const lam  = document.getElementById('laminationToggle')?.checked || false;
+  const hole = document.getElementById('holePunchToggle')?.checked || false;
+  const strapStyle   = document.querySelector('.strap-chip.on')?.dataset?.val || null;
+  const strapPrint   = document.getElementById('strapPrintToggle')?.checked || false;
+  const strapText    = document.getElementById('strapTextInput')?.value || null;
+  const strapPos     = document.querySelector('.pos-btn.on')?.dataset?.pos || null;
+  const base = { normal: 15, premium: 25, private: 40 }[q];
+  const perCard = base + (strap ? 12 : 0) + (lam ? 3 : 0);
+  const total = perCard * qty + 1;
+  const instName = document.getElementById('instName')?.value || S.name;
+  const instPhone = document.getElementById('instPhone')?.value || null;
+  const instCity  = document.getElementById('instCity')?.value  || null;
+  const instAddr  = document.getElementById('instAddr')?.value  || null;
+  return {
+    institutionName:  instName,
+    institutionPhone: instPhone,
+    institutionCity:  instCity,
+    institutionAddr:  instAddr,
+    logoUrl:          null,
+    signatureUrl:     null,
+    selectedFields:   S.fields,
+    templateId:       S.tpl,
+    cardQuality:      q,
+    cardCount:        qty,
+    strapRequired:    strap,
+    strapStyle:       strapStyle,
+    strapPrint:       strapPrint,
+    strapText:        strapText,
+    strapPosition:    strapPos,
+    lamination:       lam,
+    holePunch:        hole,
+    totalAmount:      total,
+    perCardCost:      perCard,
+    platformFee:      1,
+  };
+}
+
+async function initiatePayment() {
+  const btn = document.getElementById('payBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating order...';
+
+  try {
+    const orderData = getOrderData();
+    const token = getAuthToken();
+
+    // Step 1: Create payment order on backend
+    const res = await fetch(API + '/api/icard/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(orderData),
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.message || 'Failed to create order', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Pay & Place Order';
+      return;
+    }
+
+    const { razorpayOrderId, amount, key, iCardOrderId, orderId, institutionName } = data.data;
+
+    // Step 2: Open Razorpay checkout
+    const options = {
+      key,
+      amount,
+      currency: 'INR',
+      name: 'HelloSchool',
+      description: 'I-Card Order — ' + orderId,
+      order_id: razorpayOrderId,
+      prefill: { name: institutionName },
+      theme: { color: '#F4A723' },
+      handler: async function(response) {
+        // Step 3: Verify payment on backend
+        btn.textContent = 'Verifying payment...';
+        try {
+          const verifyRes = await fetch(API + '/api/icard/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({
+              razorpayOrderId:   response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              iCardOrderId,
+            }),
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
+            document.getElementById('sOrdId').textContent = '#' + orderId;
+            document.getElementById('successOverlay').classList.add('show');
+          } else {
+            showToast(verifyData.message || 'Payment verification failed', 'error');
+          }
+        } catch(e) {
+          showToast('Verification error. Contact support with order: ' + orderId, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '💳 Pay & Place Order';
+        }
+      },
+      modal: {
+        ondismiss: function() {
+          showToast('Payment cancelled', 'error');
+          btn.disabled = false;
+          btn.textContent = '💳 Pay & Place Order';
+        }
+      }
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.open();
+
+  } catch (err) {
+    console.error('initiatePayment error:', err);
+    showToast('Something went wrong. Please try again.', 'error');
+    btn.disabled = false;
+    btn.textContent = '💳 Pay & Place Order';
+  }
 }
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast ${type} show`;setTimeout(()=>t.classList.remove('show'),2500);}
 goStep(1);

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hello School - Premium Plans</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0d1117;--ink2:#2a3444;--ink3:#5a6a7e;--cream:#faf7f2;--cream2:#f2ede4;--cream3:#e8e0d2;--gold:#b8873a;--gold2:#d4a843;--gold3:#f0c96a;--teal:#0d7a6e;--red:#c0392b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);min-height:100vh;overflow-x:hidden;}
+.hdr{position:sticky;top:0;z-index:100;background:rgba(250,247,242,.93);backdrop-filter:blur(16px);border-bottom:1px solid var(--cream3);padding:14px 48px;display:flex;align-items:center;gap:14px;}
+.hdr-logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.hdr-mark{width:34px;height:34px;border-radius:9px;background:var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:700;color:var(--gold3);}
+.hdr-name{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--ink);}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:20px;}
+.hdr-link{font-size:13px;color:var(--ink3);text-decoration:none;}
+.hdr-back{font-size:13px;font-weight:500;color:var(--ink2);padding:7px 14px;border-radius:8px;border:1.5px solid var(--cream3);text-decoration:none;background:transparent;}
+.hero{text-align:center;padding:80px 24px 56px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:-60%;left:50%;transform:translateX(-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(ellipse,rgba(184,135,58,.1),transparent 70%);pointer-events:none;}
+.hero-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:3px;color:var(--gold);text-transform:uppercase;margin-bottom:16px;display:inline-flex;align-items:center;gap:8px;}
+.hero-eyebrow::before,.hero-eyebrow::after{content:'';width:24px;height:1px;background:var(--gold);}
+.hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(40px,6vw,68px);font-weight:300;line-height:1.06;margin-bottom:18px;color:var(--ink);}
+.hero-title strong{font-weight:600;} .hero-title em{font-style:italic;color:var(--gold);}
+.hero-sub{font-size:15px;color:var(--ink3);max-width:460px;margin:0 auto 12px;line-height:1.7;}
+.hero-note{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3);background:var(--cream2);border:1px solid var(--cream3);padding:6px 16px;border-radius:20px;display:inline-block;margin-top:8px;}
+.trust-bar{background:var(--cream2);border-top:1px solid var(--cream3);border-bottom:1px solid var(--cream3);padding:20px 24px;display:flex;align-items:center;justify-content:center;gap:40px;flex-wrap:wrap;margin-bottom:60px;}
+.trust-item{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3);}
+.plans-wrap{max-width:1060px;margin:0 auto;padding:0 24px 80px;}
+.plans-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;align-items:stretch;border:1.5px solid var(--cream3);border-radius:20px;overflow:hidden;box-shadow:0 4px 40px rgba(13,17,23,.07);}
+.plan{padding:36px 32px;background:var(--cream);border-right:1.5px solid var(--cream3);display:flex;flex-direction:column;transition:background .25s;position:relative;cursor:pointer;}
+.plan:last-child{border-right:none;} .plan:hover{background:var(--cream2);}
+.plan.featured{background:var(--ink);color:#fff;border-right:none;} .plan.featured:hover{background:#161d29;}
+.plan.picked{outline:3px solid var(--gold2);outline-offset:-2px;}
+.plan.featured::before{content:'BEST VALUE';position:absolute;top:22px;right:-1px;background:var(--gold);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:1.5px;padding:4px 12px 4px 14px;clip-path:polygon(8px 0%,100% 0%,100% 100%,0% 100%);}
+.plan-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;font-weight:500;}
+.plan.featured .plan-tag{color:var(--gold3);}
+.plan-name{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;margin-bottom:6px;color:var(--ink);line-height:1.1;}
+.plan.featured .plan-name{color:#fff;}
+.plan-desc{font-size:13px;color:var(--ink3);margin-bottom:24px;line-height:1.5;}
+.plan.featured .plan-desc{color:rgba(255,255,255,.55);}
+.plan-price-row{display:flex;align-items:baseline;gap:4px;margin-bottom:6px;}
+.plan-price{font-family:'Cormorant Garamond',serif;font-size:52px;font-weight:600;color:var(--ink);line-height:1;}
+.plan.featured .plan-price{color:#fff;}
+.plan-cur{font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--ink3);margin-right:2px;}
+.plan.featured .plan-cur{color:rgba(255,255,255,.6);}
+.plan-per{font-size:13px;color:var(--ink3);font-weight:400;} .plan.featured .plan-per{color:rgba(255,255,255,.5);}
+.plan-saving{font-size:12px;color:var(--teal);font-weight:600;margin-bottom:24px;font-family:'IBM Plex Mono',monospace;}
+.plan-divider{height:1px;background:var(--cream3);margin-bottom:22px;} .plan.featured .plan-divider{background:rgba(255,255,255,.1);}
+.plan-features{flex:1;display:flex;flex-direction:column;gap:11px;margin-bottom:28px;}
+.plan-feat{display:flex;align-items:flex-start;gap:10px;font-size:13px;color:var(--ink2);line-height:1.4;}
+.plan.featured .plan-feat{color:rgba(255,255,255,.75);}
+.feat-dot{width:18px;height:18px;border-radius:50%;flex-shrink:0;background:rgba(184,135,58,.12);border:1px solid rgba(184,135,58,.3);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gold);margin-top:1px;}
+.plan.featured .feat-dot{background:rgba(212,168,67,.15);border-color:rgba(212,168,67,.35);color:var(--gold3);}
+.btn-plan{width:100%;padding:13px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s;text-align:center;}
+.btn-plan-out{background:transparent;border:1.5px solid var(--cream3);color:var(--ink2);}
+.btn-plan-out:hover{border-color:var(--ink3);color:var(--ink);}
+.plan.picked .btn-plan-out{border-color:var(--gold2);color:var(--gold);}
+.btn-plan-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#fff;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(184,135,58,.35);}
+.btn-plan-gold:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(184,135,58,.4);}
+.pay-section{max-width:600px;margin:0 auto;padding:0 24px 100px;display:none;animation:slideUp .4s ease;}
+.pay-section.show{display:block;}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.pay-card{background:#fff;border:1.5px solid var(--cream3);border-radius:20px;overflow:hidden;box-shadow:0 8px 48px rgba(13,17,23,.08);}
+.pay-top{background:var(--ink);padding:28px 32px;display:flex;align-items:center;justify-content:space-between;}
+.pay-top-plan{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:6px;}
+.pay-top-name{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#fff;}
+.pay-top-price{font-family:'Cormorant Garamond',serif;font-size:38px;font-weight:600;color:var(--gold3);line-height:1;}
+.pay-top-per{font-size:12px;color:rgba(255,255,255,.4);margin-top:3px;}
+.pay-change{font-size:12px;color:rgba(255,255,255,.5);cursor:pointer;border:1px solid rgba(255,255,255,.15);padding:5px 12px;border-radius:7px;transition:all .2s;white-space:nowrap;}
+.pay-change:hover{border-color:rgba(255,255,255,.35);color:rgba(255,255,255,.8);}
+.pay-body{padding:32px;}
+.pay-label{font-size:11px;color:var(--ink3);letter-spacing:.5px;font-weight:500;margin-bottom:6px;display:block;}
+.pay-input{width:100%;background:var(--cream);border:1.5px solid var(--cream3);border-radius:10px;padding:12px 16px;color:var(--ink);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;outline:none;margin-bottom:16px;}
+.pay-input:focus{border-color:var(--gold2);}
+.pay-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.pay-divider{display:flex;align-items:center;gap:12px;margin:24px 0;font-size:12px;color:var(--ink3);}
+.pay-divider::before,.pay-divider::after{content:'';flex:1;height:1px;background:var(--cream3);}
+.pay-summary{background:var(--cream);border:1.5px solid var(--cream3);border-radius:12px;padding:18px 20px;margin-bottom:24px;}
+.pay-sum-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;}
+.pay-sum-row.total{border-top:1px dashed var(--cream3);margin-top:6px;padding-top:12px;font-weight:700;}
+.pay-sum-label{color:var(--ink3);} .pay-sum-val{color:var(--ink);font-weight:600;}
+.pay-sum-row.total .pay-sum-label{color:var(--ink);} .pay-sum-row.total .pay-sum-val{color:var(--gold);font-size:16px;}
+.btn-pay{width:100%;padding:15px;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;border:none;transition:all .25s;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;gap:10px;}
+.btn-pay:hover{transform:translateY(-1px);box-shadow:0 8px 32px rgba(13,17,23,.25);}
+.btn-pay .rzp-logo{background:#072654;border-radius:3px;padding:2px 7px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;color:#fff;font-weight:600;}
+.pay-security{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;font-size:12px;color:var(--ink3);}
+.faq-wrap{max-width:640px;margin:0 auto;padding:0 24px 80px;}
+.faq-title{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;text-align:center;margin-bottom:32px;color:var(--ink);}
+.faq-title em{font-style:italic;color:var(--gold);}
+.faq-item{border-bottom:1px solid var(--cream3);padding:18px 0;cursor:pointer;}
+.faq-q{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:500;color:var(--ink);user-select:none;}
+.faq-arrow{width:24px;height:24px;border-radius:50%;background:var(--cream2);border:1px solid var(--cream3);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;transition:transform .25s;color:var(--ink3);}
+.faq-item.open .faq-arrow{transform:rotate(45deg);}
+.faq-a{font-size:13px;color:var(--ink3);line-height:1.7;max-height:0;overflow:hidden;transition:max-height .35s ease,padding .25s ease;}
+.faq-item.open .faq-a{max-height:200px;padding-top:12px;}
+.success-overlay{display:none;position:fixed;inset:0;background:rgba(250,247,242,.96);backdrop-filter:blur(12px);z-index:999;align-items:center;justify-content:center;padding:24px;}
+.success-overlay.show{display:flex;}
+.success-box{background:#fff;border:1.5px solid var(--cream3);border-radius:24px;padding:48px 40px;text-align:center;max-width:440px;width:100%;box-shadow:0 16px 64px rgba(13,17,23,.1);animation:popIn .4s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.s-seal{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold2));margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 8px 28px rgba(184,135,58,.35);}
+.s-title{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:600;margin-bottom:8px;color:var(--ink);}
+.s-sub{font-size:14px;color:var(--ink3);line-height:1.7;margin-bottom:22px;}
+.s-plan-badge{background:var(--cream);border:1.5px solid var(--cream3);border-radius:10px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;}
+.s-plan-name{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:var(--ink);}
+.s-plan-price{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gold);font-weight:600;}
+.s-txn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink3);background:var(--cream);padding:8px 16px;border-radius:7px;display:inline-block;margin-bottom:22px;}
+.btn-done{width:100%;padding:13px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:none;background:var(--ink);color:#fff;transition:all .2s;margin-bottom:10px;}
+.btn-done:hover{background:#161d29;}
+.s-skip{font-size:12px;color:var(--ink3);cursor:pointer;text-decoration:underline;text-underline-offset:3px;display:inline-block;}
+.s-skip:hover{color:var(--ink);}
+.s-warn-box{background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:16px 18px;margin-bottom:22px;text-align:left;}
+.s-warn-head{font-size:12px;font-weight:700;color:#92400e;margin-bottom:6px;}
+.s-warn-list{font-size:12px;color:#b45309;line-height:1.8;}
+.spinner{width:18px;height:18px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin .7s linear infinite;flex-shrink:0;display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;border-radius:10px;padding:11px 22px;font-size:13px;z-index:10000;transition:transform .3s,opacity .3s;opacity:0;white-space:nowrap;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.err{background:var(--red);} .toast.ok{background:var(--teal);}
+@media(max-width:860px){.plans-grid{grid-template-columns:1fr;border:none;gap:16px;}.plan{border-right:none;border:1.5px solid var(--cream3);border-radius:16px;}.hdr{padding:14px 20px;}.trust-bar{gap:20px;}}
+@media(max-width:520px){.pay-grid{grid-template-columns:1fr;}.pay-body{padding:22px 20px;}.success-box{padding:32px 20px;}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <a class="hdr-logo" href="dashboard.html">
+    <div class="hdr-mark">H</div>
+    <div class="hdr-name">Hello School</div>
+  </a>
+  <div class="hdr-right">
+    <a class="hdr-link" href="dashboard.html">Dashboard</a>
+    <a class="hdr-link" href="mailto:support@helloschool.in">Support</a>
+    <a class="hdr-back" href="dashboard.html">&larr; Back</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-eyebrow">Hello School Premium</div>
+  <div class="hero-title">Unlock the <em>full power</em><br>of <strong>Hello School</strong></div>
+  <div class="hero-sub">One-time annual subscription. No hidden charges. Trusted by 500+ institutions across India.</div>
+  <div class="hero-note">&#128274; Secure payment via Razorpay &middot; All plans include 1 year validity</div>
+</div>
+
+<!-- TRUST BAR -->
+<div class="trust-bar">
+  <div class="trust-item"><span>&#127963;</span> 500+ schools trust Hello School</div>
+  <div class="trust-item"><span>&#128274;</span> 100% secure Razorpay checkout</div>
+  <div class="trust-item"><span>&#128222;</span> Dedicated support included</div>
+  <div class="trust-item"><span>&#9855;</span> Instant activation on payment</div>
+</div>
+
+<!-- PLANS -->
+<div class="plans-wrap" id="plansSection">
+  <div class="plans-grid">
+
+    <!-- Fee Management -->
+    <div class="plan" id="plan-fee" onclick="selectPlan('fee')">
+      <div class="plan-tag">Starter</div>
+      <div class="plan-name">Fee Management</div>
+      <div class="plan-desc">Complete digital fee management for your institution &mdash; tracking, payments, reports.</div>
+      <div class="plan-price-row"><span class="plan-cur">&#8377;</span><span class="plan-price">999</span></div>
+      <div class="plan-per">per year &middot; per institution</div>
+      <div class="plan-saving" style="margin-bottom:24px;">&nbsp;</div>
+      <div class="plan-divider"></div>
+      <div class="plan-features">
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Fee heads &amp; structure builder</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Student fee status tracking</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Transport fee management</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Parent app &mdash; online fee payment</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Session-wise fee structure</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Manual payment marking</div>
+      </div>
+      <button class="btn-plan btn-plan-out">Select Plan &rarr;</button>
+    </div>
+
+    <!-- Bundle FEATURED -->
+    <div class="plan featured" id="plan-bundle" onclick="selectPlan('bundle')">
+      <div class="plan-tag">Most Popular</div>
+      <div class="plan-name">Complete Bundle</div>
+      <div class="plan-desc">Everything Hello School offers &mdash; Fee Management + I-Card printing.</div>
+      <div class="plan-price-row"><span class="plan-cur" style="color:rgba(255,255,255,.4)">&#8377;</span><span class="plan-price" style="color:#fff">1,999</span></div>
+      <div class="plan-per">per year &middot; per institution</div>
+      <div class="plan-saving">&#10022; Save &#8377;499 vs buying separately</div>
+      <div class="plan-divider"></div>
+      <div class="plan-features">
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Everything in Fee Management</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>I-Card design studio (10 templates)</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Physical card printing &amp; delivery</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Strap, lamination, hole punch options</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Parent online fee payment</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Priority support</div>
+      </div>
+      <button class="btn-plan btn-plan-gold">Get Bundle &mdash; Best Value &#10022;</button>
+    </div>
+
+    <!-- I-Card -->
+    <div class="plan" id="plan-icard" onclick="selectPlan('icard')">
+      <div class="plan-tag">Add-on</div>
+      <div class="plan-name">I-Card Management</div>
+      <div class="plan-desc">Professional student I-Card design, customisation and physical printing service.</div>
+      <div class="plan-price-row"><span class="plan-cur">&#8377;</span><span class="plan-price">1,499</span></div>
+      <div class="plan-per">per year &middot; per institution</div>
+      <div class="plan-saving" style="margin-bottom:24px;">&nbsp;</div>
+      <div class="plan-divider"></div>
+      <div class="plan-features">
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>10 exclusive card templates</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Custom fields &amp; field selection</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Physical printing &amp; delivery</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Strap / lanyard options</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Logo &amp; signature upload</div>
+        <div class="plan-feat"><div class="feat-dot">&#10003;</div>Bulk class-wise printing</div>
+      </div>
+      <button class="btn-plan btn-plan-out">Select Plan &rarr;</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- PAYMENT SECTION -->
+<div class="pay-section" id="paySection">
+  <div class="pay-card">
+    <div class="pay-top">
+      <div>
+        <div class="pay-top-plan" id="payTopTag">Selected Plan</div>
+        <div class="pay-top-name" id="payTopName">Complete Bundle</div>
+      </div>
+      <div style="text-align:right">
+        <div class="pay-top-price" id="payTopPrice">&#8377;1,999</div>
+        <div class="pay-top-per">per year</div>
+        <div class="pay-change" onclick="changePlan()" style="margin-top:8px">Change Plan</div>
+      </div>
+    </div>
+    <div class="pay-body">
+      <p style="font-size:13px;color:var(--ink3);margin-bottom:20px;line-height:1.6">Fill in your institution details. Used for subscription record and invoice.</p>
+
+      <label class="pay-label">Institution Name *</label>
+      <input class="pay-input" id="pi_name" type="text" placeholder="e.g. St. Mary's Public School"/>
+
+      <div class="pay-grid">
+        <div>
+          <label class="pay-label">Contact Person Name *</label>
+          <input class="pay-input" id="pi_contact" type="text" placeholder="Principal / Owner name"/>
+        </div>
+        <div>
+          <label class="pay-label">Mobile Number *</label>
+          <input class="pay-input" id="pi_mobile" type="tel" placeholder="10-digit number" maxlength="10"/>
+        </div>
+      </div>
+
+      <label class="pay-label">Email Address *</label>
+      <input class="pay-input" id="pi_email" type="email" placeholder="your@email.com"/>
+
+      <div class="pay-grid">
+        <div>
+          <label class="pay-label">City</label>
+          <input class="pay-input" id="pi_city" type="text" placeholder="e.g. Moradabad"/>
+        </div>
+        <div>
+          <label class="pay-label">State</label>
+          <input class="pay-input" id="pi_state" type="text" placeholder="e.g. Uttar Pradesh"/>
+        </div>
+      </div>
+
+      <div class="pay-divider">Order Summary</div>
+
+      <div class="pay-summary">
+        <div class="pay-sum-row">
+          <span class="pay-sum-label" id="sumPlanName">Complete Bundle</span>
+          <span class="pay-sum-val" id="sumPlanPrice">&#8377;1,999</span>
+        </div>
+        <div class="pay-sum-row">
+          <span class="pay-sum-label">Validity</span>
+          <span class="pay-sum-val">1 Year</span>
+        </div>
+        <div class="pay-sum-row">
+          <span class="pay-sum-label">GST (18%)</span>
+          <span class="pay-sum-val" id="sumGst">&#8377;360</span>
+        </div>
+        <div class="pay-sum-row total">
+          <span class="pay-sum-label">Total Payable</span>
+          <span class="pay-sum-val" id="sumTotal">&#8377;2,359</span>
+        </div>
+      </div>
+
+      <button class="btn-pay" id="payBtn" onclick="initiatePayment()">
+        <div class="spinner" id="paySpinner"></div>
+        <span id="payBtnText">Pay Securely via</span>
+        <span class="rzp-logo">Razorpay</span>
+      </button>
+      <div class="pay-security">&#128274; 256-bit SSL encryption &middot; Your data is safe</div>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="faq-wrap">
+  <div class="faq-title">Common <em>questions</em></div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">Is this a one-time payment or recurring? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">Annual subscription. Pay once, get access for a full year. Reminder sent before expiry.</div>
+  </div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">What happens after I pay? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">Subscription activates instantly. Features unlock immediately in your dashboard.</div>
+  </div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">Is the I-Card printing cost included? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">No. Subscription gives access to the I-Card feature. Physical printing is charged separately (&#8377;15&ndash;&#8377;40 per card).</div>
+  </div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">Can I upgrade my plan later? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">Yes. Fee Management to Bundle upgrade costs the difference (&#8377;1,000). Contact support anytime.</div>
+  </div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">What is the refund policy? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">7-day refund window if no premium features have been used. No refunds after that.</div>
+  </div>
+  <div class="faq-item" onclick="togFaq(this)">
+    <div class="faq-q">Is the parent app included in all plans? <div class="faq-arrow">+</div></div>
+    <div class="faq-a">Parents can view and pay fees online via Hello School app with any Fee or Bundle subscription.</div>
+  </div>
+</div>
+
+<!-- SUCCESS OVERLAY -->
+<div class="success-overlay" id="successOverlay">
+
+  <!-- Step 1: Payment confirmed -->
+  <div class="success-box" id="sStep1">
+    <div class="s-seal">&#10003;</div>
+    <div class="s-title">Payment Successful!</div>
+    <div class="s-sub">Your Hello School subscription has been activated. Welcome to the premium family.</div>
+    <div class="s-plan-badge">
+      <div>
+        <div style="font-size:11px;color:var(--ink3);font-family:'IBM Plex Mono',monospace;letter-spacing:1px;margin-bottom:3px">PLAN ACTIVATED</div>
+        <div class="s-plan-name" id="sPlanName">Complete Bundle</div>
+      </div>
+      <div class="s-plan-price" id="sPlanPrice">&#8377;1,999</div>
+    </div>
+    <div class="s-txn" id="sTxn">TXN: HS-PAY-000000</div>
+    <button class="btn-done" id="sBtnNext" onclick="showSetupStep()">One more step &rarr;</button>
+    <span class="s-skip" onclick="goToDashboard()">Skip for now, go to dashboard</span>
+  </div>
+
+  <!-- Step 2: Payment setup nudge (fee/bundle only) -->
+  <div class="success-box" id="sStep2" style="display:none;">
+    <div class="s-seal" style="background:linear-gradient(135deg,#f59e0b,#d97706);font-size:26px;">&#128179;</div>
+    <div class="s-title" style="font-size:24px;">One Last Step</div>
+    <div class="s-sub">To let parents pay fees online, link your bank account or UPI ID now.</div>
+    <div class="s-warn-box">
+      <div class="s-warn-head">&#9888; Without this setup:</div>
+      <div class="s-warn-list">
+        &bull; Parents cannot pay fees online<br>
+        &bull; All payments must be marked manually<br>
+        &bull; You can complete this anytime from your dashboard
+      </div>
+    </div>
+    <button class="btn-done" onclick="goToSetup()" style="background:linear-gradient(135deg,#f59e0b,#d97706);">Setup Online Fee Collection &rarr;</button>
+    <span class="s-skip" onclick="goToDashboard()">I'll do this later</span>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="js/config-v2.js"></script>
+<script>
+
+// ── Pick up API base from config-v2.js (plain const API_BASE_URL) ────────────
+var API_BASE = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : null)
+               || 'https://institution-backend-kkw8.onrender.com/api';
+
+console.log('premium-payment: using API_BASE =', API_BASE);
+
+var getToken = function() {
+  return localStorage.getItem('institutionToken')
+      || localStorage.getItem('token')
+      || '';
+};
+
+// ── Plan definitions ─────────────────────────────────────────────────────────
+var PLANS = {
+  fee:    { id:'fee',    tag:'Starter',     name:'Fee Management',    price:999,  display:'&#8377;999'   },
+  icard:  { id:'icard',  tag:'Add-on',       name:'I-Card Management', price:1499, display:'&#8377;1,499' },
+  bundle: { id:'bundle', tag:'Most Popular', name:'Complete Bundle',   price:1999, display:'&#8377;1,999' }
+};
+
+var selectedPlan = null;
+
+// ── Select a plan card ────────────────────────────────────────────────────────
+function selectPlan(id) {
+  selectedPlan = PLANS[id];
+  if (!selectedPlan) return;
+
+  // Highlight selected card
+  document.querySelectorAll('.plan').forEach(function(p){ p.classList.remove('picked'); });
+  var card = document.getElementById('plan-' + id);
+  if (card) card.classList.add('picked');
+
+  // Update payment panel header
+  document.getElementById('payTopTag').textContent  = selectedPlan.tag;
+  document.getElementById('payTopName').textContent = selectedPlan.name;
+  document.getElementById('payTopPrice').innerHTML  = selectedPlan.display;
+
+  // Update order summary
+  var gst   = Math.round(selectedPlan.price * 0.18);
+  var total = selectedPlan.price + gst;
+  document.getElementById('sumPlanName').textContent  = selectedPlan.name;
+  document.getElementById('sumPlanPrice').innerHTML   = selectedPlan.display;
+  document.getElementById('sumGst').innerHTML         = '&#8377;' + gst.toLocaleString('en-IN');
+  document.getElementById('sumTotal').innerHTML       = '&#8377;' + total.toLocaleString('en-IN');
+
+  // Show payment section and scroll to it
+  var sec = document.getElementById('paySection');
+  sec.classList.add('show');
+  setTimeout(function(){ sec.scrollIntoView({ behavior:'smooth', block:'start' }); }, 80);
+}
+
+function changePlan() {
+  document.getElementById('paySection').classList.remove('show');
+  document.getElementById('plansSection').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ── Form validation ───────────────────────────────────────────────────────────
+function validate() {
+  var name    = document.getElementById('pi_name').value.trim();
+  var contact = document.getElementById('pi_contact').value.trim();
+  var mobile  = document.getElementById('pi_mobile').value.trim();
+  var email   = document.getElementById('pi_email').value.trim();
+
+  if (!name)                                      { showToast('Enter institution name', 'err'); return false; }
+  if (!contact)                                   { showToast('Enter contact person name', 'err'); return false; }
+  if (!/^[0-9]{10}$/.test(mobile))               { showToast('Enter valid 10-digit mobile number', 'err'); return false; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Enter valid email address', 'err'); return false; }
+  return true;
+}
+
+// ── Step 1: Create Razorpay order via backend ─────────────────────────────────
+async function initiatePayment() {
+  if (!selectedPlan) { showToast('Please select a plan first', 'err'); return; }
+  if (!validate()) return;
+
+  setLoading(true);
+
+  try {
+    var body = {
+      planId:          selectedPlan.id,
+      institutionName: document.getElementById('pi_name').value.trim(),
+      contactName:     document.getElementById('pi_contact').value.trim(),
+      contactMobile:   document.getElementById('pi_mobile').value.trim(),
+      contactEmail:    document.getElementById('pi_email').value.trim(),
+      city:            document.getElementById('pi_city').value.trim(),
+      state:           document.getElementById('pi_state').value.trim()
+    };
+
+    var res  = await fetch(API_BASE + '/subscription/create-order', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+      body:    JSON.stringify(body)
+    });
+
+    var data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Failed to create order');
+
+    openRazorpay({
+      orderId:  data.data.orderId,
+      amount:   data.data.amount,
+      currency: data.data.currency || 'INR',
+      key:      data.data.key
+    });
+
+  } catch(err) {
+    console.error('create-order error:', err);
+    showToast(err.message || 'Something went wrong. Try again.', 'err');
+    setLoading(false);
+  }
+}
+
+// ── Step 2: Open Razorpay checkout modal ──────────────────────────────────────
+function openRazorpay(opts) {
+  var rzp = new Razorpay({
+    key:         opts.key,
+    amount:      opts.amount,
+    currency:    opts.currency,
+    name:        'Hello School',
+    description: selectedPlan.name + ' - Annual Subscription',
+    order_id:    opts.orderId,
+    prefill: {
+      name:    document.getElementById('pi_contact').value.trim(),
+      email:   document.getElementById('pi_email').value.trim(),
+      contact: document.getElementById('pi_mobile').value.trim()
+    },
+    notes: {
+      plan:        selectedPlan.id,
+      institution: document.getElementById('pi_name').value.trim()
+    },
+    theme: { color: '#0d1117' },
+    handler: function(response) {
+      // Payment success — now verify on backend
+      verifyPayment(
+        response.razorpay_payment_id,
+        response.razorpay_order_id,
+        response.razorpay_signature
+      );
+    },
+    modal: {
+      ondismiss: function(){ setLoading(false); }
+    }
+  });
+  rzp.open();
+  setLoading(false);
+}
+
+// ── Step 3: Verify payment signature on backend ───────────────────────────────
+async function verifyPayment(paymentId, orderId, signature) {
+  try {
+    var res = await fetch(API_BASE + '/subscription/verify', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+      body:    JSON.stringify({
+        razorpayPaymentId: paymentId,
+        razorpayOrderId:   orderId,
+        razorpaySignature: signature
+      })
+    });
+
+    var data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Verification failed');
+
+    onPaymentSuccess(paymentId);
+
+  } catch(err) {
+    console.error('verify error:', err);
+    showToast('Payment received but verification failed. Contact support with TXN ID.', 'err');
+    setLoading(false);
+  }
+}
+
+// ── Step 4: Show success overlay ─────────────────────────────────────────────
+function onPaymentSuccess(txnId) {
+  document.getElementById('sPlanName').textContent = selectedPlan.name;
+  document.getElementById('sPlanPrice').innerHTML  = selectedPlan.display;
+  document.getElementById('sTxn').textContent      = 'TXN: ' + txnId;
+
+  // "One more step" button only for fee/bundle (not icard-only)
+  var needsSetup = selectedPlan.id === 'fee' || selectedPlan.id === 'bundle';
+  document.getElementById('sBtnNext').style.display = needsSetup ? 'block' : 'none';
+
+  document.getElementById('successOverlay').classList.add('show');
+}
+
+function showSetupStep() {
+  document.getElementById('sStep1').style.display = 'none';
+  document.getElementById('sStep2').style.display = 'block';
+}
+
+// ── Navigation helpers ────────────────────────────────────────────────────────
+function goToDashboard() { window.location.href = 'dashboard.html'; }
+function goToSetup()      { window.location.href = 'payment-setup.html'; }
+
+// ── Loading state ─────────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('paySpinner').style.display   = on ? 'block' : 'none';
+  document.getElementById('payBtnText').textContent     = on ? 'Processing...' : 'Pay Securely via';
+  document.getElementById('payBtn').style.opacity       = on ? '.7'    : '1';
+  document.getElementById('payBtn').style.pointerEvents = on ? 'none'  : 'auto';
+}
+
+// ── FAQ accordion ─────────────────────────────────────────────────────────────
+function togFaq(el) {
+  var wasOpen = el.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(function(f){ f.classList.remove('open'); });
+  if (!wasOpen) el.classList.add('open');
+}
+
+// ── Toast notification ────────────────────────────────────────────────────────
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast ' + (type || '') + ' show';
+  setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+
+// ── Auto-select plan from URL ?plan=fee|icard|bundle ──────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  var urlPlan   = new URLSearchParams(window.location.search).get('plan');
+  var preselect = (urlPlan && PLANS[urlPlan]) ? urlPlan : 'bundle';
+  selectPlan(preselect);
+});
+
+</script>
+</body>
+</html>

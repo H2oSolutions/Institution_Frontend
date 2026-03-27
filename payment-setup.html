@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Setup | HelloSchool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="js/config-v2.js"></script>
+<script src="js/api.js"></script>
+<style>
+:root{
+  --brand:#6366f1;--brand2:#8b5cf6;
+  --brand-grad:linear-gradient(135deg,#6366f1,#8b5cf6);
+  --surface:#fff;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --green:#10b981;--green-bg:#f0fdf4;--green-border:#bbf7d0;
+  --red:#ef4444;--red-bg:#fef2f2;--red-border:#fecaca;
+  --amber:#f59e0b;--amber-bg:#fffbeb;
+  --shadow:0 2px 16px rgba(0,0,0,.06);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--text);min-height:100vh}
+
+.ps-header{background:var(--brand-grad);color:#fff;padding:15px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 4px 24px rgba(99,102,241,.3)}
+.ps-back{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.25);color:#fff;border-radius:999px;padding:6px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s}
+.ps-back:hover{background:rgba(255,255,255,.25)}
+.ps-header h1{font-size:clamp(1rem,2.5vw,1.35rem);font-weight:900}
+
+.ps-container{max-width:700px;margin:0 auto;padding:28px 18px 80px}
+
+/* Status card */
+.ps-status-card{background:#fff;border-radius:16px;padding:22px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:20px;display:flex;align-items:center;gap:16px}
+.ps-status-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.ps-status-icon.done{background:var(--green-bg)}
+.ps-status-icon.pending{background:var(--amber-bg)}
+.ps-status-title{font-size:16px;font-weight:800;color:var(--text)}
+.ps-status-sub{font-size:13px;color:var(--text3);margin-top:3px}
+
+/* Info box */
+.ps-info{background:#eef2ff;border:1.5px solid #c7d2fe;border-radius:12px;padding:16px 18px;margin-bottom:20px}
+.ps-info-title{font-size:13px;font-weight:800;color:#4338ca;margin-bottom:6px}
+.ps-info p{font-size:13px;color:#4338ca;line-height:1.6}
+
+/* Method tabs */
+.ps-method-tabs{display:flex;gap:3px;background:#fff;border-radius:14px;padding:4px;box-shadow:var(--shadow);border:1.5px solid var(--border);margin-bottom:20px}
+.ps-method-tab{flex:1;padding:11px;border-radius:10px;border:none;background:transparent;cursor:pointer;font-family:inherit;font-size:14px;font-weight:700;color:var(--text3);transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.ps-method-tab.active{background:var(--brand-grad);color:#fff;box-shadow:0 4px 14px rgba(99,102,241,.3)}
+
+/* Form card */
+.ps-form-card{background:#fff;border-radius:16px;padding:24px;box-shadow:var(--shadow);border:1.5px solid var(--border)}
+.ps-form-title{font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px}
+.ps-form-sub{font-size:12px;color:var(--text3);margin-bottom:20px}
+
+.ps-label{display:block;font-size:11px;font-weight:800;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em}
+.ps-input{width:100%;background:#f8fafc;border:1.5px solid var(--border);border-radius:9px;padding:11px 13px;font-family:inherit;font-size:14px;color:var(--text);transition:.2s;outline:none}
+.ps-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+.ps-input::placeholder{color:var(--text3)}
+.ps-form-group{margin-bottom:16px}
+.ps-form-group.half{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Mono font for account numbers */
+.ps-input.mono{font-family:'JetBrains Mono',monospace;letter-spacing:.04em}
+
+/* Buttons */
+.ps-submit{width:100%;background:var(--brand-grad);color:#fff;border:none;border-radius:10px;padding:14px;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;transition:.2s;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.ps-submit:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(99,102,241,.35)}
+.ps-submit:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Security note */
+.ps-security{display:flex;align-items:flex-start;gap:10px;background:#f8fafc;border-radius:10px;padding:14px 16px;margin-top:16px}
+.ps-security-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.ps-security p{font-size:12px;color:var(--text3);line-height:1.6}
+
+/* Success overlay */
+.ps-success{display:none;flex-direction:column;align-items:center;padding:40px 24px;text-align:center;gap:12px}
+.ps-success.show{display:flex}
+.ps-success-icon{width:80px;height:80px;background:var(--green-bg);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;animation:bounce .5s cubic-bezier(.68,-.55,.27,1.55)}
+@keyframes bounce{0%{transform:scale(0)}100%{transform:scale(1)}}
+.ps-success h2{font-size:20px;font-weight:800;color:var(--text)}
+.ps-success p{font-size:14px;color:var(--text3);max-width:380px;line-height:1.6}
+
+/* Toast */
+.ps-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1e293b;color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:700;z-index:9999;transition:transform .3s ease,opacity .3s;opacity:0;pointer-events:none;white-space:nowrap}
+.ps-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
+</head>
+<body>
+
+<header class="ps-header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <button class="ps-back" onclick="history.back()">← Back</button>
+    <h1>💳 Online Payment Setup</h1>
+  </div>
+</header>
+
+<main class="ps-container">
+
+  <!-- Loading -->
+  <div id="loadingState" style="text-align:center;padding:60px 20px">
+    <div style="width:36px;height:36px;border:4px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px"></div>
+    <p style="color:#94a3b8;font-weight:600">Loading setup status...</p>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+  <!-- Main content (hidden until loaded) -->
+  <div id="mainContent" style="display:none">
+
+    <!-- Status -->
+    <div class="ps-status-card" id="statusCard">
+      <div class="ps-status-icon pending" id="statusIcon">⚙️</div>
+      <div>
+        <div class="ps-status-title" id="statusTitle">Setup Required</div>
+        <div class="ps-status-sub" id="statusSub">Complete setup to enable online fee collection</div>
+      </div>
+    </div>
+
+    <!-- Info box -->
+    <div class="ps-info">
+      <div class="ps-info-title">ℹ️ How it works</div>
+      <p>Parents pay fees through the HelloSchool app. The fee amount is automatically transferred to your registered bank account or UPI ID. A small platform fee (₹1 + 2% of fee amount) is added to parents' payment to cover processing costs — you receive the full fee amount.</p>
+    </div>
+
+    <!-- Success view (shown after already set up) -->
+    <div class="ps-form-card ps-success" id="successView">
+      <div class="ps-success-icon">✅</div>
+      <h2>Payment Setup Complete!</h2>
+      <p>Parents can now pay fees online through the HelloSchool app. Payments will be transferred to your registered account automatically.</p>
+      <div id="existingDetails" style="background:#f8fafc;border-radius:10px;padding:16px;width:100%;margin-top:8px;text-align:left"></div>
+      <button onclick="showUpdateForm()" style="margin-top:16px;background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 20px;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;color:#475569">Update Payment Details</button>
+    </div>
+
+    <!-- Setup form -->
+    <div id="setupForm">
+      <!-- Method tabs -->
+      <div class="ps-method-tabs">
+        <button class="ps-method-tab active" id="tabBank" onclick="switchTab('bank')">🏦 Bank Account</button>
+        <button class="ps-method-tab" id="tabUpi"  onclick="switchTab('upi')">📱 UPI ID</button>
+      </div>
+
+      <div class="ps-form-card">
+        <div class="ps-form-title" id="formTitle">Bank Account Details</div>
+        <div class="ps-form-sub" id="formSub">Fees will be transferred to this bank account within 1-2 business days.</div>
+
+        <!-- Common fields -->
+        <div class="ps-form-group">
+          <label class="ps-label">Legal Name (as per PAN)</label>
+          <input type="text" class="ps-input" id="legalName" placeholder="e.g. ABC School Trust" />
+        </div>
+        <div class="ps-form-group">
+          <label class="ps-label">PAN Number</label>
+          <input type="text" class="ps-input mono" id="pan" placeholder="ABCDE1234F" maxlength="10" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+        </div>
+
+        <!-- Bank fields -->
+        <div id="bankFields">
+          <div class="ps-form-group">
+            <label class="ps-label">Bank Account Number</label>
+            <input type="text" class="ps-input mono" id="accountNumber" placeholder="Enter account number" />
+          </div>
+          <div class="ps-form-group half">
+            <div>
+              <label class="ps-label">IFSC Code</label>
+              <input type="text" class="ps-input mono" id="ifsc" placeholder="SBIN0001234" maxlength="11" oninput="this.value=this.value.toUpperCase()" />
+            </div>
+            <div>
+              <label class="ps-label">Confirm Account Number</label>
+              <input type="text" class="ps-input mono" id="accountNumberConfirm" placeholder="Re-enter account number" />
+            </div>
+          </div>
+        </div>
+
+        <!-- UPI field -->
+        <div id="upiFields" style="display:none">
+          <div class="ps-form-group">
+            <label class="ps-label">UPI ID</label>
+            <input type="text" class="ps-input mono" id="upiId" placeholder="yourschool@okaxis" />
+          </div>
+        </div>
+
+        <button class="ps-submit" id="submitBtn" onclick="submitSetup()">
+          <span id="submitText">✅ Save & Enable Online Payments</span>
+        </button>
+
+        <div class="ps-security">
+          <div class="ps-security-icon">🔒</div>
+          <p>Your payment details are securely stored and processed by <strong>Razorpay</strong>. HelloSchool never stores your full bank account number. Transfers are powered by <strong>Razorpay Route</strong>, a RBI-regulated payment system.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="ps-toast" id="psToast"></div>
+
+<script>
+'use strict';
+
+const API_SETUP  = `${API_BASE_URL}/institution/payment-setup`;
+let currentTab   = 'bank';
+let isAlreadySet = false;
+
+function toast(msg, isErr = false) {
+  const t = document.getElementById('psToast');
+  t.textContent = msg;
+  t.style.background = isErr ? '#ef4444' : '#1e293b';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Load current status ────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const res = await apiGet(API_SETUP, true);
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('mainContent').style.display  = 'block';
+
+    if (res.success && res.data?.isSetupComplete) {
+      isAlreadySet = true;
+      showSuccessView(res.data);
+    }
+  } catch (e) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('mainContent').style.display  = 'block';
+    // If 404 or error, just show the setup form (new institution)
+  }
+}
+
+function showSuccessView(data) {
+  document.getElementById('statusIcon').className  = 'ps-status-icon done';
+  document.getElementById('statusIcon').textContent = '✅';
+  document.getElementById('statusTitle').textContent = 'Online Payment Active';
+  document.getElementById('statusSub').textContent   = 'Parents can pay fees through the app';
+
+  document.getElementById('successView').classList.add('show');
+  document.getElementById('setupForm').style.display = 'none';
+
+  const details = document.getElementById('existingDetails');
+  details.innerHTML = `
+    <div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:10px">Current Setup</div>
+    ${data.paymentMethod === 'bank' ? `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px">
+        <span style="color:#94a3b8;font-weight:600">Method</span>
+        <span style="color:#0f172a;font-weight:700">🏦 Bank Account</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px">
+        <span style="color:#94a3b8;font-weight:600">Account</span>
+        <span style="color:#0f172a;font-weight:700;font-family:'JetBrains Mono',monospace">${data.bankAccountLast4 || '****'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px">
+        <span style="color:#94a3b8;font-weight:600">IFSC</span>
+        <span style="color:#0f172a;font-weight:700;font-family:'JetBrains Mono',monospace">${data.ifsc || '—'}</span>
+      </div>
+    ` : `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:13px">
+        <span style="color:#94a3b8;font-weight:600">Method</span>
+        <span style="color:#0f172a;font-weight:700">📱 UPI</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px">
+        <span style="color:#94a3b8;font-weight:600">UPI ID</span>
+        <span style="color:#0f172a;font-weight:700;font-family:'JetBrains Mono',monospace">${data.upiId || '—'}</span>
+      </div>
+    `}
+  `;
+}
+
+function showUpdateForm() {
+  document.getElementById('successView').classList.remove('show');
+  document.getElementById('setupForm').style.display = 'block';
+}
+
+// ── Tab switch ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabBank').classList.toggle('active', tab === 'bank');
+  document.getElementById('tabUpi').classList.toggle('active',  tab === 'upi');
+  document.getElementById('bankFields').style.display = tab === 'bank' ? 'block' : 'none';
+  document.getElementById('upiFields').style.display  = tab === 'upi'  ? 'block' : 'none';
+  document.getElementById('formTitle').textContent    = tab === 'bank'
+    ? 'Bank Account Details'
+    : 'UPI Payment Details';
+  document.getElementById('formSub').textContent = tab === 'bank'
+    ? 'Fees will be transferred to this bank account within 1-2 business days.'
+    : 'Fees will be transferred to this UPI ID instantly.';
+}
+
+// ── Submit ─────────────────────────────────────────────────────────────────
+async function submitSetup() {
+  const legalName = document.getElementById('legalName').value.trim();
+  const pan       = document.getElementById('pan').value.trim().toUpperCase();
+
+  if (!legalName) { toast('Legal name is required', true); return; }
+  if (!pan || pan.length !== 10) { toast('Enter a valid 10-digit PAN number', true); return; }
+
+  const body = { paymentMethod: currentTab, legalName, pan };
+
+  if (currentTab === 'bank') {
+    const accNo  = document.getElementById('accountNumber').value.trim();
+    const accNo2 = document.getElementById('accountNumberConfirm').value.trim();
+    const ifsc   = document.getElementById('ifsc').value.trim().toUpperCase();
+
+    if (!accNo)                  { toast('Bank account number is required', true); return; }
+    if (accNo !== accNo2)        { toast('Account numbers do not match', true); return; }
+    if (!ifsc || ifsc.length !== 11) { toast('Enter a valid 11-character IFSC code', true); return; }
+
+    body.bankAccountNumber = accNo;
+    body.ifscCode          = ifsc;
+  }
+
+  if (currentTab === 'upi') {
+    const upiId = document.getElementById('upiId').value.trim().toLowerCase();
+    if (!upiId || !upiId.includes('@')) { toast('Enter a valid UPI ID (e.g. school@okaxis)', true); return; }
+    body.upiId = upiId;
+  }
+
+  const btn  = document.getElementById('submitBtn');
+  const text = document.getElementById('submitText');
+  btn.disabled   = true;
+  text.textContent = '⏳ Setting up...';
+
+  try {
+    const res = await apiPost(API_SETUP, body, true);
+    if (res.success) {
+      toast('✅ Payment setup complete!');
+      await loadStatus();   // refresh status view
+    } else {
+      toast(res.message || 'Setup failed', true);
+      btn.disabled     = false;
+      text.textContent = '✅ Save & Enable Online Payments';
+    }
+  } catch (e) {
+    toast(e.message || 'Setup failed', true);
+    btn.disabled     = false;
+    text.textContent = '✅ Save & Enable Online Payments';
+  }
+}
+
+loadStatus();
+</script>
+</body>
+</html>
