@@ -385,8 +385,8 @@ function displayClasses() {
     const studentClassSelect = document.getElementById('student-class');
     const bulkClassSelect    = document.getElementById('bulk-class-select');
 
-    if (studentClassSelect) populateDropdown(studentClassSelect, classesData, '_id', data => data.nickname || data.className);
-    if (bulkClassSelect)    populateDropdown(bulkClassSelect,    classesData, '_id', data => data.nickname || data.className);
+    if (studentClassSelect) populateDropdown(studentClassSelect, classesData, '_id', data => data.nickname ? `${data.className} (${data.nickname})` : data.className);
+    if (bulkClassSelect)    populateDropdown(bulkClassSelect,    classesData, '_id', data => data.nickname ? `${data.className} (${data.nickname})` : data.className);
 }
 
 async function handleAddClass(e) {
