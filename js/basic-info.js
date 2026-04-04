@@ -389,6 +389,8 @@ function displayClasses() {
     if (bulkClassSelect)    populateDropdown(bulkClassSelect,    classesData, '_id', data => data.nickname ? `${data.className} (${data.nickname})` : data.className);
 }
 
+// made changes in this part for boht nickname and class name and also added nickname in display of class in dropdowns
+
 async function handleAddClass(e) {
     e.preventDefault();
     const className = document.getElementById('class-name').value.trim();
