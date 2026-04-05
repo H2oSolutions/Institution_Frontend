@@ -630,7 +630,7 @@ async function loadDashboardData() {
 async function loadYearStats() {
     try {
         const token = localStorage.getItem('token') || localStorage.getItem('institutionToken');
-        const rawRes = await fetch(`${API_BASE}/promotion/year-stats`, { headers: { Authorization: `Bearer ${token}` } });
+        const rawRes = await fetch(`${API_BASE_URL}/promotion/year-stats`, { headers: { Authorization: `Bearer ${token}` } });
         const res = await rawRes.json();
         if (!res.success) return;
         const { stats, currentAcademicYear, isPromotionLocked, lastPromotionYear, lastPromotionDate, feeDefaultersCount } = res.data;
@@ -682,9 +682,9 @@ function renderYearCards(stats, currentAcademicYear) {
 // ══════════════════════════════════════════════════════════
 async function loadSubscriptionStatus() {
     try {
-        const token = localStorage.getItem('institutionToken');
+        const token = localStorage.getItem('token');
         if (!token) return;
-        const res  = await fetch(`${API_BASE}/subscription/status`,{headers:{Authorization:`Bearer ${token}`}});
+        const res  = await fetch(`${API_BASE_URL}/subscription/status`,{headers:{Authorization:`Bearer ${token}`}});
         const data = await res.json();
         if (!data.success || !data.data) return;
         const sub = data.data;
@@ -739,9 +739,9 @@ async function loadPaymentSetupStatus() {
     const sub   = document.getElementById('psSub');
     const btn   = document.getElementById('psBtn');
     try {
-        const token = localStorage.getItem('institutionToken');
+        const token = localStorage.getItem('token');
         if (!token) return;
-        const res  = await fetch(`${API_BASE}/institution/payment-setup`,{headers:{Authorization:`Bearer ${token}`}});
+        const res  = await fetch(`${API_BASE_URL}/institution/payment-setup`,{headers:{Authorization:`Bearer ${token}`}});
         const data = await res.json();
         if (data.success && data.data?.isSetupComplete) {
             card.classList.add('ps-active');
@@ -801,8 +801,8 @@ async function goToFeature(feature) {
     closePremiumModal();
     if (feature==='bundle') { window.location.href='premium-payment.html?plan=bundle'; return; }
     try {
-        const token=localStorage.getItem('institutionToken');
-        const res  =await fetch(`${API_BASE}/subscription/status`,{headers:{Authorization:`Bearer ${token}`}});
+        const token=localStorage.getItem('token');
+        const res  =await fetch(`${API_BASE_URL}/subscription/status`,{headers:{Authorization:`Bearer ${token}`}});
         const data =await res.json();
         const sub  =data?.data;
         const ok   =sub&&sub.isActive&&!sub.isExpired&&(sub.plan===feature||sub.plan==='bundle');
