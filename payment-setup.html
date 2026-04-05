@@ -320,11 +320,27 @@ async function submitSetup() {
   btn.disabled   = true;
   text.textContent = '⏳ Setting up...';
 
-  try {
+ try {
     const res = await apiPost(API_SETUP, body, true);
     if (res.success) {
       toast('✅ Payment setup complete!');
-      await loadStatus();   // refresh status view
+      // Use POST response directly — avoids race condition where
+      // an immediate GET can still return isSetupComplete:false
+      // due to Render's cold-start / MongoDB propagation delay.
+      const displayData = {
+        isSetupComplete: true,
+        paymentMethod:   currentTab,
+        bankAccountLast4: currentTab === 'bank'
+          ? document.getElementById('accountNumber').value.slice(-4)
+          : null,
+        ifsc:  currentTab === 'bank'
+          ? document.getElementById('ifsc').value.toUpperCase()
+          : null,
+        upiId: currentTab === 'upi'
+          ? document.getElementById('upiId').value.trim()
+          : null,
+      };
+      showSuccessView(displayData);
     } else {
       toast(res.message || 'Setup failed', true);
       btn.disabled     = false;
