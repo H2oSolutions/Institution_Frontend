@@ -126,27 +126,36 @@ async function loadClassStatistics() {
 }
 
 function displayClassStatistics() {
-    const totalClassesEl = document.getElementById('total-classes-count');
+    const totalClassesEl  = document.getElementById('total-classes-count');
     const totalStudentsEl = document.getElementById('total-students-count');
-    const classListEl = document.getElementById('class-list');
+    const classListEl     = document.getElementById('class-list');
 
     if (!totalClassesEl || !totalStudentsEl || !classListEl) return;
 
-    const totalClasses = classStatistics.length;
+    const totalClasses  = classStatistics.length;
     const totalStudents = classStatistics.reduce((sum, cls) => sum + (cls.studentCount || 0), 0);
 
     totalClassesEl.textContent = totalClasses;
     totalStudentsEl.textContent = totalStudents;
 
     if (classStatistics.length === 0) {
-        classListEl.innerHTML = '<p style="text-align: center; color: var(--gray-500); padding: var(--space-4);">No classes available</p>';
+        classListEl.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:var(--space-4);">No classes available</p>';
         return;
     }
 
     classListEl.innerHTML = classStatistics.map(cls => `
-        <div class="class-list-item">
-            <span class="class-name">${cls.nickname || cls.className}</span>
-            <span class="class-student-count">${cls.studentCount || 0} students</span>
+        <div class="class-list-item"
+            onclick="openClassStudentsModal('${cls._id}', '${cls.className}', '${(cls.nickname || '').replace(/'/g, "\\'")}')"
+            style="cursor:pointer; transition:all 0.18s;"
+            onmouseover="this.style.background='#eff6ff';this.style.transform='translateX(5px)'"
+            onmouseout="this.style.background='white';this.style.transform='translateX(0)'">
+            <span class="class-name">
+    ${cls.className}${cls.nickname ? ` <span style="font-size:12px;font-weight:600;color:#6b7280;">(${cls.nickname})</span>` : ''}
+</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="class-student-count">${cls.studentCount || 0} students</span>
+                <span style="font-size:11px;color:#93c5fd;font-weight:600;">tap ›</span>
+            </div>
         </div>
     `).join('');
 }
@@ -1131,6 +1140,227 @@ function getClassOptions(selectedClass) {
 document.addEventListener('click', function(e) {
     const modal = document.getElementById('upload-results-modal');
     if (e.target === modal) closeUploadModal();
+});
+
+
+// ===================================
+// CLASS STUDENTS MODAL
+// With pagination (50/page) + live search filter
+// ===================================
+
+const CSM_PAGE_SIZE = 50;
+let csmState = {
+    classId:    '',
+    className:  '',
+    nickname:   '',
+    page:       1,
+    totalPages: 1,
+    totalCount: 0,
+    allLoaded:  [],   // all fetched students for current page-set
+    filtered:   [],   // after search filter
+    searchTerm: ''
+};
+
+async function openClassStudentsModal(classId, className, nickname) {
+    // Reset state
+    csmState = {
+        classId, className, nickname,
+        page: 1, totalPages: 1, totalCount: 0,
+        allLoaded: [], filtered: [], searchTerm: ''
+    };
+
+    // Clear search input
+    const searchEl = document.getElementById('csm-search');
+    if (searchEl) searchEl.value = '';
+
+    // Set title
+    document.getElementById('csm-title').textContent =
+        nickname ? `${className} (${nickname})` : className;
+    document.getElementById('csm-subtitle').textContent = 'Loading...';
+
+    // Show modal
+    const modal = document.getElementById('class-students-modal');
+    modal.style.display = 'flex';
+
+    // Show loading state
+    document.getElementById('csm-body').innerHTML = `
+        <div style="text-align:center;padding:50px 20px;color:#94a3b8;">
+            <div style="font-size:36px;margin-bottom:12px;">⏳</div>
+            <div style="font-size:15px;font-weight:600;">Loading students...</div>
+        </div>`;
+    document.getElementById('csm-pagination').style.display = 'none';
+
+    await csmFetchPage(1);
+}
+
+async function csmFetchPage(page) {
+    try {
+        const token = localStorage.getItem('token');
+        const url = `${API_ENDPOINTS.STUDENTS}?classId=${csmState.classId}&isActive=true&limit=${CSM_PAGE_SIZE}&page=${page}&sortBy=name&sortOrder=asc`;
+
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            csmShowError('Failed to load students.');
+            return;
+        }
+
+        // Update state
+        csmState.page       = page;
+        csmState.allLoaded  = data.data || [];
+        csmState.totalCount = data.pagination?.totalRecords ?? data.data.length;
+        csmState.totalPages = data.pagination?.totalPages   ?? 1;
+        csmState.searchTerm = (document.getElementById('csm-search')?.value || '').trim().toLowerCase();
+        csmState.filtered   = csmApplySearch(csmState.allLoaded, csmState.searchTerm);
+
+        // Update subtitle
+        document.getElementById('csm-subtitle').textContent =
+            `${csmState.totalCount} student${csmState.totalCount !== 1 ? 's' : ''} total`;
+
+        csmRenderList();
+        csmRenderPagination();
+
+    } catch (err) {
+        csmShowError('Network error: ' + err.message);
+    }
+}
+
+function csmApplySearch(students, term) {
+    if (!term) return students;
+    return students.filter(s =>
+        s.name?.toLowerCase().includes(term)       ||
+        s.fatherName?.toLowerCase().includes(term) ||
+        s.mobileNo?.includes(term)
+    );
+}
+
+function filterModalStudents() {
+    const term = (document.getElementById('csm-search')?.value || '').trim().toLowerCase();
+    csmState.searchTerm = term;
+    csmState.filtered   = csmApplySearch(csmState.allLoaded, term);
+    csmRenderList();
+}
+
+function csmRenderList() {
+    const body = document.getElementById('csm-body');
+    const list = csmState.filtered;
+
+    if (list.length === 0) {
+        body.innerHTML = `
+            <div style="text-align:center;padding:50px 20px;color:#94a3b8;">
+                <div style="font-size:36px;margin-bottom:12px;">🔍</div>
+                <div style="font-size:15px;font-weight:600;">
+                    ${csmState.searchTerm ? 'No students match your search.' : 'No students in this class yet.'}
+                </div>
+            </div>`;
+        return;
+    }
+
+    // Calculate display index offset for current page
+    const pageOffset = (csmState.page - 1) * CSM_PAGE_SIZE;
+
+    body.innerHTML = list.map((s, i) => `
+        <div style="
+            display:flex; align-items:center; gap:14px;
+            padding:13px 15px; margin-bottom:9px;
+            background:#f8fafc; border-radius:13px;
+            border-left:4px solid #3b82f6;
+            transition:background 0.15s;"
+            onmouseover="this.style.background='#eff6ff'"
+            onmouseout="this.style.background='#f8fafc'">
+
+            <!-- Index badge -->
+            <div style="
+                width:36px; height:36px; border-radius:50%;
+                background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+                color:#fff; display:flex; align-items:center; justify-content:center;
+                font-weight:800; font-size:13px; flex-shrink:0; letter-spacing:-0.5px;">
+                ${pageOffset + i + 1}
+            </div>
+
+            <!-- Info -->
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700;color:#0f172a;font-size:15px;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${s.name}
+                </div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">
+                    Father: <span style="font-weight:600;color:#475569;">${s.fatherName}</span>
+                </div>
+            </div>
+
+            <!-- Mobile chip -->
+            <div style="
+                font-size:12px; font-weight:700; color:#1d4ed8;
+                background:#dbeafe; padding:6px 11px;
+                border-radius:20px; white-space:nowrap; flex-shrink:0;">
+                📞 ${s.mobileNo}
+            </div>
+        </div>
+    `).join('');
+}
+
+function csmRenderPagination() {
+    const pag     = document.getElementById('csm-pagination');
+    const info    = document.getElementById('csm-page-info');
+    const prevBtn = document.getElementById('csm-prev-btn');
+    const nextBtn = document.getElementById('csm-next-btn');
+
+    if (csmState.totalPages <= 1) {
+        pag.style.display = 'none';
+        return;
+    }
+
+    pag.style.display = 'flex';
+
+    const start = (csmState.page - 1) * CSM_PAGE_SIZE + 1;
+    const end   = Math.min(csmState.page * CSM_PAGE_SIZE, csmState.totalCount);
+    info.textContent = `Showing ${start}–${end} of ${csmState.totalCount}`;
+
+    prevBtn.disabled = csmState.page <= 1;
+    nextBtn.disabled = csmState.page >= csmState.totalPages;
+    prevBtn.style.opacity = csmState.page <= 1 ? '0.4' : '1';
+    nextBtn.style.opacity = csmState.page >= csmState.totalPages ? '0.4' : '1';
+}
+
+async function csmChangePage(delta) {
+    const newPage = csmState.page + delta;
+    if (newPage < 1 || newPage > csmState.totalPages) return;
+
+    // Clear search when changing pages
+    const searchEl = document.getElementById('csm-search');
+    if (searchEl) searchEl.value = '';
+    csmState.searchTerm = '';
+
+    document.getElementById('csm-body').innerHTML = `
+        <div style="text-align:center;padding:50px 20px;color:#94a3b8;">
+            <div style="font-size:36px;margin-bottom:12px;">⏳</div>
+            <div style="font-size:15px;font-weight:600;">Loading page ${newPage}...</div>
+        </div>`;
+
+    await csmFetchPage(newPage);
+}
+
+function csmShowError(msg) {
+    document.getElementById('csm-body').innerHTML = `
+        <div style="text-align:center;padding:50px 20px;color:#dc2626;">
+            <div style="font-size:36px;margin-bottom:12px;">❌</div>
+            <div style="font-size:15px;font-weight:600;">${msg}</div>
+        </div>`;
+    document.getElementById('csm-subtitle').textContent = 'Error';
+}
+
+function closeClassStudentsModal() {
+    document.getElementById('class-students-modal').style.display = 'none';
+}
+
+// Close on backdrop click
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('class-students-modal');
+    if (e.target === modal) closeClassStudentsModal();
 });
 
 console.log('✅ basic-info.js loaded — isActive filter + tab reload fixed');
