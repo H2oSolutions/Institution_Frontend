@@ -1262,7 +1262,20 @@ function csmRenderList() {
     // Calculate display index offset for current page
     const pageOffset = (csmState.page - 1) * CSM_PAGE_SIZE;
 
-    body.innerHTML = list.map((s, i) => `
+body.innerHTML = `
+    <div style="text-align:right; margin-bottom:12px;">
+        <button onclick="printClassStudents()" style="
+            background:linear-gradient(135deg,#1d4ed8,#3b82f6);
+            color:#fff; border:none; padding:9px 18px;
+            border-radius:10px; font-size:13px; font-weight:700;
+            cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+            transition:opacity 0.2s;"
+            onmouseover="this.style.opacity='0.85'"
+            onmouseout="this.style.opacity='1'">
+            🖨️ Print / Save PDF
+        </button>
+    </div>
+    ${list.map((s, i) => `
         <div style="
             display:flex; align-items:center; gap:14px;
             padding:13px 15px; margin-bottom:9px;
@@ -1271,8 +1284,6 @@ function csmRenderList() {
             transition:background 0.15s;"
             onmouseover="this.style.background='#eff6ff'"
             onmouseout="this.style.background='#f8fafc'">
-
-            <!-- Index badge -->
             <div style="
                 width:36px; height:36px; border-radius:50%;
                 background:linear-gradient(135deg,#1d4ed8,#3b82f6);
@@ -1280,8 +1291,6 @@ function csmRenderList() {
                 font-weight:800; font-size:13px; flex-shrink:0; letter-spacing:-0.5px;">
                 ${pageOffset + i + 1}
             </div>
-
-            <!-- Info -->
             <div style="flex:1; min-width:0;">
                 <div style="font-weight:700;color:#0f172a;font-size:15px;
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -1291,8 +1300,6 @@ function csmRenderList() {
                     Father: <span style="font-weight:600;color:#475569;">${s.fatherName}</span>
                 </div>
             </div>
-
-            <!-- Mobile chip -->
             <div style="
                 font-size:12px; font-weight:700; color:#1d4ed8;
                 background:#dbeafe; padding:6px 11px;
@@ -1300,7 +1307,7 @@ function csmRenderList() {
                 📞 ${s.mobileNo}
             </div>
         </div>
-    `).join('');
+    `).join('')}`;
 }
 
 function csmRenderPagination() {
@@ -1351,6 +1358,105 @@ function csmShowError(msg) {
             <div style="font-size:15px;font-weight:600;">${msg}</div>
         </div>`;
     document.getElementById('csm-subtitle').textContent = 'Error';
+}
+
+function printClassStudents() {
+    const title    = document.getElementById('csm-title')?.textContent  || 'Class';
+    const subtitle = document.getElementById('csm-subtitle')?.textContent || '';
+    const list     = csmState.filtered;
+
+    if (list.length === 0) return;
+
+    const pageOffset = (csmState.page - 1) * CSM_PAGE_SIZE;
+
+    const rows = list.map((s, i) => `
+        <tr>
+            <td>${pageOffset + i + 1}</td>
+            <td>${s.name}</td>
+            <td>${s.fatherName}</td>
+            <td>${s.mobileNo}</td>
+        </tr>
+    `).join('');
+
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${title} - Student List</title>
+            <style>
+                * { margin:0; padding:0; box-sizing:border-box; }
+                body { font-family: 'Segoe UI', sans-serif; padding:32px; color:#0f172a; }
+
+                .header { margin-bottom:24px; }
+                .header h2 {
+                    font-size:22px; font-weight:800; color:#1d4ed8; margin-bottom:4px;
+                }
+                .header p { font-size:13px; color:#64748b; }
+
+                table {
+                    width:100%; border-collapse:collapse; font-size:13px;
+                }
+                thead tr {
+                    background:#1d4ed8; color:#fff;
+                }
+                thead th {
+                    padding:11px 14px; text-align:left;
+                    font-weight:700; letter-spacing:0.05em; font-size:12px;
+                    text-transform:uppercase;
+                }
+                tbody tr:nth-child(even) { background:#f1f5f9; }
+                tbody tr:nth-child(odd)  { background:#ffffff; }
+                tbody td {
+                    padding:10px 14px; border-bottom:1px solid #e2e8f0;
+                    color:#1e293b;
+                }
+                tbody td:first-child {
+                    font-weight:700; color:#1d4ed8; width:48px; text-align:center;
+                }
+
+                .footer {
+                    margin-top:20px; font-size:11px;
+                    color:#94a3b8; text-align:right;
+                }
+
+                @media print {
+                    body { padding:20px; }
+                    @page { margin:15mm; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h2>${title}</h2>
+                <p>${subtitle}</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student Name</th>
+                        <th>Father Name</th>
+                        <th>Mobile No</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            <div class="footer">
+                Generated on ${new Date().toLocaleDateString('en-IN', {
+                    day:'2-digit', month:'long', year:'numeric'
+                })}
+            </div>
+            <script>
+                window.onload = function() { window.print(); }
+            <\/script>
+        </body>
+        </html>
+    `;
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
 }
 
 function closeClassStudentsModal() {
