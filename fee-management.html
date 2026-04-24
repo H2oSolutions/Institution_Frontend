@@ -358,6 +358,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 .transport-section-label .tsl-title{font-size:12px;font-weight:900;color:#c2410c;text-transform:uppercase;letter-spacing:.08em}
 .transport-section-label .tsl-route{font-size:11px;font-weight:600;color:#ea580c;margin-left:auto}
 .transport-section-label .tsl-badge{font-size:10px;font-weight:800;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;border-radius:999px;padding:2px 9px;flex-shrink:0}
+
+
+
+#assign-student-list label { border-bottom: none !important; }
+#assign-student-list label > div { border: none !important; border-bottom: none !important; }
+#assign-student-list label input[type="checkbox"] { border: none !important; }
+
 </style>
 </head>
 <body>
@@ -455,8 +462,15 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       <div class="fm-card-title">Regular Fee Entries</div>
       <div class="fm-card-sub">Toggle ON the fee heads to include, set amounts, classes and due months.</div>
       <div id="reg-builder-list"><div class="builder-empty">&#9203; Loading fee heads...</div></div>
-      <div class="transport-note" style="margin-top:16px" id="transport-auto-note">
-        &#128652; <span id="transport-note-text">Transport fees will auto-include based on route assignments.</span>
+      <div id="transport-builder-section" style="display:none;margin-top:20px">
+        <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#c2410c;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          &#128652; Transport Fee Schedule — select which months to charge each route
+          <span style="flex:1;height:1px;background:#fed7aa"></span>
+        </div>
+        <div id="transport-builder-list"></div>
+      </div>
+      <div class="transport-note" style="margin-top:10px" id="transport-auto-note">
+        &#128652; <span id="transport-note-text">No transport routes configured yet.</span>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:18px">
         <button class="btn-primary" id="save-structure-btn" onclick="saveFeeStructure()">Save Fee Structure</button>
@@ -569,7 +583,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       <div class="fm-form-group" style="flex:2;margin-bottom:0;min-width:160px"><label class="fm-label">Search</label><input type="text" id="am-search" class="fm-input" placeholder="Name or roll no..." oninput="filterAssignStudents()"></div>
     </div>
     <div class="fm-info">A student already on another route will be moved here when you save.</div>
-    <div id="assign-student-list" style="max-height:310px;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
+    <div id="assign-student-list" style="max-height:310px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;align-items:stretch"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('assign-modal')">Cancel</button>
       <button class="btn-confirm-primary" id="am-save-btn" onclick="saveAssignments()">Save</button>
@@ -693,6 +707,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       <h3 id="pay-modal-title">Mark Payment</h3>
       <button class="modal-close" onclick="closeModal('pay-modal')">X</button>
     </div>
+
+    <div id="pay-modal-body"></div> 
     <p class="modal-sub" id="pay-modal-sub"></p>
     <div class="prev-unpaid-warn" id="pay-prev-warn">
       <span style="font-size:16px;flex-shrink:0">&#9888;</span>
@@ -802,14 +818,17 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
         <div class="receipt-date" id="rc-date"></div>
       </div>
       <div class="receipt-student">
-        <div style="font-size:13px;font-weight:900" id="rc-student"></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px" id="rc-class"></div>
-      </div>
-      <div class="receipt-items">
-        <div style="font-size:10px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Items</div>
-        <div id="rc-items"></div>
-        <div class="receipt-row"><span>Total</span><span id="rc-total">Rs.0</span></div>
-      </div>
+  <div style="font-size:13px;font-weight:900" id="rc-student"></div>
+  <div style="font-size:11px;color:var(--text3);margin-top:2px" id="rc-class"></div>
+  <div style="font-size:11px;color:var(--text3);margin-top:1px" id="rc-father-row">S/O <span id="rc-father"></span></div>
+</div>
+<div class="receipt-items">
+  <div style="font-size:10px;font-weight:900;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Items</div>
+  <div id="rc-items"></div>
+  <div class="receipt-row"><span>Total Paid</span><span id="rc-total">Rs.0</span></div>
+  <div class="receipt-row" id="rc-balance-row"><span id="rc-balance-label">Balance</span><span id="rc-balance" style="font-weight:900"></span></div>
+  <div class="receipt-row" id="rc-mode-row" style="color:var(--text3);font-size:11px"><span>Mode</span><span id="rc-mode" style="font-weight:700"></span></div>
+</div>
       <div id="rc-remark-row" style="display:none;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Remark: <span id="rc-remark"></span></div>
       <div class="receipt-foot">Hello School &middot; Fee Management &middot; <span id="rc-session"></span></div>
     </div>
