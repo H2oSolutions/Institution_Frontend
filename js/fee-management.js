@@ -9,6 +9,7 @@ var API_TRANSPORT_ROUTES = API_BASE_URL + '/transport/routes';
 var API_TRANSPORT_BUSES  = API_BASE_URL + '/transport/buses';
 var API_TRANSPORT_ASSIGN = API_BASE_URL + '/transport/assign';
 var API_TRANSPORT_STATS  = API_BASE_URL + '/transport/route-stats';
+var API_TRANSPORT_ROSTER = API_BASE_URL + '/transport/bus-roster';
 
 
 var MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -33,6 +34,14 @@ var lastReceiptData   = null;
 var PAY_REG = {};
 var payIdx  = 0;
 function regPay(d) { var k = 'p' + (payIdx++); PAY_REG[k] = d; return k; }
+
+var FLEET_REG = {};
+var fleetIdx  = 0;
+function regFleet(d) { 
+  var k = 'f' + (fleetIdx++); 
+  FLEET_REG[k] = d; 
+  return k; 
+}
 
 var pendingSinglePay   = null;
 var bulkMap            = {};
@@ -145,7 +154,9 @@ function switchTab(n) {
     document.getElementById('tab' + i).style.display = i === n ? 'block' : 'none';
     document.getElementById('tab' + i + '-btn').classList.toggle('active', i === n);
   });
+  
   if (n === 3) initFeeSetupTab();
+  if (n === 2) loadFleetOverview();
   if (n === 4) populateClassDropdowns();
 }
 
@@ -237,7 +248,7 @@ function renderRoutesList() {
     el.innerHTML = '<div class="fm-card"><div class="fm-empty"><div class="ei">?</div>No routes yet.</div></div>';
     return;
   }
-
+  
   el.innerHTML = transportRoutes.map(function(rt) {
     return '<div class="route-card" id="rc-' + rt._id + '">' +
       '<div class="route-header" onclick="toggleRoute(\'' + rt._id + '\')">' +
@@ -275,6 +286,259 @@ function renderRoutesList() {
         if (sc) sc.textContent = '?';
       });
     });
+}
+
+// ── FLEET OVERVIEW ──────────────────────────────────────────────
+function loadFleetOverview() {
+  FLEET_REG = {};
+  fleetIdx  = 0;
+  var el = document.getElementById('fleet-overview-container');
+  if (!el) return;
+  el.innerHTML = '<div class="fm-empty" style="padding:18px 0"><div class="ei">⏳</div>Loading fleet...</div>';
+  var session = currentSession;
+  if (!session) return;
+
+  apiGet(API_TRANSPORT_ROSTER + '?session=' + encodeURIComponent(session), true)
+    .then(function(r) {
+      var routes = r.data || [];
+      if (!routes.length) {
+        el.innerHTML = '<div class="fm-empty">No routes or buses yet.</div>';
+        return;
+      }
+
+      // Group by route for cleaner display
+      var html = '';
+      routes.forEach(function(route) {
+        html += '<div class="fov-route-section">';
+        html += '<div class="fov-route-header">';
+        html += '<span class="fov-route-icon">🚌</span>';
+        html += '<div class="fov-route-info">';
+        html += '<span class="fov-route-name">' + escH(route.name) + '</span>';
+        html += '<span class="fov-route-path">' + escH(route.from) + ' → ' + escH(route.to) + '</span>';
+        html += '</div>';
+        var totalStudents = (route.buses || []).reduce(function(s, b) { return s + b.students.length; }, 0)
+          + ((route.unassigned || []).length);
+        html += '<span class="fov-route-count">' + totalStudents + ' students</span>';
+        html += '</div>'; // route-header
+
+        html += '<div class="fov-buses-row">';
+
+        // Regular bus cards
+        (route.buses || []).forEach(function(bus) {
+          var k = regFleet({
+            bus: bus, routeId: route._id, students: bus.students,
+            route: route, isUnassigned: false
+          });
+          var occupancy = bus.capacity ? Math.round((bus.students.length / bus.capacity) * 100) : null;
+          var occColor  = occupancy === null ? '#6366f1'
+            : occupancy >= 90 ? '#ef4444'
+            : occupancy >= 70 ? '#f59e0b' : '#10b981';
+
+          html += '<div class="fov-bus-card" onclick="openBusRosterFromReg(\'' + k + '\')">';
+          html += '<div class="fov-bus-top">';
+          html += '<div class="fov-bus-num">' + escH(bus.busNumber || 'No No.') + '</div>';
+          if (occupancy !== null) {
+            html += '<div class="fov-occ-badge" style="background:' + occColor + '22;color:' + occColor + ';border:1.5px solid ' + occColor + '44">'
+              + occupancy + '%</div>';
+          }
+          html += '</div>';
+          html += '<div class="fov-bus-driver">👤 ' + escH(bus.driverName) + '</div>';
+          html += '<div class="fov-bus-stats">';
+          html += '<span class="fov-stat-num" style="color:' + occColor + '">' + bus.students.length + '</span>';
+          html += '<span class="fov-stat-sep">/</span>';
+          html += '<span class="fov-stat-cap">' + (bus.capacity || '?') + '</span>';
+          html += '<span class="fov-stat-lbl"> students</span>';
+          html += '</div>';
+          html += '<div class="fov-tap-hint">Tap to view roster →</div>';
+          html += '</div>'; // fov-bus-card
+        });
+
+        // Unassigned card (only if there are unassigned students)
+        if (route.unassigned && route.unassigned.length) {
+          var ku = regFleet({
+            bus: null, routeId: route._id, students: route.unassigned,
+            route: route, isUnassigned: true
+          });
+          html += '<div class="fov-bus-card fov-unassigned-card" onclick="openBusRosterFromReg(\'' + ku + '\')">';
+          html += '<div class="fov-bus-top">';
+          html += '<div class="fov-bus-num" style="color:#c2410c">No Bus</div>';
+          html += '<div class="fov-occ-badge" style="background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa">!</div>';
+          html += '</div>';
+          html += '<div class="fov-bus-driver" style="color:#c2410c">⚠ Not assigned to bus</div>';
+          html += '<div class="fov-bus-stats">';
+          html += '<span class="fov-stat-num" style="color:#c2410c">' + route.unassigned.length + '</span>';
+          html += '<span class="fov-stat-lbl"> students</span>';
+          html += '</div>';
+          html += '<div class="fov-tap-hint">Tap to view →</div>';
+          html += '</div>';
+        }
+
+        // Empty state if no buses
+        if (!route.buses.length && !(route.unassigned && route.unassigned.length)) {
+          html += '<div class="fov-no-buses">No buses added to this route yet</div>';
+        }
+
+        html += '</div>'; // fov-buses-row
+        html += '</div>'; // fov-route-section
+      });
+
+      el.innerHTML = html;
+    })
+    .catch(function(e) {
+      el.innerHTML = '<div class="fm-empty">Failed to load fleet: ' + escH(e.message) + '</div>';
+    });
+}
+
+function openBusRosterModal(bus, routeId, students, route, isUnassigned) {
+  var modal = document.getElementById('bus-roster-modal');
+  var title = document.getElementById('brm-title');
+  var sub   = document.getElementById('brm-sub');
+  var info  = document.getElementById('brm-bus-info');
+  var tbody = document.getElementById('brm-student-tbody');
+  var cnt   = document.getElementById('brm-student-count');
+
+  window._busRosterData = { bus: bus, route: route, students: students, isUnassigned: isUnassigned };
+
+  if (isUnassigned) {
+    title.textContent = 'Unassigned Students — ' + (route ? route.name : '');
+    sub.textContent   = 'Students on this route not assigned to any specific bus';
+    info.innerHTML    = '<div class="brm-info-grid">' +
+      '<div><div class="brm-il">Route</div><div class="brm-iv">' + escH(route.name) + '</div></div>' +
+      '<div><div class="brm-il">Path</div><div class="brm-iv">' + escH(route.from) + ' → ' + escH(route.to) + '</div></div>' +
+      '<div><div class="brm-il">Monthly Fee</div><div class="brm-iv">Rs.' + (route.amount || 0).toLocaleString() + '</div></div>' +
+    '</div>';
+  } else {
+    title.textContent = 'Bus Roster — ' + (bus.busNumber || 'No Bus No.');
+    sub.textContent   = route ? route.name + '  (' + route.from + ' → ' + route.to + ')' : '';
+    info.innerHTML    = '<div class="brm-info-grid">' +
+      '<div><div class="brm-il">Bus Number</div><div class="brm-iv brm-bus-no">' + escH(bus.busNumber || 'Not Set') + '</div></div>' +
+      '<div><div class="brm-il">Driver</div><div class="brm-iv">&#128100; ' + escH(bus.driverName) + '</div></div>' +
+      '<div><div class="brm-il">Driver Contact</div><div class="brm-iv">&#128222; ' + escH(bus.driverContact) + '</div></div>' +
+      '<div><div class="brm-il">Capacity</div><div class="brm-iv">' + (bus.capacity ? bus.capacity + ' seats' : 'Not set') + '</div></div>' +
+      '<div><div class="brm-il">Route</div><div class="brm-iv">' + escH(route ? route.name : '') + '</div></div>' +
+      '<div><div class="brm-il">Monthly Fee</div><div class="brm-iv">Rs.' + (route ? (route.amount || 0).toLocaleString() : '0') + '</div></div>' +
+    '</div>';
+  }
+
+  cnt.textContent = students.length + ' student' + (students.length !== 1 ? 's' : '');
+
+  if (!students.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text3);font-size:13px">No students assigned.</td></tr>';
+  } else {
+    tbody.innerHTML = students.map(function(s, idx) {
+      return '<tr>' +
+        '<td style="color:var(--text3);font-size:11px;font-weight:600">' + (idx + 1) + '</td>' +
+        '<td>' +
+          '<div style="font-size:13px;font-weight:800;color:#0f172a">' + escH(s.name) + '</div>' +
+          (s.rollNo ? '<div style="font-size:10px;color:var(--text3)">Roll ' + escH(s.rollNo) + '</div>' : '') +
+        '</td>' +
+        '<td style="font-size:12px;font-weight:600">' + escH(s.class || '-') + '</td>' +
+        '<td>' +
+          '<div style="font-size:12px;font-weight:700">' + escH(s.fatherName || '-') + '</div>' +
+        '</td>' +
+        '<td>' +
+          (s.phone ? '<a href="tel:' + escH(s.phone) + '" style="font-size:12px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(s.phone) + '</a>' : '<span style="color:var(--text3);font-size:11px">—</span>') +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  openModal('bus-roster-modal');
+}
+
+function printBusRoster() {
+  var d = window._busRosterData;
+  if (!d) return;
+  var route = d.route || {};
+  var bus   = d.bus   || {};
+  var students = d.students || [];
+  var isUnassigned = d.isUnassigned;
+
+  var dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  var rows = students.map(function(s, idx) {
+    return '<tr>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b">' + (idx + 1) + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:13px;font-weight:700;color:#0f172a">' +
+        escH(s.name) + (s.rollNo ? '<br><span style="font-size:10px;color:#94a3b8;font-weight:600">Roll ' + escH(s.rollNo) + '</span>' : '') +
+      '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:600;color:#334155">' + escH(s.class || '-') + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:700;color:#0f172a">' + escH(s.fatherName || '-') + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:700;color:#4f46e5">' + escH(s.phone || '—') + '</td>' +
+      '<td style="padding:8px 10px;border-bottom:1px solid #f1f5f9;width:80px"></td>' +
+    '</tr>';
+  }).join('');
+
+  var busBlock = isUnassigned ? '' :
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px">' +
+      _infoBox('Bus Number', bus.busNumber || 'Not Set') +
+      _infoBox('Driver Name', bus.driverName || '—') +
+      _infoBox('Driver Contact', bus.driverContact || '—') +
+      _infoBox('Capacity', bus.capacity ? bus.capacity + ' seats' : 'Not set') +
+      _infoBox('Route', route.name || '—') +
+      _infoBox('Monthly Fee', 'Rs.' + (route.amount || 0).toLocaleString()) +
+    '</div>';
+
+  function _infoBox(label, value) {
+    return '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:9px;padding:10px 13px">' +
+      '<div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;font-weight:700;margin-bottom:3px">' + label + '</div>' +
+      '<div style="font-size:14px;font-weight:800;color:#1e293b">' + escH(String(value)) + '</div>' +
+    '</div>';
+  }
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bus Roster</title>' +
+    '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",Arial,sans-serif;background:#eef2ff;padding:28px;color:#0f172a}' +
+    '.wrap{max-width:900px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(99,102,241,.18)}' +
+    '.hdr{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:26px 32px}' +
+    '.hdr-title{font-size:22px;font-weight:900;margin-bottom:3px}' +
+    '.hdr-sub{font-size:12px;opacity:.75;font-weight:600}' +
+    '.hdr-date{font-size:11px;opacity:.65;margin-top:6px}' +
+    '.body{padding:26px 32px}' +
+    'table{width:100%;border-collapse:collapse;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden}' +
+    'thead tr{background:linear-gradient(135deg,#4f46e5,#7c3aed)}' +
+    'thead th{padding:10px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#fff;font-weight:800;text-align:left}' +
+    'tbody tr:nth-child(even){background:#f8fafc}' +
+    '.foot{border-top:1px dashed #e2e8f0;padding:16px 32px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#94a3b8;background:#fafbff}' +
+    '.sig{text-align:center}.sig-line{width:130px;border-top:1.5px solid #cbd5e1;margin-bottom:4px}' +
+    '@media print{body{background:#fff;padding:0}.wrap{box-shadow:none;border-radius:0}.pabtn{display:none!important}}' +
+    '.pabtn{display:flex;justify-content:center;gap:12px;padding:16px 32px 24px}' +
+    '.pabtn button{border-radius:9px;padding:10px 24px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:none}' +
+    '</style></head><body><div class="wrap">' +
+    '<div class="hdr">' +
+      '<div class="hdr-title">&#127979; Hello School — Bus Roster</div>' +
+      '<div class="hdr-sub">' + (isUnassigned ? 'Unassigned Students — ' : 'Bus: ') + escH(isUnassigned ? route.name : (bus.busNumber || 'No Bus No.')) + '</div>' +
+      '<div class="hdr-date">Printed: ' + dateStr + ' &nbsp;·&nbsp; Session: ' + escH(currentSession || '') + '</div>' +
+    '</div>' +
+    '<div class="body">' +
+      busBlock +
+      '<div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:8px">' +
+        'Student Roster <span style="color:#4f46e5;font-size:13px;font-weight:900">' + students.length + '</span>' +
+        '<span style="flex:1;height:1px;background:#e2e8f0;margin-left:6px"></span>' +
+      '</div>' +
+      '<table><thead><tr>' +
+        '<th style="width:36px">#</th>' +
+        '<th>Student Name</th>' +
+        '<th>Class</th>' +
+        '<th>Father\'s Name</th>' +
+        '<th>Phone</th>' +
+        '<th>Signature</th>' +
+      '</tr></thead><tbody>' +
+        (rows || '<tr><td colspan="6" style="text-align:center;padding:18px;color:#94a3b8">No students assigned.</td></tr>') +
+      '</tbody></table>' +
+    '</div>' +
+    '<div class="foot">' +
+      '<div>Hello School &middot; Transport Management &middot; ' + escH(currentSession || '') + '</div>' +
+      '<div class="sig"><div class="sig-line"></div><div style="font-size:10px;color:#64748b;font-weight:700">Authorised Signatory</div></div>' +
+    '</div>' +
+    '<div class="pabtn">' +
+      '<button style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff" onclick="window.print()">&#128424; Print Roster</button>' +
+      '<button style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0" onclick="window.close()">Close</button>' +
+    '</div>' +
+  '</div></body></html>';
+
+  var w = window.open('', '_blank', 'width=960,height=900');
+  if (!w) { toast('Please allow popups to print', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 function loadRouteStats(rid) {
@@ -385,6 +649,22 @@ function saveEditRoute() {
     })
     .catch(function(e) { toast(e.message, 'error'); })
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
+}
+
+function openBusRosterFromReg(k) {
+  var d = FLEET_REG[k];
+  if (!d) {
+    console.error("Invalid key:", k);
+    return;
+  }
+
+  openBusRosterModal(
+    d.bus,
+    d.routeId,
+    d.students,
+    d.route,
+    d.isUnassigned
+  );
 }
 
 function deleteRoute(id) {
@@ -501,12 +781,12 @@ function filterAssignStudents() {
 
     var busSelect = '';
     if (hasBuses) {
-      var autoSelect  = buses.length === 1 ? String(buses[0]._id) : '';
-      var selectedBus = currentBusId || autoSelect;
+      var autoSelect  = buses.length >= 1 ? String(buses[0]._id) : '';
+var selectedBus = currentBusId || autoSelect;
       busSelect =
         '<div style="padding-left:62px;margin-top:8px">' +
           '<select class="bus-select" data-student-id="' + s._id + '" style="width:100%;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#334155;outline:none">' +
-            (buses.length > 1 ? '<option value="">No specific bus</option>' : '') +
+            (buses.length > 1 ? '<option value="" disabled>— Select a bus —</option>' : '') +
             buses.map(function(b) {
               return '<option value="' + b._id + '"' + (selectedBus === String(b._id) ? ' selected' : '') + '>' +
                 escH(b.busNumber || 'Bus') + ' — ' + escH(b.driverName) + '</option>';
@@ -514,6 +794,7 @@ function filterAssignStudents() {
           '</select>' +
         '</div>';
     }
+    
 
     return '<label style="display:flex;flex-direction:column;padding:10px 12px;border-radius:8px;cursor:pointer;' +
   'border:1.5px solid ' + (isOn ? '#bfdbfe' : '#e2e8f0') + ';' +
@@ -539,32 +820,42 @@ function saveAssignments() {
   var rid     = document.getElementById('am-route-id').value;
   var session = currentSession || '2026-27';
 
-  var labels   = document.querySelectorAll('#assign-student-list label');
   var students = [];
-  labels.forEach(function(label) {
-    var cb        = label.querySelector('input[type=checkbox]');
-    var busSelect = label.querySelector('.bus-select');
-    if (cb && cb.checked) {
-      students.push({
-        studentId: cb.value,
-        busId:     (busSelect && busSelect.value) ? busSelect.value : null
-      });
-    }
+  
+  // Query ALL checkboxes in the list, not just inside labels
+  var checkboxes = document.querySelectorAll('#assign-student-list input[type="checkbox"]');
+  checkboxes.forEach(function(cb) {
+    if (!cb.checked) return;
+    var sid = cb.value;
+    // Find bus select directly by data attribute — not by DOM parent traversal
+    var busSelect = document.querySelector('#assign-student-list .bus-select[data-student-id="' + sid + '"]');
+    var busId = (busSelect && busSelect.value && busSelect.value !== '') ? busSelect.value : null;
+    students.push({ studentId: sid, busId: busId });
   });
+
+  if (!students.length) { toast('No students selected', 'error'); return; }
 
   var btn = document.getElementById('am-save-btn');
   setLoading(btn, true);
+  
   apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: students, session: session }, true)
     .then(function() {
       toast(students.length + ' student(s) saved');
       closeModal('assign-modal');
-      routeStuCache[rid] = null;
+      routeStuCache[rid] = null;  // Clear cache so fresh data loads
+      routeBusCache[rid] = null;  // Clear bus cache too
+      // Reload route stats AND fleet overview
       return loadRouteStats(rid);
-    }).then(function() {
+    })
+    .then(function() {
+      // Re-render route body if expanded
       var card = document.getElementById('rc-' + rid);
       if (card && card.classList.contains('expanded')) renderRouteBody(rid);
-    }).catch(function(e) { toast(e.message, 'error'); })
-      .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
+      // CRITICAL FIX: Always reload fleet overview so cards refresh
+      loadFleetOverview();
+    })
+    .catch(function(e) { toast(e.message, 'error'); })
+    .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
 }
 
 function removeAssignment(aid, rid) {
@@ -574,8 +865,11 @@ function removeAssignment(aid, rid) {
       toast('Removed');
       routeStuCache[rid] = null;
       return loadRouteStats(rid);
-    }).then(function() { renderRouteBody(rid); })
-      .catch(function(e) { toast(e.message, 'error'); });
+    }).then(function() { 
+      renderRouteBody(rid); 
+      loadFleetOverview(); // ADD THIS LINE
+    })
+    .catch(function(e) { toast(e.message, 'error'); });
 }
 
 function initFeeSetupTab() {
@@ -1539,10 +1833,8 @@ function buildTransportMonthRow(sid, m, routeName, session, routeId, nextMonthNa
       '<button class="mr-btn mr-btn-del" onclick="event.stopPropagation();openDelPay(\'' +
         m.paymentId + '\',\'' + SHORT_MONTHS[m.monthIndex] + ' Transport\')">Del</button>' +
       '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe"' +
-        ' onclick="event.stopPropagation();printTransportRowReceipt(\'' +
-        sid + '\',' + m.monthIndex + ',' + (m.paidAmount || 0) + ',\'' +
-        paidAtStr + '\',\'' + escA(m.remark || '') + '\',\'' + escA(routeName) + '\',\'' +
-        session + '\',\'' + paySource + '\')">&#128424; PDF</button>';
+  ' onclick="event.stopPropagation();printTransportMonthReceipt(\'' +
+  sid + '\',' + m.monthIndex + ')">&#128424; PDF</button>';
   }
 
   return '<div class="month-row mr-transport ' + stateClass + '" id="trow-' + sid + '-' + m.monthIndex + '">' +
@@ -3083,6 +3375,26 @@ function printMonthRowReceipt(sid, monthIndex) {
 
   if (!rawItems.length) { toast('No payment record found for this month', 'error'); return; }
 
+  // ── Check if this was part of a bulk payment ──
+  var bulkGroupId = rawItems[0].month.bulkGroupId;
+  if (bulkGroupId) {
+    // Fetch all months paid in this bulk group
+    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+      .then(function(res) {
+        var groupPayments = res.data || [];
+        _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId);
+      })
+      .catch(function() {
+        // Fallback to single month if group fetch fails
+        _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex);
+      });
+    return;
+  }
+
+  _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex);
+}
+
+function _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex) {
   var paidAt  = rawItems[0].month.paidAt ? new Date(rawItems[0].month.paidAt) : new Date();
   var remark  = rawItems[0].month.remark || '';
   var payMode = rawItems[0].month.paymentSource === 'online' ? 'Online \u2014 App' : 'Cash \u2014 Reception';
@@ -3113,7 +3425,7 @@ function printMonthRowReceipt(sid, monthIndex) {
     receiptItems.push({
       feeHead:      i.entry.feeHeadName,
       month:        MONTHS[monthIndex],
-      base:         base,       // signals rich format to printDetailedReceipt
+      base:         base,
       waiver:       waiver,
       carry:        carry,
       credit:       credit,
@@ -3145,6 +3457,96 @@ function printMonthRowReceipt(sid, monthIndex) {
     items:        receiptItems,
     paidAt:       paidAt,
     receiptType:  'Monthly Fee Receipt \u2014 ' + MONTHS[monthIndex]
+  });
+}
+
+function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
+  // Group payments by monthIndex
+  var monthGroups = {};
+  groupPayments.forEach(function(p) {
+    var mi = p.monthIndex;
+    if (!monthGroups[mi]) monthGroups[mi] = [];
+    monthGroups[mi].push(p);
+  });
+
+  var sortedMonthIndices = Object.keys(monthGroups).map(Number).sort(function(a, b) {
+    return sessionOrderOf(a) - sessionOrderOf(b);
+  });
+
+  var receiptItems = [];
+  var totalBase = 0, totalCarry = 0, totalCredit = 0;
+  var totalWaiver = 0, totalLateFee = 0, totalDue = 0, totalPaid = 0;
+
+  var paidAt  = new Date(groupPayments[0].paidAt || Date.now());
+  var remark  = groupPayments[0].remark || '';
+  var payMode = groupPayments[0].paymentSource === 'online' ? 'Online \u2014 App' : 'Cash \u2014 Reception';
+
+  sortedMonthIndices.forEach(function(mi) {
+    var payments = monthGroups[mi];
+    payments.forEach(function(p) {
+      var base    = p.amount    || 0;
+      var paidAmt = (p.paidAmount != null) ? p.paidAmount : base;
+      var waiver  = p.waiverAmount || 0;
+      var lateFee = p.lateFee      || 0;
+      var adjBase = Math.max(0, base - waiver);
+      var effDue  = adjBase + lateFee;
+
+      totalBase    += base;
+      totalWaiver  += waiver;
+      totalLateFee += lateFee;
+      totalDue     += effDue;
+      totalPaid    += paidAmt;
+
+      // Find fee head name from feeStatusData
+      var fhName = 'Fee';
+      if (p.type === 'transport') {
+        fhName = 'Transport Fee';
+      } else if (p.feeHeadId) {
+        var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
+        if (stuData) {
+          var entry = (stuData.entries || []).find(function(e) { return String(e.feeHeadId) === String(p.feeHeadId); });
+          if (entry) fhName = entry.feeHeadName;
+        }
+      }
+
+      receiptItems.push({
+        feeHead:      fhName,
+        month:        MONTHS[mi],
+        base:         base,
+        waiver:       waiver,
+        carry:        0,
+        credit:       0,
+        lateFee:      lateFee,
+        effectiveDue: effDue,
+        paid:         paidAmt,
+        isPaid:       p.isPaid && p.paymentStatus !== 'partial',
+        isPartial:    p.paymentStatus === 'partial'
+      });
+    });
+  });
+
+  var monthNames = sortedMonthIndices.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
+
+  printDetailedReceipt({
+    studentName:  stu.name,
+    className:    (stu.class && stu.class.className) || '',
+    rollNo:       stu.rollNo     || '',
+    fatherName:   stu.fatherName || '',
+    phone:        stu.phone      || '',
+    session:      currentSession,
+    total:        totalPaid,
+    totalBase:    totalBase,
+    totalCarry:   totalCarry,
+    totalCredit:  totalCredit,
+    totalWaiver:  totalWaiver,
+    totalLateFee: totalLateFee,
+    totalFeeDue:  totalDue,
+    balance:      totalPaid - totalDue,
+    paymentMode:  payMode,
+    remark:       remark,
+    items:        receiptItems,
+    paidAt:       paidAt,
+    receiptType:  'Multi-Month Fee Receipt \u2014 ' + monthNames
   });
 }
 
@@ -3214,6 +3616,87 @@ function printTransportRowReceipt(sid, monthIndex, paidAmount, paidAtStr, remark
   });
 }
 
+// Transport PDF — checks bulkGroupId first, just like regular fee printMonthRowReceipt()
+function printTransportMonthReceipt(sid, monthIndex) {
+  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
+  if (!stu || !stu.transport) return;
+
+  var tMonths  = stu.transport.months || [];
+  var tMonth   = tMonths.find(function(m) { return m.monthIndex === monthIndex; });
+  if (!tMonth || !tMonth.paymentId) { toast('No payment record found', 'error'); return; }
+
+  // If this was part of a bulk group, print all months paid together
+  var bulkGroupId = tMonth.bulkGroupId;
+  if (bulkGroupId) {
+    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+      .then(function(res) {
+        var groupPayments = res.data || [];
+        _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId);
+      })
+      .catch(function() {
+        // Fallback to single month if group fetch fails
+        _printSingleTransportReceipt(stu, tMonth, monthIndex);
+      });
+    return;
+  }
+
+  // No bulk group — single month receipt
+  _printSingleTransportReceipt(stu, tMonth, monthIndex);
+}
+
+function _printSingleTransportReceipt(stu, tMonth, monthIndex) {
+  var routeName   = (stu.transport && stu.transport.routeName) || 'Transport';
+  var session     = currentSession;
+  var paidAt      = tMonth.paidAt ? new Date(tMonth.paidAt) : new Date();
+  var paySource   = tMonth.paymentSource || 'cash';
+  var payMode     = paySource === 'online' ? 'Online — App' : 'Cash — Reception';
+  var paidAmount  = tMonth.paidAmount || 0;
+
+  var base    = tMonth.baseAmount != null ? tMonth.baseAmount : paidAmount;
+  var waiver  = tMonth.waiverAmount  || 0;
+  var lateFee = tMonth.lateFee       || 0;
+  var credit  = tMonth.previousCredit || 0;
+  var adjBase = Math.max(0, base - waiver);
+  var effDue  = tMonth.effectiveDue != null ? tMonth.effectiveDue : adjBase;
+  var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
+
+  var richItem = {
+    feeHead:      'Transport Fee — ' + routeName,
+    month:        MONTHS[monthIndex],
+    base:         base,
+    waiver:       waiver,
+    carry:        carry,
+    credit:       credit,
+    lateFee:      lateFee,
+    effectiveDue: effDue,
+    paid:         paidAmount,
+    isPaid:       tMonth.isPaid && !tMonth.isPartial,
+    isPartial:    tMonth.isPartial || false
+  };
+
+  printDetailedReceipt({
+    studentName:  stu.name,
+    className:    (stu.class && stu.class.className) || '',
+    rollNo:       stu.rollNo     || '',
+    fatherName:   stu.fatherName || '',
+    phone:        stu.phone      || '',
+    session:      session,
+    total:        paidAmount,
+    totalBase:    base,
+    totalCarry:   carry,
+    totalCredit:  credit,
+    totalWaiver:  waiver,
+    totalLateFee: lateFee,
+    totalFeeDue:  effDue,
+    balance:      paidAmount - effDue,
+    paymentMode:  payMode,
+    remark:       tMonth.remark || '',
+    items:        [richItem],
+    paidAt:       paidAt,
+    receiptType:  'Transport Fee Receipt — ' + MONTHS[monthIndex]
+  });
+}
+
 var toastTimer;
 function toast(msg, type) {
   type = type || 'success';
@@ -3223,3 +3706,4 @@ function toast(msg, type) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3000);
 }
+

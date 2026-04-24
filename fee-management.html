@@ -360,13 +360,142 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 .transport-section-label .tsl-badge{font-size:10px;font-weight:800;background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;border-radius:999px;padding:2px 9px;flex-shrink:0}
 
 
-
+z
 #assign-student-list label { border-bottom: none !important; }
 #assign-student-list label > div { border: none !important; border-bottom: none !important; }
 #assign-student-list label input[type="checkbox"] { border: none !important; }
 
+
+.fleet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.fleet-card{background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:16px;cursor:pointer;transition:.2s;position:relative}
+.fleet-card:hover{border-color:#c7d2fe;box-shadow:0 4px 18px rgba(99,102,241,.12);transform:translateY(-2px)}
+.fleet-unassigned{border-color:#fed7aa;background:#fffbf5}
+.fleet-unassigned:hover{border-color:#fb923c}
+.fc-bus-icon{font-size:22px;margin-bottom:6px}
+.fc-bus-num{font-size:16px;font-weight:900;color:#4f46e5;margin-bottom:4px;font-family:'JetBrains Mono',monospace}
+.fc-route-name{font-size:12px;font-weight:800;color:var(--text);margin-bottom:2px}
+.fc-route-path{font-size:10px;color:var(--text3);font-weight:600;margin-bottom:8px}
+.fc-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.fc-driver{font-size:11px;font-weight:700;color:var(--text2);background:var(--surface2);border-radius:5px;padding:2px 7px}
+.fc-cap{font-size:11px;font-weight:700;color:#059669;background:var(--green-bg);border-radius:5px;padding:2px 7px}
+.fc-count{font-size:12px;font-weight:900;color:var(--brand);margin-bottom:3px}
+.fc-hint{font-size:10px;color:var(--text3);font-weight:600}
+.brm-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.brm-il{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;font-weight:700;margin-bottom:3px}
+.brm-iv{font-size:13px;font-weight:800;color:#1e293b}
+.brm-bus-no{font-family:'JetBrains Mono',monospace;color:#4f46e5;font-size:16px}
+@media(max-width:600px){.fleet-grid{grid-template-columns:1fr 1fr}.brm-info-grid{grid-template-columns:1fr 1fr}}
+
+
+
+/* ── Fleet Overview v2 — Route-grouped, clean ── */
+.fov-route-section {
+  border: 1.5px solid var(--border);
+  border-radius: 13px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.fov-route-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  background: linear-gradient(135deg, #f8faff, #eef2ff);
+  border-bottom: 1.5px solid #e0e7ff;
+}
+.fov-route-icon { font-size: 18px; flex-shrink: 0; }
+.fov-route-info { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fov-route-name { font-size: 13px; font-weight: 900; color: #1e293b; }
+.fov-route-path { font-size: 11px; color: var(--text3); font-weight: 600; }
+.fov-route-count {
+  font-size: 11px; font-weight: 800; color: #4f46e5;
+  background: #eef2ff; border-radius: 999px; padding: 3px 10px;
+  border: 1.5px solid #c7d2fe; white-space: nowrap; flex-shrink: 0;
+}
+.fov-buses-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  background: #fafbff;
+}
+.fov-bus-card {
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 13px 14px;
+  cursor: pointer;
+  transition: .2s;
+  min-width: 155px;
+  flex: 1;
+  max-width: 220px;
+}
+.fov-bus-card:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 3px 14px rgba(99,102,241,.12);
+  transform: translateY(-2px);
+}
+.fov-unassigned-card {
+  border-color: #fed7aa;
+  background: #fffbf5;
+}
+.fov-unassigned-card:hover {
+  border-color: #fb923c;
+  box-shadow: 0 3px 14px rgba(234,88,12,.1);
+}
+.fov-bus-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.fov-bus-num {
+  font-size: 14px;
+  font-weight: 900;
+  color: #4f46e5;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .02em;
+}
+.fov-occ-badge {
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+.fov-bus-driver {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fov-bus-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.fov-stat-num { font-size: 20px; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+.fov-stat-sep { font-size: 13px; color: var(--text3); margin: 0 1px; }
+.fov-stat-cap { font-size: 13px; font-weight: 700; color: var(--text3); }
+.fov-stat-lbl { font-size: 11px; color: var(--text3); font-weight: 600; margin-left: 3px; }
+.fov-tap-hint { font-size: 10px; color: var(--brand); font-weight: 700; }
+.fov-no-buses {
+  font-size: 12px;
+  color: var(--text3);
+  font-weight: 600;
+  padding: 8px 4px;
+  font-style: italic;
+}
+@media(max-width: 600px) {
+  .fov-bus-card { max-width: 100%; }
+}
+
 </style>
 </head>
+
 <body>
 
 <div class="fm-header">
@@ -434,6 +563,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       </div>
       <button class="btn-primary" id="add-route-btn" onclick="addRoute()">Add Route</button>
     </div>
+    <!-- FLEET OVERVIEW -->
+<div class="fm-card" style="margin-bottom:16px">
+  <div class="fm-card-title">&#128652; Fleet Overview</div>
+  <div class="fm-card-sub">All buses across all routes. Tap a bus card to view the full student roster.</div>
+  <div id="fleet-overview-container">
+    <div class="fm-empty" style="padding:14px 0">Switch to this tab to load fleet.</div>
+  </div>
+</div>
     <div id="routes-list"><div class="fm-card"><div class="fm-empty"><div class="ei">&#9203;</div>Loading...</div></div></div>
   </div>
 
@@ -873,6 +1010,49 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('transport-edit-modal')">Cancel</button>
       <button class="btn-confirm-primary" id="tem-save-btn" onclick="saveTransportEditPayment()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bus Roster Modal -->
+<div class="modal-overlay" id="bus-roster-modal">
+  <div class="modal-box xl">
+    <div class="modal-head">
+      <h3 id="brm-title">Bus Roster</h3>
+      <button class="modal-close" onclick="closeModal('bus-roster-modal')">X</button>
+    </div>
+    <p class="modal-sub" id="brm-sub"></p>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <button class="btn-primary" onclick="printBusRoster()">&#128424; Print PDF Roster</button>
+    </div>
+
+    <div id="brm-bus-info" style="margin-bottom:18px"></div>
+
+    <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      Student Roster &nbsp;<span id="brm-student-count" style="color:var(--brand);font-size:13px;font-weight:900"></span>
+      <span style="flex:1;height:1px;background:var(--border);margin-left:4px"></span>
+    </div>
+
+    <div style="overflow-x:auto;border-radius:10px;border:1.5px solid var(--border)">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:linear-gradient(135deg,#4f46e5,#7c3aed)">
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left;width:36px">#</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Student</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Class</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Father's Name</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Phone</th>
+          </tr>
+        </thead>
+        <tbody id="brm-student-tbody">
+          <tr><td colspan="5" style="text-align:center;padding:18px;color:var(--text3)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-secondary" onclick="closeModal('bus-roster-modal')">Close</button>
     </div>
   </div>
 </div>
