@@ -31,6 +31,8 @@ var fhEditId          = null;
 var currentSession    = '';
 var lastReceiptData   = null;
 
+var pendingBusSelections = {};
+
 var PAY_REG = {};
 var payIdx  = 0;
 function regPay(d) { var k = 'p' + (payIdx++); PAY_REG[k] = d; return k; }
@@ -646,15 +648,80 @@ function renderRouteBody(rid) {
       var nm = (s.student && s.student.name) ? s.student.name : '?';
       var cn = (s.student && s.student.class && s.student.class.className) ? s.student.class.className : '';
       var busInfo = s.busNumber ? ' · ' + escH(s.busNumber) : '';
-      return '<div class="stu-chip-sm"><div class="stu-av-sm">' + nm.charAt(0).toUpperCase() + '</div>' +
-        escH(nm) + '<span style="color:var(--text3);font-size:10px">' + escH(cn) + busInfo + '</span>' +
-        '<span class="stu-chip-remove" onclick="removeAssignment(\'' + s._id + '\',\'' + rid + '\')">X</span></div>';
+      var busId = s.busId ? String(s.busId._id || s.busId) : '';
+return '<div class="stu-chip-sm">' +
+  '<div class="stu-av-sm">' + nm.charAt(0).toUpperCase() + '</div>' +
+  escH(nm) +
+  '<span style="color:var(--text3);font-size:10px">' + escH(cn) + busInfo + '</span>' +
+  '<button onclick="openChangeBusModal(\'' + s._id + '\',\'' + escA(nm) + '\',\'' + busId + '\',\'' + rid + '\')"' +
+    ' style="font-size:9px;font-weight:800;background:#eff6ff;color:#3b82f6;border:1px solid #bfdbfe;border-radius:4px;padding:1px 5px;cursor:pointer;font-family:inherit;margin-left:2px">Bus</button>' +
+  '<span class="stu-chip-remove" onclick="removeAssignment(\'' + s._id + '\',\'' + rid + '\')">X</span>' +
+  '</div>';
     }).join('') + '</div>';
   } else {
     html += '<div style="font-size:12px;color:var(--text3);padding:5px 0 9px">No students assigned.</div>';
   }
   html += '<button class="btn-green" onclick="openAssignModal(\'' + rid + '\')">+ Assign Students</button>';
   document.getElementById('rb-' + rid).innerHTML = html;
+}
+
+
+function openChangeBusModal(assignmentId, studentName, currentBusId, rid) {
+  var buses = routeBusCache[rid] || [];
+  document.getElementById('cbm2-aid').value  = assignmentId;
+  document.getElementById('cbm2-rid').value  = rid;
+  document.getElementById('cbm2-sub').textContent = 'Changing bus for: ' + studentName;
+
+  var sel = document.getElementById('cbm2-bus');
+  sel.innerHTML =
+    '<option value="">No specific bus</option>' +
+    buses.map(function(b) {
+      return '<option value="' + b._id + '"' + (String(b._id) === currentBusId ? ' selected' : '') + '>' +
+        escH(b.busNumber || 'Bus') + ' — ' + escH(b.driverName) + '</option>';
+    }).join('');
+
+  openModal('change-bus-modal');
+}
+
+function saveChangeBus() {
+  var aid     = document.getElementById('cbm2-aid').value;
+  var rid     = document.getElementById('cbm2-rid').value;
+  var newBusId = document.getElementById('cbm2-bus').value || null;
+  var session = currentSession;
+
+  // Find the studentId from cache
+  var assignment = (routeStuCache[rid] || []).find(function(a) {
+    return String(a._id) === String(aid);
+  });
+  if (!assignment) { toast('Assignment not found', 'error'); return; }
+
+  var sid = String(assignment.studentId || (assignment.student && assignment.student._id));
+
+  var btn = document.getElementById('cbm2-save-btn');
+  setLoading(btn, true);
+
+  // Re-send full list with this student's bus updated
+  var allStudentsPayload = (routeStuCache[rid] || []).map(function(a) {
+    var s  = String(a.studentId || (a.student && a.student._id));
+    var b  = a.busId ? String(a.busId._id || a.busId) : null;
+    if (s === sid) b = newBusId; // update this one
+    return { studentId: s, busId: b };
+  });
+
+  apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: allStudentsPayload, session: session }, true)
+    .then(function() {
+      toast('Bus updated');
+      closeModal('change-bus-modal');
+      routeStuCache[rid] = null;
+      return loadRouteStats(rid);
+    })
+    .then(function() {
+      var card = document.getElementById('rc-' + rid);
+      if (card && card.classList.contains('expanded')) renderRouteBody(rid);
+      loadFleetOverview();
+    })
+    .catch(function(e) { toast(e.message, 'error'); })
+    .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
 }
 
 function openEditRouteModal(id) {
@@ -764,28 +831,83 @@ function deleteBus(bid, rid) {
 }
 
 function openAssignModal(rid) {
-  var cachePromise = routeStuCache[rid]
-    ? Promise.resolve()
-    : loadRouteStats(rid);
-
-  var loadPromise = allStudents.length
-    ? Promise.resolve()
-    : loadAllStudents();
+  var cachePromise = routeStuCache[rid] ? Promise.resolve() : loadRouteStats(rid);
+  var loadPromise  = allStudents.length  ? Promise.resolve() : loadAllStudents();
 
   return Promise.all([cachePromise, loadPromise]).then(function() {
     document.getElementById('am-route-id').value = rid;
     var rt = transportRoutes.find(function(r) { return r._id === rid; });
     document.getElementById('assign-modal-sub').textContent =
       'Assigning to: ' + ((rt && rt.name) || 'Route');
+
     var amCls = document.getElementById('am-class');
     amCls.innerHTML = '<option value="">All Classes</option>' +
       classes.map(function(c) {
         return '<option value="' + c._id + '">' + escH(c.className) + '</option>';
       }).join('');
     document.getElementById('am-search').value = '';
+    pendingBusSelections = {};
+
+    // ── Populate & show global bus selector ──
+    var buses      = routeBusCache[rid] || [];
+    var amBusRow   = document.getElementById('am-bus-row');
+    var amBusSel   = document.getElementById('am-bus');
+    if (buses.length > 0 && amBusRow && amBusSel) {
+      amBusSel.innerHTML =
+        '<option value="">Tap to select bus</option>' +
+        buses.map(function(b) {
+          return '<option value="' + b._id + '">' +
+            escH(b.busNumber || 'Bus') + ' — ' + escH(b.driverName) + '</option>';
+        }).join('');
+      amBusSel.onchange = applyGlobalBus;
+      amBusRow.style.display = 'block';
+    } else if (amBusRow) {
+      amBusRow.style.display = 'none';
+    }
+
     filterAssignStudents();
     openModal('assign-modal');
   });
+}
+
+// Called when global bus selector changes — applies to ALL checked students
+function applyGlobalBus() {
+  var globalBusId = document.getElementById('am-bus').value;
+  document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked').forEach(function(cb) {
+    var sid = cb.value;
+    if (globalBusId) {
+      pendingBusSelections[sid] = globalBusId;
+    } else {
+      delete pendingBusSelections[sid];
+    }
+    // Visually update per-student dropdown too
+    var perSelect = document.querySelector(
+      '#assign-student-list .bus-select[data-student-id="' + sid + '"]'
+    );
+    if (perSelect) perSelect.value = globalBusId || perSelect.options[0].value;
+  });
+  var count = document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked').length;
+  if (globalBusId && count > 0) {
+    toast(count + ' student(s) set to this bus');
+  }
+}
+
+// Called when a student checkbox is checked/unchecked
+function onStudentCheck(cb) {
+  var sid = cb.value;
+  if (!cb.checked) {
+    delete pendingBusSelections[sid];
+    return;
+  }
+  // Auto-apply global bus to newly checked student
+  var globalBusId = document.getElementById('am-bus') && document.getElementById('am-bus').value;
+  if (globalBusId) {
+    pendingBusSelections[sid] = globalBusId;
+    var perSelect = document.querySelector(
+      '#assign-student-list .bus-select[data-student-id="' + sid + '"]'
+    );
+    if (perSelect) perSelect.value = globalBusId;
+  }
 }
 
 function filterAssignStudents() {
@@ -794,19 +916,23 @@ function filterAssignStudents() {
   var rid    = document.getElementById('am-route-id').value;
   var buses  = routeBusCache[rid] || [];
 
+  // Build map of already-assigned student IDs
   var assignedMap = {};
   (routeStuCache[rid] || []).forEach(function(a) {
     var sid = String(a.studentId || (a.student && a.student._id));
-    assignedMap[sid] = String(a.busId || '');
+    assignedMap[sid] = true;
   });
 
+  // Only show UNASSIGNED students
   var list = allStudents.filter(function(s) {
+    if (assignedMap[String(s._id)]) return false; // already on route — hide
     if (cls) {
       var cid = s.classId && s.classId._id ? String(s.classId._id) : String(s.classId || '');
       if (cid !== String(cls)) return false;
     }
     if (search) {
-      if (!(s.name && s.name.toLowerCase().includes(search)) && !String(s.rollNo || '').includes(search)) return false;
+      if (!(s.name && s.name.toLowerCase().includes(search)) &&
+          !String(s.rollNo || '').includes(search)) return false;
     }
     return true;
   });
@@ -814,51 +940,35 @@ function filterAssignStudents() {
   var el = document.getElementById('assign-student-list');
   el.style.alignItems = 'stretch';
 
-  if (!list.length) { el.innerHTML = '<div class="fm-empty">No students found.</div>'; return; }
+  if (!list.length) {
+    el.innerHTML = '<div class="fm-empty">No unassigned students found for this route.</div>';
+    return;
+  }
 
   var hasBuses = buses.length > 0;
 
-  el.innerHTML = list.map(function(s) {
-    var isOn         = assignedMap.hasOwnProperty(String(s._id));
-    var currentBusId = isOn ? assignedMap[String(s._id)] : '';
-    var cn           = (s.classId && s.classId.className) || (s.class && s.class.className) || '';
-    var initial      = s.name.charAt(0).toUpperCase();
+ el.innerHTML = list.map(function(s) {
+  var cn      = (s.classId && s.classId.className) || (s.class && s.class.className) || '';
+  var initial = s.name.charAt(0).toUpperCase();
 
-    var busSelect = '';
-    if (hasBuses) {
-      var autoSelect  = buses.length >= 1 ? String(buses[0]._id) : '';
-var selectedBus = currentBusId || autoSelect;
-      busSelect =
-        '<div style="padding-left:62px;margin-top:8px">' +
-          '<select class="bus-select" data-student-id="' + s._id + '" style="width:100%;padding:6px 10px;font-size:12px;font-family:inherit;border-radius:8px;border:1.5px solid #e2e8f0;background:#fff;color:#334155;outline:none">' +
-            (buses.length > 1 ? '<option value="" disabled>— Select a bus —</option>' : '') +
-            buses.map(function(b) {
-              return '<option value="' + b._id + '"' + (selectedBus === String(b._id) ? ' selected' : '') + '>' +
-                escH(b.busNumber || 'Bus') + ' — ' + escH(b.driverName) + '</option>';
-            }).join('') +
-          '</select>' +
-        '</div>';
-    }
-    
-
-    return '<label style="display:flex;flex-direction:column;padding:10px 12px;border-radius:8px;cursor:pointer;' +
-  'border:1.5px solid ' + (isOn ? '#bfdbfe' : '#e2e8f0') + ';' +
-  'border-bottom:1.5px solid ' + (isOn ? '#bfdbfe' : '#e2e8f0') + ';' +
-  'background:' + (isOn ? '#eff6ff' : '#fff') + ';width:100%;list-style:none">' +
-      '<div style="display:flex;align-items:center;gap:12px;width:100%;border:none;border-bottom:none">' +
-        '<input type="checkbox" value="' + s._id + '" ' + (isOn ? 'checked' : '') +
-          ' style="width:16px;height:16px;flex-shrink:0;cursor:pointer;accent-color:#4f46e5;margin:0">' +
-        '<div style="width:34px;height:34px;border-radius:8px;background:#4f46e5;display:flex;align-items:center;' +
-          'justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">' + initial + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:13px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escH(s.name) + '</div>' +
-          '<div style="font-size:11px;color:#94a3b8;margin-top:1px">' + escH(cn) + (s.rollNo ? ' · Roll ' + s.rollNo : '') + '</div>' +
+  return '<label style="display:flex;flex-direction:column;padding:10px 12px;border-radius:8px;cursor:pointer;' +
+    'border:1.5px solid #e2e8f0;background:#fff;width:100%;list-style:none">' +
+    '<div style="display:flex;align-items:center;gap:12px;width:100%">' +
+      '<input type="checkbox" value="' + s._id + '"' +
+        ' onchange="onStudentCheck(this)"' +
+        ' style="width:16px;height:16px;flex-shrink:0;cursor:pointer;accent-color:#4f46e5;margin:0">' +
+      '<div style="width:34px;height:34px;border-radius:8px;background:#4f46e5;display:flex;align-items:center;' +
+        'justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">' + initial + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:700;color:#0f172a">' + escH(s.name) + '</div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:1px">' +
+          escH(cn) + (s.rollNo ? ' · Roll ' + s.rollNo : '') +
+          (s.fatherName ? ' · S/O ' + escH(s.fatherName) : '') +
         '</div>' +
-        (isOn ? '<span style="font-size:10px;font-weight:800;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:6px;flex-shrink:0;white-space:nowrap">On route</span>' : '') +
       '</div>' +
-      busSelect +
-    '</label>';
-  }).join('');
+    '</div>' +
+  '</label>';
+}).join('');
 }
 
 function saveAssignments() {
@@ -866,45 +976,37 @@ function saveAssignments() {
   var session = currentSession || document.getElementById('st-session').value;
   if (!session) { toast('Session not loaded yet', 'error'); return; }
 
-  // ── Build a map of ALL currently assigned students from cache ──
-  var existingMap = {};
-  (routeStuCache[rid] || []).forEach(function(a) {
-    var sid = String(a.studentId || (a.student && a.student._id));
-    existingMap[sid] = a.busId ? String(a.busId) : null;
-  });
-
-  // ── Get the IDs of students currently VISIBLE in the modal ──
-  var visibleIds = new Set();
-  document.querySelectorAll('#assign-student-list input[type="checkbox"]').forEach(function(cb) {
-    visibleIds.add(String(cb.value));
-  });
-
-  // ── Start with assigned students NOT visible in current filter — preserve them ──
   var students = [];
-  Object.keys(existingMap).forEach(function(sid) {
-    if (!visibleIds.has(sid)) {
-      students.push({ studentId: sid, busId: existingMap[sid] || null });
-    }
-  });
+  document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked').forEach(function(cb) {
+  var sid   = cb.value;
+  var busId = pendingBusSelections[sid] || null;
+  // Fallback to global selector if no explicit selection tracked
+  if (!busId) {
+    var globalSel = document.getElementById('am-bus');
+    busId = (globalSel && globalSel.value) ? globalSel.value : null;
+  }
+  students.push({ studentId: sid, busId: busId });
+});
 
-  // ── Add checked students from the visible filtered list ──
-  document.querySelectorAll('#assign-student-list input[type="checkbox"]').forEach(function(cb) {
-    if (!cb.checked) return;
-    var sid = cb.value;
-    var busSelect = document.querySelector('#assign-student-list .bus-select[data-student-id="' + sid + '"]');
-    var busId = (busSelect && busSelect.value && busSelect.value !== '') ? busSelect.value : null;
-    students.push({ studentId: sid, busId: busId });
-  });
-
-  if (!students.length) { toast('No students selected', 'error'); return; }
+  if (!students.length) { toast('Select at least one student', 'error'); return; }
 
   var btn = document.getElementById('am-save-btn');
   setLoading(btn, true);
 
-  apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: students, session: session }, true)
+  // Merge with existing assignments so server doesn't remove them
+  var existing = (routeStuCache[rid] || []).map(function(a) {
+    var sid = String(a.studentId || (a.student && a.student._id));
+    var bid = a.busId ? String(a.busId._id || a.busId) : null;
+    return { studentId: sid, busId: bid };
+  });
+
+  var allStudentsPayload = existing.concat(students);
+
+  apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: allStudentsPayload, session: session }, true)
     .then(function() {
-      toast(students.length + ' student(s) saved');
+      toast(students.length + ' student(s) assigned');
       closeModal('assign-modal');
+      pendingBusSelections = {};
       routeStuCache[rid] = null;
       routeBusCache[rid] = null;
       return loadRouteStats(rid);
@@ -3506,8 +3608,8 @@ function _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex) {
     var base    = m.baseAmount   != null ? m.baseAmount   : (m.amount || 0);
     var adjBase = m.adjustedBase != null ? m.adjustedBase : base;
     var effDue  = m.effectiveDue != null ? m.effectiveDue : adjBase;
-    var carry   = Math.max(0, Math.round(effDue - adjBase));
     var credit  = m.previousCredit || 0;
+    var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
     var waiver  = m.waiverAmount   || 0;
     var lateFee = m.lateFee        || 0;
     var paidAmt = m.paidAmount     || 0;
@@ -3766,7 +3868,7 @@ function _printSingleTransportReceipt(stu, tMonth, monthIndex) {
     carry:        carry,
     credit:       credit,
     lateFee:      lateFee,
-    effectiveDue: effDue,
+    effectiveDue: effDue + lateFee,
     paid:         paidAmount,
     isPaid:       tMonth.isPaid && !tMonth.isPartial,
     isPartial:    tMonth.isPartial || false
@@ -3785,8 +3887,8 @@ function _printSingleTransportReceipt(stu, tMonth, monthIndex) {
     totalCredit:  credit,
     totalWaiver:  waiver,
     totalLateFee: lateFee,
-    totalFeeDue:  effDue,
-    balance:      paidAmount - effDue,
+    totalFeeDue:  effDue + lateFee, 
+    balance:      (paidAmount - lateFee) - adjBase,
     paymentMode:  payMode,
     remark:       tMonth.remark || '',
     items:        [richItem],

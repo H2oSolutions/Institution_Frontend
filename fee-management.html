@@ -564,6 +564,31 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
 @media(max-width:600px){.fov2-stat-badges{display:none}.fov2-bus-grid{grid-template-columns:1fr 1fr}}
 
+
+
+/* Assign modal — no scroll, flex layout */
+#assign-modal .modal-box {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden; /* remove the default scroll from modal-box */
+}
+
+#assign-modal #assign-student-list {
+  flex: 1;
+  min-height: 0; /* critical for flex children to shrink */
+  overflow-y: auto;
+  max-height: none; /* remove any hardcoded max-height */
+}
+
+#assign-modal .modal-actions {
+  flex-shrink: 0;
+  padding-top: 12px;
+  border-top: 1.5px solid var(--border);
+  margin-top: 0;
+  background: #fff;
+}
+
 </style>
 </head>
 
@@ -793,13 +818,11 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       <div class="fm-form-group" style="flex:1;margin-bottom:0;min-width:120px"><label class="fm-label">Class</label><select id="am-class" class="fm-select" onchange="filterAssignStudents()"><option value="">All Classes</option></select></div>
       <div class="fm-form-group" style="flex:2;margin-bottom:0;min-width:160px"><label class="fm-label">Search</label><input type="text" id="am-search" class="fm-input" placeholder="Name or roll no..." oninput="filterAssignStudents()"></div>
     </div>
-    <div class="fm-info">A student already on another route will be moved here when you save.</div>
     <div id="am-bus-row" style="display:none;margin-bottom:11px;background:#f8faff;border:1.5px solid #c7d2fe;border-radius:10px;padding:11px 14px">
   <label class="fm-label" style="margin-bottom:6px">&#128652; Assign checked students to bus</label>
   <select id="am-bus" class="fm-select" style="font-weight:700">
     <option value="">No specific bus</option>
   </select>
-  <div style="font-size:10px;color:var(--text3);margin-top:5px;font-weight:600">Already-assigned students keep their existing bus unless you change it individually below.</div>
 </div>
     <div id="assign-student-list" style="max-height:310px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;align-items:stretch"></div>
     <div class="modal-actions">
@@ -1145,6 +1168,27 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn-secondary" onclick="closeModal('bus-roster-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Bus Modal -->
+<div class="modal-overlay" id="change-bus-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Change Bus Assignment</h3>
+      <button class="modal-close" onclick="closeModal('change-bus-modal')">X</button>
+    </div>
+    <p class="modal-sub" id="cbm2-sub"></p>
+    <input type="hidden" id="cbm2-aid">
+    <input type="hidden" id="cbm2-rid">
+    <div class="fm-form-group">
+      <label class="fm-label">Assign to Bus</label>
+      <select id="cbm2-bus" class="fm-select"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('change-bus-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="cbm2-save-btn" onclick="saveChangeBus()">Save</button>
     </div>
   </div>
 </div>
