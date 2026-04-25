@@ -902,10 +902,20 @@ z
       </div>
     </div>
     <div class="fm-form-group">
-      <label class="fm-label">Amount to Collect <span style="font-size:10px;font-weight:600;color:var(--text3)">adjust for partial or advance</span></label>
-      <input type="number" id="bulk-custom-amount" class="fm-input" min="1" oninput="updateBulkAmtPreview(this.value)">
-    </div>
-    <div id="bulk-preview" class="pay-preview"></div>
+  <label class="fm-label">Amount to Collect <span style="font-size:10px;font-weight:600;color:var(--text3)">adjust for partial or advance</span></label>
+  <input type="number" id="bulk-custom-amount" class="fm-input" min="1" oninput="updateBulkAmtPreview(this.value)">
+</div>
+<div class="fm-grid-2" style="margin-top:2px">
+  <div class="fm-form-group" style="margin-bottom:10px">
+    <label class="fm-label">Waiver / Discount <span style="font-size:10px;color:var(--text3)">optional</span></label>
+    <input type="number" id="bulk-waiver" class="fm-input" placeholder="0" min="0" oninput="updateBulkAmtPreview(document.getElementById('bulk-custom-amount').value)">
+  </div>
+  <div class="fm-form-group" style="margin-bottom:10px">
+    <label class="fm-label">Late Fee <span style="font-size:10px;color:var(--text3)">optional</span></label>
+    <input type="number" id="bulk-latefee" class="fm-input" placeholder="0" min="0" oninput="updateBulkAmtPreview(document.getElementById('bulk-custom-amount').value)">
+  </div>
+</div>
+<div id="bulk-preview" class="pay-preview"></div>
     <div class="fm-form-group" style="margin-top:11px;margin-bottom:0">
       <label class="fm-label">Remark (optional)</label>
       <textarea class="textarea-field" id="bulk-remark" rows="2" placeholder="e.g. Cash collected at counter"></textarea>

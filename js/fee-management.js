@@ -2709,8 +2709,10 @@ function openBulkPayModal() {
   }).join('');
   document.getElementById('bulk-total-display').textContent = 'Rs.' + total.toLocaleString();
   document.getElementById('bulk-custom-amount').value = total;
-  document.getElementById('bulk-remark').value = '';
-  updateBulkAmtPreview(total);
+  document.getElementById('bulk-waiver').value  = 0;
+document.getElementById('bulk-latefee').value = 0;
+document.getElementById('bulk-remark').value  = '';
+updateBulkAmtPreview(total);
   document.getElementById('bulk-confirm-btn').onclick = confirmBulkPayment;
   openModal('bulk-pay-modal');
 }
@@ -2734,13 +2736,17 @@ function openRegBulkPayModal() {
   }).join('');
   document.getElementById('bulk-total-display').textContent = 'Rs.' + total.toLocaleString();
   document.getElementById('bulk-custom-amount').value = total;
-  document.getElementById('bulk-remark').value = '';
-  updateBulkAmtPreview(total);
+  document.getElementById('bulk-waiver').value  = 0;
+document.getElementById('bulk-latefee').value = 0;
+document.getElementById('bulk-remark').value  = '';
+updateBulkAmtPreview(total);
   document.getElementById('bulk-confirm-btn').onclick = confirmRegBulkPayment;
   openModal('bulk-pay-modal');
 }
 
 function updateBulkAmtPreview(val) {
+  var waiver   = Math.max(0, parseInt(document.getElementById('bulk-waiver').value)  || 0);
+  var lateFeeV = Math.max(0, parseInt(document.getElementById('bulk-latefee').value) || 0);
   var total;
   if (currentBulkMode === 'regular') {
     var rk = Object.keys(regBulkMap);
@@ -2749,19 +2755,23 @@ function updateBulkAmtPreview(val) {
     var tk = Object.keys(bulkMap);
     total = tk.reduce(function(s, k) { return s + (bulkMap[k].amount || 0); }, 0);
   }
+  var adjBase = Math.max(0, total - waiver);
   var v   = parseInt(val) || 0;
+  var paidTowardBase = Math.max(0, v - lateFeeV);
   var box = document.getElementById('bulk-preview');
   box.className = 'pay-preview';
   if (!v) { box.classList.remove('show'); return; }
-  if (v < total) {
-    box.innerHTML = 'Rs.' + (total - v).toLocaleString() + ' short \u2014 distributed as partials, oldest month first';
+  if (paidTowardBase < adjBase) {
+    box.innerHTML = 'Rs.' + (adjBase - paidTowardBase).toLocaleString() + ' short \u2014 distributed as partials, oldest month first';
     box.classList.add('show', 'partial');
-  } else if (v > total) {
-    box.innerHTML = 'Rs.' + (v - total).toLocaleString() + ' extra \u2014 credited to next applicable month';
+  } else if (paidTowardBase > adjBase) {
+    box.innerHTML = 'Rs.' + (paidTowardBase - adjBase).toLocaleString() + ' extra \u2014 credited to next applicable month';
     box.classList.add('show', 'advance');
   } else {
     var cnt = currentBulkMode === 'regular' ? Object.keys(regBulkMap).length : Object.keys(bulkMap).length;
-    box.innerHTML = 'Exact \u2014 all ' + cnt + ' item' + (cnt !== 1 ? 's' : '') + ' will be fully paid';
+    box.innerHTML = 'Exact \u2014 all ' + cnt + ' item' + (cnt !== 1 ? 's' : '') + ' will be fully paid'
+      + (waiver   ? ' (Rs.' + waiver.toLocaleString()   + ' waiver applied)' : '')
+      + (lateFeeV ? ' + Rs.' + lateFeeV.toLocaleString() + ' late fee' : '');
     box.classList.add('show', 'full');
   }
 }
@@ -2769,14 +2779,29 @@ function updateBulkAmtPreview(val) {
 function confirmBulkPayment() {
   var keys = Object.keys(bulkMap); if (!keys.length) return;
   var remark    = document.getElementById('bulk-remark').value.trim();
+  var waiver    = Math.max(0, parseInt(document.getElementById('bulk-waiver').value)  || 0);
+  var lateFeeV  = Math.max(0, parseInt(document.getElementById('bulk-latefee').value) || 0);
   var customAmt = parseInt(document.getElementById('bulk-custom-amount').value);
   var remaining = customAmt || keys.reduce(function(s, k) { return s + (bulkMap[k].amount || 0); }, 0);
-  var payments  = keys.map(function(k) {
+
+  var payments = keys.map(function(k, idx) {
     var d     = bulkMap[k];
     var alloc = Math.min(remaining, d.amount);
     remaining -= alloc;
-    return {type: d.type, feeHeadId: d.feeHeadId, routeId: d.routeId, monthIndex: d.monthIndex, amount: d.baseAmount, paidAmount: alloc};
+    return {
+      type: d.type, feeHeadId: d.feeHeadId, routeId: d.routeId,
+      monthIndex: d.monthIndex, amount: d.baseAmount,
+      paidAmount: alloc,
+      waiverAmount: idx === 0 ? waiver : 0,
+      lateFee: idx === keys.length - 1 ? lateFeeV : 0
+    };
   });
+
+  // Add late fee to last item's paidAmount
+  if (lateFeeV > 0 && payments.length > 0) {
+    payments[payments.length - 1].paidAmount += lateFeeV;
+  }
+
   var sid     = bulkStudentId;
   var session = currentSession || document.getElementById('st-session').value;
   var btn = document.getElementById('bulk-confirm-btn');
@@ -2790,19 +2815,21 @@ function confirmBulkPayment() {
         return {label: ((d && d.fhName) || 'Fee') + ' \u2014 ' + SHORT_MONTHS[p.monthIndex], amount: p.paidAmount};
       });
       var totalDueForBulk = keys.reduce(function(s, k2) { return s + (bulkMap[k2].amount || 0); }, 0);
-closeModal('bulk-pay-modal');
-showReceipt({
-  studentName:  (stu && stu.name) || '',
-  className:    (stu && stu.class && stu.class.className) || '',
-  fatherName:   (stu && stu.fatherName) || '',
-  session:      session,
-  total:        collected,
-  totalFeeDue:  totalDueForBulk,
-  balance:      collected - totalDueForBulk,
-  paymentMode:  'Cash \u2014 Reception',
-  remark:       remark,
-  items:        items
-});
+      closeModal('bulk-pay-modal');
+      showReceipt({
+        studentName:  (stu && stu.name) || '',
+        className:    (stu && stu.class && stu.class.className) || '',
+        fatherName:   (stu && stu.fatherName) || '',
+        session:      session,
+        total:        collected,
+        totalFeeDue:  totalDueForBulk,
+        totalWaiver:  waiver,
+        totalLateFee: lateFeeV,
+        balance:      collected - lateFeeV - Math.max(0, totalDueForBulk - waiver),
+        paymentMode:  'Cash \u2014 Reception',
+        remark:       remark,
+        items:        items
+      });
       clearBulkSelection();
       return loadFeeStatus();
     })
@@ -2813,6 +2840,8 @@ showReceipt({
 function confirmRegBulkPayment() {
   var keys = Object.keys(regBulkMap); if (!keys.length) return;
   var remark    = document.getElementById('bulk-remark').value.trim();
+  var waiver    = Math.max(0, parseInt(document.getElementById('bulk-waiver').value)  || 0);
+  var lateFeeV  = Math.max(0, parseInt(document.getElementById('bulk-latefee').value) || 0);
   var customAmt = parseInt(document.getElementById('bulk-custom-amount').value);
   var sid       = regBulkStudentId;
   var session   = currentSession;
@@ -2823,6 +2852,8 @@ function confirmRegBulkPayment() {
 
   var remaining = customAmt || sorted.reduce(function(s, k) { return s + regBulkMap[k].totalDue; }, 0);
   var payments  = [];
+  var itemIndex = 0;
+  var totalItems = sorted.reduce(function(s, k) { return s + regBulkMap[k].items.length; }, 0);
 
   sorted.forEach(function(k) {
     var d = regBulkMap[k];
@@ -2831,18 +2862,23 @@ function confirmRegBulkPayment() {
       var alloc = Math.min(remaining, due);
       remaining -= alloc;
       payments.push({
-        type:       'regular',
-        feeHeadId:  item.entry.feeHeadId,
-        routeId:    null,
+        type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
         monthIndex: d.monthIndex,
-        amount:     item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
-        paidAmount: alloc
+        amount: item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
+        paidAmount: alloc,
+        waiverAmount: itemIndex === 0 ? waiver : 0,
+        lateFee: itemIndex === totalItems - 1 ? lateFeeV : 0
       });
+      itemIndex++;
     });
   });
 
   if (remaining > 0 && payments.length > 0) {
     payments[payments.length - 1].paidAmount += remaining;
+  }
+  // Add late fee to last item's paidAmount
+  if (lateFeeV > 0 && payments.length > 0) {
+    payments[payments.length - 1].paidAmount += lateFeeV;
   }
 
   var btn = document.getElementById('bulk-confirm-btn');
@@ -2857,19 +2893,21 @@ function confirmRegBulkPayment() {
         return {label: MONTHS[d.monthIndex], amount: d.totalDue};
       });
       var totalDueForRegBulk = sorted.reduce(function(s, k2) { return s + regBulkMap[k2].totalDue; }, 0);
-closeModal('bulk-pay-modal');
-showReceipt({
-  studentName:  (stu && stu.name) || '',
-  className:    (stu && stu.class && stu.class.className) || '',
-  fatherName:   (stu && stu.fatherName) || '',
-  session:      session,
-  total:        collected,
-  totalFeeDue:  totalDueForRegBulk,
-  balance:      collected - totalDueForRegBulk,
-  paymentMode:  'Cash \u2014 Reception',
-  remark:       remark,
-  items:        items
-});
+      closeModal('bulk-pay-modal');
+      showReceipt({
+        studentName:  (stu && stu.name) || '',
+        className:    (stu && stu.class && stu.class.className) || '',
+        fatherName:   (stu && stu.fatherName) || '',
+        session:      session,
+        total:        collected,
+        totalFeeDue:  totalDueForRegBulk,
+        totalWaiver:  waiver,
+        totalLateFee: lateFeeV,
+        balance:      collected - lateFeeV - Math.max(0, totalDueForRegBulk - waiver),
+        paymentMode:  'Cash \u2014 Reception',
+        remark:       remark,
+        items:        items
+      });
       clearRegBulkSelection();
       return loadFeeStatus();
     })
