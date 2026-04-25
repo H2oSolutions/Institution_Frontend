@@ -949,7 +949,7 @@ function loadExistingStructure(session) {
 
       renderFeeBuilder();
       buildPreview();
-      toast('Structure loaded');
+     // toast('Structure loaded');
     }).catch(function(e) { console.error('loadExistingStructure:', e); });
 }
 
