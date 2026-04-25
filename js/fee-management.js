@@ -291,102 +291,138 @@ function renderRoutesList() {
 // ── FLEET OVERVIEW ──────────────────────────────────────────────
 function loadFleetOverview() {
   FLEET_REG = {};
-  fleetIdx  = 0;
   var el = document.getElementById('fleet-overview-container');
   if (!el) return;
   el.innerHTML = '<div class="fm-empty" style="padding:18px 0"><div class="ei">⏳</div>Loading fleet...</div>';
+ 
   var session = currentSession;
   if (!session) return;
-
+ 
   apiGet(API_TRANSPORT_ROSTER + '?session=' + encodeURIComponent(session), true)
     .then(function(r) {
       var routes = r.data || [];
       if (!routes.length) {
-        el.innerHTML = '<div class="fm-empty">No routes or buses yet.</div>';
+        el.innerHTML = '<div class="fm-empty">No routes or buses yet. Add routes in Tab 2.</div>';
         return;
       }
-
-      // Group by route for cleaner display
+ 
       var html = '';
+ 
       routes.forEach(function(route) {
-        html += '<div class="fov-route-section">';
-        html += '<div class="fov-route-header">';
-        html += '<span class="fov-route-icon">🚌</span>';
-        html += '<div class="fov-route-info">';
-        html += '<span class="fov-route-name">' + escH(route.name) + '</span>';
-        html += '<span class="fov-route-path">' + escH(route.from) + ' → ' + escH(route.to) + '</span>';
+        var buses       = route.buses      || [];
+        var unassigned  = route.unassigned || [];
+        var totalStus   = buses.reduce(function(s, b) { return s + b.students.length; }, 0) + unassigned.length;
+        var totalCap    = buses.reduce(function(s, b) { return s + (b.capacity || 0); }, 0);
+        var totalOnBus  = buses.reduce(function(s, b) { return s + b.students.length; }, 0);
+        var overallOcc  = totalCap > 0 ? Math.round((totalOnBus / totalCap) * 100) : null;
+        var occColor    = overallOcc === null ? '#6366f1'
+          : overallOcc >= 90 ? '#ef4444'
+          : overallOcc >= 70 ? '#f59e0b' : '#10b981';
+ 
+        /* ── Header ── */
+        html += '<div class="fov2-item" id="fov2-' + route._id + '">';
+        html += '<div class="fov2-header" onclick="toggleFov2(\'' + route._id + '\')">';
+        html += '<span class="fov2-icon">&#128652;</span>';
+        html += '<div class="fov2-route-info">';
+        html += '<div class="fov2-route-name">' + escH(route.name) + '</div>';
+        html += '<div class="fov2-route-path">' + escH(route.from) + ' \u2192 ' + escH(route.to) + '</div>';
         html += '</div>';
-        var totalStudents = (route.buses || []).reduce(function(s, b) { return s + b.students.length; }, 0)
-          + ((route.unassigned || []).length);
-        html += '<span class="fov-route-count">' + totalStudents + ' students</span>';
-        html += '</div>'; // route-header
-
-        html += '<div class="fov-buses-row">';
-
-        // Regular bus cards
-        (route.buses || []).forEach(function(bus) {
-          var k = regFleet({
-            bus: bus, routeId: route._id, students: bus.students,
-            route: route, isUnassigned: false
+ 
+        /* stat badges */
+        html += '<div class="fov2-stat-badges">';
+        html += '<span class="fov2-badge fov2-b-bus">' + buses.length + ' bus' + (buses.length !== 1 ? 'es' : '') + '</span>';
+        html += '<span class="fov2-badge fov2-b-stu">' + totalStus + ' student' + (totalStus !== 1 ? 's' : '') + '</span>';
+        if (overallOcc !== null) {
+          html += '<span class="fov2-badge" style="background:' + occColor + '18;color:' + occColor + ';border-color:' + occColor + '44">' + overallOcc + '% full</span>';
+        }
+        if (unassigned.length) {
+          html += '<span class="fov2-badge fov2-b-warn">&#9888; ' + unassigned.length + ' unassigned</span>';
+        }
+        html += '</div>'; /* badges */
+ 
+        html += '<span class="fov2-chevron">&#9660;</span>';
+        html += '</div>'; /* header */
+ 
+        /* ── Body (hidden by default) ── */
+        html += '<div class="fov2-body" id="fov2body-' + route._id + '">';
+ 
+        if (buses.length || unassigned.length) {
+          html += '<div class="fov2-bus-grid">';
+ 
+          /* regular bus tiles */
+          buses.forEach(function(bus) {
+            var k = regFleet({
+              bus: bus, routeId: route._id, students: bus.students,
+              route: route, isUnassigned: false
+            });
+            var occ   = bus.capacity ? Math.round((bus.students.length / bus.capacity) * 100) : null;
+            var oc    = occ === null ? '#6366f1' : occ >= 90 ? '#ef4444' : occ >= 70 ? '#f59e0b' : '#10b981';
+            var pct   = bus.capacity ? Math.min(100, Math.round((bus.students.length / bus.capacity) * 100)) : 0;
+ 
+            html += '<div class="fov2-bus-tile" onclick="openBusRosterFromReg(\'' + k + '\')">';
+            html += '<div class="fov2-tile-top">';
+            html += '<div class="fov2-tile-num">' + escH(bus.busNumber || 'No No.') + '</div>';
+            if (occ !== null) {
+              html += '<div style="font-size:9px;font-weight:800;background:' + oc + '18;color:' + oc + ';border:1.5px solid ' + oc + '33;border-radius:4px;padding:1px 5px">' + occ + '%</div>';
+            }
+            html += '</div>';
+            html += '<div class="fov2-tile-driver">&#128100; ' + escH(bus.driverName) + '</div>';
+            html += '<div class="fov2-tile-count" style="color:' + oc + '">';
+            html += bus.students.length + '<span>/' + (bus.capacity || '?') + ' seats</span></div>';
+            if (bus.capacity) {
+              html += '<div class="fov2-occ-bar"><div class="fov2-occ-fill" style="width:' + pct + '%;background:' + oc + '"></div></div>';
+            }
+            html += '<div class="fov2-tile-hint">Tap to view roster \u2192</div>';
+            html += '</div>'; /* bus-tile */
           });
-          var occupancy = bus.capacity ? Math.round((bus.students.length / bus.capacity) * 100) : null;
-          var occColor  = occupancy === null ? '#6366f1'
-            : occupancy >= 90 ? '#ef4444'
-            : occupancy >= 70 ? '#f59e0b' : '#10b981';
-
-          html += '<div class="fov-bus-card" onclick="openBusRosterFromReg(\'' + k + '\')">';
-          html += '<div class="fov-bus-top">';
-          html += '<div class="fov-bus-num">' + escH(bus.busNumber || 'No No.') + '</div>';
-          if (occupancy !== null) {
-            html += '<div class="fov-occ-badge" style="background:' + occColor + '22;color:' + occColor + ';border:1.5px solid ' + occColor + '44">'
-              + occupancy + '%</div>';
+ 
+          /* unassigned tile */
+          if (unassigned.length) {
+            var ku = regFleet({
+              bus: null, routeId: route._id, students: unassigned,
+              route: route, isUnassigned: true
+            });
+            html += '<div class="fov2-bus-tile fov2-tile-unassigned" onclick="openBusRosterFromReg(\'' + ku + '\')">';
+            html += '<div class="fov2-tile-top">';
+            html += '<div class="fov2-tile-num" style="color:#c2410c">No Bus</div>';
+            html += '<div style="font-size:9px;font-weight:800;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;border-radius:4px;padding:1px 5px">!</div>';
+            html += '</div>';
+            html += '<div class="fov2-tile-driver" style="color:#c2410c">&#9888; Not assigned to bus</div>';
+            html += '<div class="fov2-tile-count" style="color:#c2410c">' + unassigned.length + '<span style="color:#ea580c"> students</span></div>';
+            html += '<div class="fov2-tile-hint" style="color:#c2410c">Tap to view \u2192</div>';
+            html += '</div>';
           }
-          html += '</div>';
-          html += '<div class="fov-bus-driver">👤 ' + escH(bus.driverName) + '</div>';
-          html += '<div class="fov-bus-stats">';
-          html += '<span class="fov-stat-num" style="color:' + occColor + '">' + bus.students.length + '</span>';
-          html += '<span class="fov-stat-sep">/</span>';
-          html += '<span class="fov-stat-cap">' + (bus.capacity || '?') + '</span>';
-          html += '<span class="fov-stat-lbl"> students</span>';
-          html += '</div>';
-          html += '<div class="fov-tap-hint">Tap to view roster →</div>';
-          html += '</div>'; // fov-bus-card
-        });
-
-        // Unassigned card (only if there are unassigned students)
-        if (route.unassigned && route.unassigned.length) {
-          var ku = regFleet({
-            bus: null, routeId: route._id, students: route.unassigned,
-            route: route, isUnassigned: true
-          });
-          html += '<div class="fov-bus-card fov-unassigned-card" onclick="openBusRosterFromReg(\'' + ku + '\')">';
-          html += '<div class="fov-bus-top">';
-          html += '<div class="fov-bus-num" style="color:#c2410c">No Bus</div>';
-          html += '<div class="fov-occ-badge" style="background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa">!</div>';
-          html += '</div>';
-          html += '<div class="fov-bus-driver" style="color:#c2410c">⚠ Not assigned to bus</div>';
-          html += '<div class="fov-bus-stats">';
-          html += '<span class="fov-stat-num" style="color:#c2410c">' + route.unassigned.length + '</span>';
-          html += '<span class="fov-stat-lbl"> students</span>';
-          html += '</div>';
-          html += '<div class="fov-tap-hint">Tap to view →</div>';
-          html += '</div>';
+ 
+          html += '</div>'; /* bus-grid */
+        } else {
+          html += '<div class="fov2-no-buses">No buses added to this route yet.</div>';
         }
-
-        // Empty state if no buses
-        if (!route.buses.length && !(route.unassigned && route.unassigned.length)) {
-          html += '<div class="fov-no-buses">No buses added to this route yet</div>';
-        }
-
-        html += '</div>'; // fov-buses-row
-        html += '</div>'; // fov-route-section
+ 
+        html += '</div>'; /* fov2-body */
+        html += '</div>'; /* fov2-item */
       });
-
+ 
       el.innerHTML = html;
     })
     .catch(function(e) {
       el.innerHTML = '<div class="fm-empty">Failed to load fleet: ' + escH(e.message) + '</div>';
     });
+}
+
+function toggleFov2(routeId) {
+  var item = document.getElementById('fov2-' + routeId);
+  var body = document.getElementById('fov2body-' + routeId);
+  if (!item || !body) return;
+
+  var isOpen = item.classList.contains('fov2-open');
+  item.classList.toggle('fov2-open', !isOpen);
+  body.style.display = isOpen ? 'none' : 'block';
+
+  if (!isOpen) {
+    setTimeout(function() {
+      item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 60);
+  }
 }
 
 function openBusRosterModal(bus, routeId, students, route, isUnassigned) {
@@ -728,15 +764,24 @@ function deleteBus(bid, rid) {
 }
 
 function openAssignModal(rid) {
-  allStudents = [];
-  return loadAllStudents().then(function() {
+  var cachePromise = routeStuCache[rid]
+    ? Promise.resolve()
+    : loadRouteStats(rid);
+
+  var loadPromise = allStudents.length
+    ? Promise.resolve()
+    : loadAllStudents();
+
+  return Promise.all([cachePromise, loadPromise]).then(function() {
     document.getElementById('am-route-id').value = rid;
     var rt = transportRoutes.find(function(r) { return r._id === rid; });
-    document.getElementById('assign-modal-sub').textContent = 'Assigning to: ' + ((rt && rt.name) || 'Route');
+    document.getElementById('assign-modal-sub').textContent =
+      'Assigning to: ' + ((rt && rt.name) || 'Route');
     var amCls = document.getElementById('am-class');
-    amCls.innerHTML = '<option value="">All Classes</option>' + classes.map(function(c) {
-      return '<option value="' + c._id + '">' + escH(c.className) + '</option>';
-    }).join('');
+    amCls.innerHTML = '<option value="">All Classes</option>' +
+      classes.map(function(c) {
+        return '<option value="' + c._id + '">' + escH(c.className) + '</option>';
+      }).join('');
     document.getElementById('am-search').value = '';
     filterAssignStudents();
     openModal('assign-modal');
@@ -818,16 +863,34 @@ var selectedBus = currentBusId || autoSelect;
 
 function saveAssignments() {
   var rid     = document.getElementById('am-route-id').value;
-  var session = currentSession || '2026-27';
+  var session = currentSession || document.getElementById('st-session').value;
+  if (!session) { toast('Session not loaded yet', 'error'); return; }
 
+  // ── Build a map of ALL currently assigned students from cache ──
+  var existingMap = {};
+  (routeStuCache[rid] || []).forEach(function(a) {
+    var sid = String(a.studentId || (a.student && a.student._id));
+    existingMap[sid] = a.busId ? String(a.busId) : null;
+  });
+
+  // ── Get the IDs of students currently VISIBLE in the modal ──
+  var visibleIds = new Set();
+  document.querySelectorAll('#assign-student-list input[type="checkbox"]').forEach(function(cb) {
+    visibleIds.add(String(cb.value));
+  });
+
+  // ── Start with assigned students NOT visible in current filter — preserve them ──
   var students = [];
-  
-  // Query ALL checkboxes in the list, not just inside labels
-  var checkboxes = document.querySelectorAll('#assign-student-list input[type="checkbox"]');
-  checkboxes.forEach(function(cb) {
+  Object.keys(existingMap).forEach(function(sid) {
+    if (!visibleIds.has(sid)) {
+      students.push({ studentId: sid, busId: existingMap[sid] || null });
+    }
+  });
+
+  // ── Add checked students from the visible filtered list ──
+  document.querySelectorAll('#assign-student-list input[type="checkbox"]').forEach(function(cb) {
     if (!cb.checked) return;
     var sid = cb.value;
-    // Find bus select directly by data attribute — not by DOM parent traversal
     var busSelect = document.querySelector('#assign-student-list .bus-select[data-student-id="' + sid + '"]');
     var busId = (busSelect && busSelect.value && busSelect.value !== '') ? busSelect.value : null;
     students.push({ studentId: sid, busId: busId });
@@ -837,21 +900,18 @@ function saveAssignments() {
 
   var btn = document.getElementById('am-save-btn');
   setLoading(btn, true);
-  
+
   apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: students, session: session }, true)
     .then(function() {
       toast(students.length + ' student(s) saved');
       closeModal('assign-modal');
-      routeStuCache[rid] = null;  // Clear cache so fresh data loads
-      routeBusCache[rid] = null;  // Clear bus cache too
-      // Reload route stats AND fleet overview
+      routeStuCache[rid] = null;
+      routeBusCache[rid] = null;
       return loadRouteStats(rid);
     })
     .then(function() {
-      // Re-render route body if expanded
       var card = document.getElementById('rc-' + rid);
       if (card && card.classList.contains('expanded')) renderRouteBody(rid);
-      // CRITICAL FIX: Always reload fleet overview so cards refresh
       loadFleetOverview();
     })
     .catch(function(e) { toast(e.message, 'error'); })
@@ -3745,4 +3805,225 @@ function toast(msg, type) {
   toastTimer = setTimeout(function() { t.classList.remove('show'); }, 3000);
 }
 
-// fixed one 
+async function exportBusRosterExcel() {
+  var d = window._busRosterData;
+  if (!d) return;
+  var route        = d.route    || {};
+  var bus          = d.bus      || {};
+  var students     = d.students || [];
+  var isUnassigned = d.isUnassigned;
+
+  var title = isUnassigned
+    ? 'Unassigned Students — ' + (route.name || '')
+    : 'Bus Roster — ' + (bus.busNumber || 'No Bus No.');
+
+  var workbook  = new ExcelJS.Workbook();
+  workbook.creator = 'Hello School';
+  workbook.created = new Date();
+
+  var sheetName = (isUnassigned ? 'Unassigned' : (bus.busNumber || 'Roster')).slice(0, 31);
+  var ws = workbook.addWorksheet(sheetName);
+
+  ws.columns = [
+    { width: 5  },  // #
+    { width: 26 },  // Student Name
+    { width: 14 },  // Class
+    { width: 26 },  // Father's Name
+    { width: 18 },  // Phone
+    { width: 22 },  // Signature
+  ];
+
+  // ── Color palette ──
+  var C = {
+    purple:      'FF4F46E5',
+    purple2:     'FF7C3AED',
+    lightPurple: 'FFEEF2FF',
+    midPurple:   'FFC7D2FE',
+    white:       'FFFFFFFF',
+    gray:        'FFF8FAFC',
+    darkText:    'FF0F172A',
+    mutedText:   'FF94A3B8',
+    orange:      'FFEA580C',
+    lightOrange: 'FFFFF7ED',
+    green:       'FF059669',
+    lightGreen:  'FFF0FDF4',
+  };
+
+  function mkFill(argb)  { return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } }; }
+  function mkFont(opts)  { return Object.assign({ name: 'Arial' }, opts); }
+  function mkBorder(col) {
+    var s = { style: 'thin', color: { argb: col || 'FFE2E8F0' } };
+    return { top: s, left: s, bottom: s, right: s };
+  }
+  function mkAlign(h, v) { return { horizontal: h || 'left', vertical: v || 'middle', wrapText: false }; }
+
+  function mergeStyle(r1, c1, r2, c2, val, fontOpts, fillArgb, alignH) {
+    var addr = ws.getCell(r1, c1).address + ':' + ws.getCell(r2, c2).address;
+    ws.mergeCells(addr);
+    var cell = ws.getCell(r1, c1);
+    cell.value     = val;
+    cell.font      = mkFont(fontOpts);
+    cell.fill      = mkFill(fillArgb);
+    cell.alignment = mkAlign(alignH || 'left', 'middle');
+    return cell;
+  }
+
+  var row = 1;
+
+  // ── Row 1: Big header ──
+  ws.getRow(row).height = 40;
+  mergeStyle(row, 1, row, 6, '🏫  Hello School — Bus Roster',
+    { bold: true, size: 16, color: { argb: C.white } }, C.purple, 'center');
+  row++;
+
+  // ── Row 2: Title ──
+  ws.getRow(row).height = 26;
+  mergeStyle(row, 1, row, 6, title,
+    { bold: true, size: 12, color: { argb: C.white } }, C.purple2, 'center');
+  row++;
+
+  // ── Row 3: Session | Date ──
+  ws.getRow(row).height = 20;
+  var addr3a = ws.getCell(row, 1).address + ':' + ws.getCell(row, 3).address;
+  ws.mergeCells(addr3a);
+  var c3a = ws.getCell(row, 1);
+  c3a.value = 'Session: ' + (currentSession || '');
+  c3a.font = mkFont({ size: 10, color: { argb: C.darkText } });
+  c3a.fill = mkFill(C.lightPurple);
+  c3a.alignment = mkAlign('left', 'middle');
+
+  var addr3b = ws.getCell(row, 4).address + ':' + ws.getCell(row, 6).address;
+  ws.mergeCells(addr3b);
+  var c3b = ws.getCell(row, 4);
+  c3b.value = 'Printed: ' + new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  c3b.font = mkFont({ size: 10, color: { argb: C.darkText } });
+  c3b.fill = mkFill(C.lightPurple);
+  c3b.alignment = mkAlign('right', 'middle');
+  row++;
+
+  // ── Spacer ──
+  ws.getRow(row).height = 10;
+  row++;
+
+  // ── Bus info block ──
+  if (!isUnassigned && bus.busNumber) {
+    ws.getRow(row).height = 18;
+    mergeStyle(row, 1, row, 6, 'BUS INFORMATION',
+      { bold: true, size: 9, color: { argb: C.purple } }, C.lightPurple, 'left');
+    row++;
+
+    var infoData = [
+      ['Bus Number', bus.busNumber || '—'],
+      ['Driver',     bus.driverName || '—'],
+      ['Contact',    String(bus.driverContact || '—')],
+      ['Capacity',   bus.capacity ? bus.capacity + ' seats' : 'Not set'],
+      ['Route',      route.name || '—'],
+      ['Path',       (route.from || '') + ' → ' + (route.to || '')],
+      ['Monthly Fee','Rs.' + (route.amount || 0).toLocaleString()],
+    ];
+
+    for (var i = 0; i < infoData.length; i += 2) {
+      ws.getRow(row).height = 20;
+
+      var lc1 = ws.getCell(row, 1);
+      lc1.value = infoData[i][0];
+      lc1.font  = mkFont({ bold: true, size: 9, color: { argb: C.mutedText } });
+      lc1.fill  = mkFill(C.gray);
+      lc1.alignment = mkAlign('left', 'middle');
+
+      var addr_v1 = ws.getCell(row, 2).address + ':' + ws.getCell(row, 3).address;
+      ws.mergeCells(addr_v1);
+      var vc1 = ws.getCell(row, 2);
+      vc1.value = infoData[i][1];
+      vc1.font  = mkFont({ bold: true, size: 10, color: { argb: C.darkText } });
+      vc1.fill  = mkFill(C.white);
+      vc1.alignment = mkAlign('left', 'middle');
+
+      if (infoData[i + 1]) {
+        var lc2 = ws.getCell(row, 4);
+        lc2.value = infoData[i + 1][0];
+        lc2.font  = mkFont({ bold: true, size: 9, color: { argb: C.mutedText } });
+        lc2.fill  = mkFill(C.gray);
+        lc2.alignment = mkAlign('left', 'middle');
+
+        var addr_v2 = ws.getCell(row, 5).address + ':' + ws.getCell(row, 6).address;
+        ws.mergeCells(addr_v2);
+        var vc2 = ws.getCell(row, 5);
+        vc2.value = infoData[i + 1][1];
+        vc2.font  = mkFont({ bold: true, size: 10, color: { argb: C.darkText } });
+        vc2.fill  = mkFill(C.white);
+        vc2.alignment = mkAlign('left', 'middle');
+      }
+      row++;
+    }
+    ws.getRow(row).height = 10;
+    row++;
+  }
+
+  // ── Student count label ──
+  ws.getRow(row).height = 18;
+  mergeStyle(row, 1, row, 6,
+    'STUDENT ROSTER — ' + students.length + ' STUDENT' + (students.length !== 1 ? 'S' : ''),
+    { bold: true, size: 9, color: { argb: C.purple } }, C.lightPurple, 'left');
+  row++;
+
+  // ── Table header ──
+  ws.getRow(row).height = 26;
+  var headers = ['#', 'Student Name', 'Class', "Father's Name", 'Phone', 'Signature'];
+  headers.forEach(function(h, i) {
+    var cell = ws.getCell(row, i + 1);
+    cell.value     = h;
+    cell.font      = mkFont({ bold: true, size: 10, color: { argb: C.white } });
+    cell.fill      = mkFill(C.purple);
+    cell.alignment = mkAlign('center', 'middle');
+    cell.border    = mkBorder('FF4F46E5');
+  });
+  row++;
+
+  // ── Student rows ──
+  students.forEach(function(s, idx) {
+    ws.getRow(row).height = 22;
+    var rowFill = idx % 2 === 1 ? C.gray : C.white;
+    var vals = [idx + 1, s.name || '', s.class || '', s.fatherName || '', String(s.phone || ''), ''];
+    vals.forEach(function(v, i) {
+      var cell = ws.getCell(row, i + 1);
+      cell.value     = v;
+      cell.font      = mkFont({ size: 10, color: { argb: C.darkText }, bold: i === 1 });
+      cell.fill      = mkFill(rowFill);
+      cell.alignment = mkAlign(i === 0 ? 'center' : 'left', 'middle');
+      cell.border    = mkBorder();
+    });
+    row++;
+  });
+
+  // ── Footer ──
+  ws.getRow(row).height = 20;
+  var addr_fl = ws.getCell(row, 1).address + ':' + ws.getCell(row, 4).address;
+  ws.mergeCells(addr_fl);
+  var fl = ws.getCell(row, 1);
+  fl.value     = 'Hello School · Transport Management · ' + (currentSession || '');
+  fl.font      = mkFont({ size: 9, color: { argb: C.mutedText }, italic: true });
+  fl.fill      = mkFill(C.lightPurple);
+  fl.alignment = mkAlign('left', 'middle');
+
+  var addr_fr = ws.getCell(row, 5).address + ':' + ws.getCell(row, 6).address;
+  ws.mergeCells(addr_fr);
+  var fr = ws.getCell(row, 5);
+  fr.value     = 'Authorised Signatory';
+  fr.font      = mkFont({ size: 9, color: { argb: C.mutedText } });
+  fr.fill      = mkFill(C.lightPurple);
+  fr.alignment = mkAlign('center', 'middle');
+
+  // ── Download ──
+  var buffer = await workbook.xlsx.writeBuffer();
+  var blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var url    = URL.createObjectURL(blob);
+  var a      = document.createElement('a');
+  a.href     = url;
+  a.download = title.replace(/[^a-z0-9]/gi, '_') + '.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Excel file downloaded');
+}
