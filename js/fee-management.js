@@ -1676,7 +1676,9 @@ function calcRemaining(m) {
   if (m.isRecovered) return 0;
   if (m.isPaid && !m.isPartial) return 0;   // <-- FIX: fully paid months have 0 remaining
   var base = m.baseAmount != null ? m.baseAmount : m.amount;
-  if (m.isPartial) return Math.max(0, base - (m.paidAmount || 0));
+  if (m.isPartial) return Math.max(0, 
+  (m.effectiveDue != null ? m.effectiveDue : base) - (m.paidAmount || 0)
+);
   var effectiveDue = m.effectiveDue != null ? m.effectiveDue : m.amount;
   return Math.max(0, effectiveDue);
 }
@@ -1809,7 +1811,22 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
   var isFullyRecovered = !allPaid && items.every(function(i) {
     return (i.month.isPaid && !i.month.isPartial) || i.month.isRecovered;
   });
-  var totalDue     = items.reduce(function(s, i) { return s + calcRemaining(i.month); }, 0);
+
+  // Compute prevIsUnpaid early so it can influence both totalDue and chip display.
+  var prevMi0 = idx > 0 ? sortedMonths[idx - 1] : null;
+  var prevIsUnpaid = prevMi0 != null && monthMap[prevMi0]
+    ? monthMap[prevMi0].some(function(pi) { return !pi.month.isPaid && !pi.month.isRecovered; })
+    : false;
+
+  // The backend incorrectly re-attaches the original carry to every subsequent unpaid month.
+  // Only the immediately-next month (prevIsUnpaid=false) should include carry-only entries
+  // (base=0). For all later months skip them — they are repeated carry artefacts.
+  var totalDue = items.reduce(function(s, i) {
+    var base = i.month.baseAmount != null ? i.month.baseAmount : i.month.amount;
+    if (!prevIsUnpaid) return s + calcRemaining(i.month);
+    if (base <= 0)     return s;                               // skip carry-only artefact (base=0)
+    return s + Math.min(calcRemaining(i.month), base);         // cap scheduled fee at base — backend inflates effectiveDue with old carry
+  }, 0);
   var totalPaidAmt = items.reduce(function(s, i) { return s + (i.month.paidAmount || 0); }, 0);
   var baseTotal    = items.reduce(function(s, i) {
     return s + (i.month.baseAmount != null ? i.month.baseAmount : (i.month.amount || 0));
@@ -1824,11 +1841,16 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
     : totalDue <= 0 ? 'mr-covered'
     : 'mr-unpaid';
 
-  var fhChips = items.map(function(i) {
-    var remaining = calcRemaining(i.month);
-    var dispAmt   = allPaid ? (i.month.paidAmount || baseTotal)
-                  : isFullyRecovered ? (i.month.paidAmount || 0)
-                  : remaining;
+ var fhChips = items.filter(function(i) {
+    // Only render a chip for fee heads actually scheduled this month (base > 0).
+    // Carry-only entries (base = 0) are surfaced by the '+Rs.X carry' badge instead.
+    var base = i.month.baseAmount != null ? i.month.baseAmount : i.month.amount;
+    return base > 0;
+  }).map(function(i) {
+    var base    = i.month.baseAmount != null ? i.month.baseAmount : i.month.amount;
+    var dispAmt = allPaid          ? (i.month.paidAmount || base)
+                : isFullyRecovered ? (i.month.paidAmount || 0)
+                : base;  // show scheduled base; carry surfaces via '+Rs.X carry' badge
     var partialTag = (i.month.isPartial && !i.month.isRecovered)
       ? ' <span style="color:#ea580c;font-size:9px;font-weight:900">(partial)</span>'
       : '';
@@ -1855,14 +1877,19 @@ if (allPaid) {
   badge = '<span class="mr-status mr-status-due">Rs.' + totalDue.toLocaleString() + ' due</span>';
 }
 
-  var carryParts = [];
+ 
+
+var carryParts = [];
 
 items.forEach(function(i) {
   var m       = i.month;
+  var credit  = m.previousCredit || 0;
   var adjBase = m.adjustedBase != null ? m.adjustedBase : (m.baseAmount != null ? m.baseAmount : m.amount);
   var effDue  = m.effectiveDue != null ? m.effectiveDue : adjBase;
-  var carry   = Math.max(0, Math.round(effDue - adjBase));
-  if (!m.isPaid && !m.isRecovered && carry > 0) {
+  var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
+  // Only show carry badge on the FIRST unpaid month after the originating carried month.
+  // If the previous month was also unpaid, the carry is already shown there — suppress it here.
+  if (!m.isPaid && !m.isRecovered && carry > 0 && !prevIsUnpaid) {
     carryParts.push('+Rs.' + carry.toLocaleString() + ' carry');
   }
   if ((m.previousCredit || 0) > 0) {
@@ -2209,18 +2236,66 @@ function openMonthPayModal(studentId, monthIndex) {
   var stu = feeStatusData.find(function(s) { return s.studentId === studentId; });
   if (!stu) return;
 
-  var items = [];
-  (stu.entries || []).forEach(function(entry) {
-    var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-    if (m && !m.paymentId && calcRemaining(m) > 0) {
-      items.push({ entry: entry, month: m });
-    }
+  // ── Apply same prevIsUnpaid capping as buildMonthRow ──
+// Carry-only non-due entries (base=0) from sparse fee heads (e.g. examination
+// testing) persist through every non-due month in the backend chain. They
+// should only appear in the FIRST unpaid month, not every subsequent one.
+var allMIs = [];
+(stu.entries || []).forEach(function(e) {
+  e.months.forEach(function(m) { if (allMIs.indexOf(m.monthIndex) === -1) allMIs.push(m.monthIndex); });
+});
+allMIs.sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
+var myIdx = allMIs.indexOf(monthIndex);
+var prevMiMPM = myIdx > 0 ? allMIs[myIdx - 1] : null;
+var prevIsUnpaidMPM = prevMiMPM != null && (stu.entries || []).some(function(e) {
+  return e.months.some(function(m) {
+    return m.monthIndex === prevMiMPM && !m.isPaid && !m.isRecovered;
   });
+});
 
-  if (!items.length) { toast('Nothing to pay for this month', 'info'); return; }
+// ── Apply same prevIsUnpaid capping as buildMonthRow ──
+var allMIs = [];
+(stu.entries || []).forEach(function(e) {
+  e.months.forEach(function(m) {
+    if (allMIs.indexOf(m.monthIndex) === -1) allMIs.push(m.monthIndex);
+  });
+});
 
-  // calcRemaining reads effectiveDue which already includes carry from backend
-  var totalDue = items.reduce(function(sum, i) { return sum + calcRemaining(i.month); }, 0);
+allMIs.sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
+
+var myIdx = allMIs.indexOf(monthIndex);
+var prevMiMPM = myIdx > 0 ? allMIs[myIdx - 1] : null;
+
+var prevIsUnpaidMPM = prevMiMPM != null && (stu.entries || []).some(function(e) {
+  return e.months.some(function(m) {
+    return m.monthIndex === prevMiMPM && !m.isPaid && !m.isRecovered;
+  });
+});
+
+var items = [];
+(stu.entries || []).forEach(function(entry) {
+  var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
+
+  if (m && !m.paymentId && calcRemaining(m) > 0) {
+
+    // 🔥 CORE FIX
+    if (prevIsUnpaidMPM) {
+      var base = m.baseAmount != null ? m.baseAmount : m.amount;
+      if (base <= 0) return; // skip carry-only
+    }
+
+    items.push({ entry: entry, month: m });
+  }
+});
+
+if (!items.length) {
+  toast('Nothing to pay for this month', 'info');
+  return;
+}
+
+var totalDue = items.reduce(function(sum, i) {
+  return sum + calcRemaining(i.month);
+}, 0);
 
   var html = '';
   items.forEach(function(i) {
@@ -2345,7 +2420,10 @@ var payments  = d.items.map(function(item, idx) {
     return {
       type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
       monthIndex: d.monthIndex,
-      amount: item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
+      amount: (function() {
+  var b = item.month.baseAmount != null ? item.month.baseAmount : item.month.amount;
+  return b > 0 ? b : (item.month.effectiveDue || alloc || 1);
+}()),
       paidAmount:   alloc,
       waiverAmount: idx === 0 ? waiver   : 0,
       lateFee:      idx === d.items.length - 1 ? lateFeeV : 0
@@ -2355,6 +2433,10 @@ var payments  = d.items.map(function(item, idx) {
 if (remaining > 0 && payments.length > 0) {
     payments[payments.length - 1].paidAmount += remaining;
 }
+
+// ADD THIS: prevents spurious zero-paid DB records for carry-only entries
+payments = payments.filter(function(p) { return p.paidAmount > 0; });
+
 
   var btn = document.getElementById('mpm-confirm-btn');
   setLoading(btn, true);
@@ -2377,8 +2459,8 @@ if (remaining > 0 && payments.length > 0) {
         var base    = m.baseAmount   != null ? m.baseAmount   : (m.amount || 0);
         var adjBase = m.adjustedBase != null ? m.adjustedBase : base;
         var effDue  = m.effectiveDue != null ? m.effectiveDue : adjBase;
-        var carry   = Math.max(0, Math.round(effDue - adjBase));
-        var credit  = m.previousCredit || 0;
+          var credit  = m.previousCredit || 0;   // ← declare FIRST
+  var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
         var wv      = (idx === 0) ? waiver : 0;      // waiver applied to first head
         var lf      = (idx === d.items.length - 1) ? lateFeeV : 0; // late fee to last
         var paidRow = payments[idx] ? payments[idx].paidAmount : 0;
@@ -2415,7 +2497,7 @@ if (remaining > 0 && payments.length > 0) {
         fatherName:   (stu && stu.fatherName) || '',
         phone:        (stu && stu.phone)      || '',
         session:      d.session,
-        total:        paidAmt + lateFeeV,
+        total:        paidAmt,
         totalBase:    totalBase,
         totalCarry:   totalCarry,
         totalCredit:  totalCredit,
@@ -2480,14 +2562,15 @@ function confirmMonthEdit() {
     .then(function() {
       var remaining = newTotal;
       var payments  = d.items.map(function(item) {
-        var base  = item.month.baseAmount != null ? item.month.baseAmount : (item.month.amount || 0);
-        var alloc = Math.min(remaining, base);
-        remaining -= alloc;
-        return {
-          type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
-          monthIndex: d.monthIndex, amount: base, paidAmount: alloc
-        };
-      });
+    var base    = item.month.baseAmount != null ? item.month.baseAmount : (item.month.amount || 0);
+    var sendAmt = base > 0 ? base : (item.month.effectiveDue || 1);
+    var alloc   = Math.min(remaining, sendAmt);
+    remaining -= alloc;
+    return {
+      type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
+      monthIndex: d.monthIndex, amount: sendAmt, paidAmount: alloc
+    };
+});
       if (remaining > 0 && payments.length > 0) {
         payments[payments.length - 1].paidAmount += remaining;
       }
@@ -2707,11 +2790,41 @@ function toggleRegBulkMonth(sid, monthIndex, checked) {
     if (regBulkStudentId && regBulkStudentId !== sid) clearRegBulkSelection();
     var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
     if (!stu) return;
-    var items = [];
-    (stu.entries || []).forEach(function(entry) {
-      var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-      if (m) items.push({entry: entry, month: m});
-    });
+    // ── Apply same prevIsUnpaid capping as modal ──
+var allMIs = [];
+(stu.entries || []).forEach(function(e) {
+  e.months.forEach(function(m) {
+    if (allMIs.indexOf(m.monthIndex) === -1) allMIs.push(m.monthIndex);
+  });
+});
+
+allMIs.sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
+
+var myIdx = allMIs.indexOf(monthIndex);
+var prevMiMPM = myIdx > 0 ? allMIs[myIdx - 1] : null;
+
+var prevIsUnpaidMPM = prevMiMPM != null && (stu.entries || []).some(function(e) {
+  return e.months.some(function(m) {
+    return m.monthIndex === prevMiMPM && !m.isPaid && !m.isRecovered;
+  });
+});
+
+var items = [];
+
+(stu.entries || []).forEach(function(entry) {
+  var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
+
+  if (m && !m.paymentId && calcRemaining(m) > 0) {
+
+    // 🔥 CORE FIX — skip carry-only if previous month unpaid
+    if (prevIsUnpaidMPM) {
+      var base = m.baseAmount != null ? m.baseAmount : m.amount;
+      if (base <= 0) return;
+    }
+
+    items.push({entry: entry, month: m});
+  }
+});
     var totalDue = items.reduce(function(s, i) { return s + calcRemaining(i.month); }, 0);
     regBulkMap[key] = {sid: sid, monthIndex: monthIndex, totalDue: totalDue, items: items};
     regBulkStudentId = sid;
@@ -3288,7 +3401,11 @@ function confirmRegBulkPayment() {
     payments.push({
       type: 'regular', feeHeadId: fi.item.entry.feeHeadId, routeId: null,
       monthIndex: fi.monthIndex,
-      amount:       fi.item.month.baseAmount != null ? fi.item.month.baseAmount : fi.item.month.amount,
+      amount: (function() {
+  var b = fi.item.month.baseAmount != null ? fi.item.month.baseAmount : fi.item.month.amount;
+  return b > 0 ? b : (fi.item.month.effectiveDue || alloc || 1);
+}()),
+
       paidAmount:   alloc,
       waiverAmount: idx === 0 ? waiver   : 0,
       lateFee:      idx === totalItems - 1 ? lateFeeV : 0
@@ -3298,7 +3415,10 @@ function confirmRegBulkPayment() {
   if (remaining > 0 && payments.length > 0) {
     payments[payments.length - 1].paidAmount += remaining;
   }
-  // NOTE: late fee is already baked into adjItemDues — do NOT add again
+
+  payments = payments.filter(function(p) { return p.paidAmount > 0; });
+
+  
 
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
@@ -3945,11 +4065,31 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
   sortedMonthIndices.forEach(function(mi) {
     var payments = monthGroups[mi];
     payments.forEach(function(p) {
-      var base    = p.amount       || 0;
-      var paidAmt = (p.paidAmount != null) ? p.paidAmount : base;
-      var waiver  = p.waiverAmount || 0;
-      var lateFee = p.lateFee      || 0;
-      var adjBase = Math.max(0, base - waiver);
+      // REPLACE WITH:
+var storedAmt = p.amount || 0;
+var paidAmt   = (p.paidAmount != null) ? p.paidAmount : storedAmt;
+var waiver    = p.waiverAmount || 0;
+var lateFee   = p.lateFee      || 0;
+
+// p.amount may be effectiveDue (not real base) for carry-only entries.
+// Look up actual baseAmount from feeStatusData chain to get real scheduled base.
+var base = storedAmt;
+if (p.type !== 'transport' && p.feeHeadId && stuData) {
+  var _fhe = (stuData.entries || []).find(function(e) {
+    return String(e.feeHeadId) === String(p.feeHeadId);
+  });
+  if (_fhe) {
+    var _md = (_fhe.months || []).find(function(m) { return m.monthIndex === mi; });
+    if (_md && _md.baseAmount != null) base = _md.baseAmount;
+  }
+} else if (p.type === 'transport' && stuData && stuData.transport) {
+  var _tmd = (stuData.transport.months || []).find(function(m) {
+    return m.monthIndex === mi;
+  });
+  if (_tmd && _tmd.baseAmount != null) base = _tmd.baseAmount;
+}
+
+var adjBase = Math.max(0, base - waiver);
 
       // ── Resolve credit and carry from feeStatusData ──
       var credit = 0, carry = 0;
@@ -4174,7 +4314,7 @@ function _printSingleTransportReceipt(stu, tMonth, monthIndex) {
     totalWaiver:  waiver,
     totalLateFee: lateFee,
     totalFeeDue:  effDue + lateFee, 
-    balance:      (paidAmount - lateFee) - adjBase,
+    balance: paidAmount - (effDue + lateFee),
     paymentMode:  payMode,
     remark:       tMonth.remark || '',
     items:        [richItem],
