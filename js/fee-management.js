@@ -1874,6 +1874,37 @@ items.forEach(function(i) {
   badge += ' <span class="mr-carry">' + carryParts.join(' · ') + '</span>';
 }
 
+// ── Date + Bulk tag ──
+  if (allPaid || anyPartial) {
+    var paidAtItem = items.find(function(i) { return i.month.paidAt; });
+    if (paidAtItem) {
+      var d = new Date(paidAtItem.month.paidAt);
+      badge += ' <span class="mr-date">' +
+        d.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) +
+        ' ' + d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true}) +
+      '</span>';
+    }
+    var bulkItem = items.find(function(i) { return i.month.bulkGroupId; });
+    if (bulkItem) {
+      var bgid = bulkItem.month.bulkGroupId;
+      var stuRef = feeStatusData.find(function(s) { return s.studentId === sid; });
+      if (stuRef) {
+        var bMIs = [];
+        (stuRef.entries || []).forEach(function(entry) {
+          entry.months.forEach(function(m) {
+            if (m.bulkGroupId === bgid && bMIs.indexOf(m.monthIndex) === -1) bMIs.push(m.monthIndex);
+          });
+        });
+        if (bMIs.length > 1) {
+          var bNames = bMIs.sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+            .map(function(mi){ return SHORT_MONTHS[mi]; }).join(', ');
+          badge += '<br><span class="mr-bulk-tag">&#128230; Bulk payment: ' + bNames + '</span>';
+        }
+      }
+    }
+  }
+
+
   var cbHtml = canPay
     ? '<input type="checkbox" class="mp-checkbox" id="reg-cb-' + sid + '-' + monthIndex + '"' +
       ' style="margin-bottom:3px"' +
@@ -2265,32 +2296,31 @@ function confirmMonthPayment() {
   var lateFeeV = Math.max(0, parseInt(document.getElementById('mpm-latefee').value) || 0);
   var remark   = document.getElementById('mpm-remark').value.trim();
 
-  var remaining = paidAmt;
-  var payments  = d.items.map(function(item) {
-    var due   = calcRemaining(item.month);
-    var alloc = Math.min(remaining, due);
+  // Compute per-item effective quota: (due - waiver on first) + lateFee on last
+var adjItemDues = d.items.map(function(item, idx) {
+    var due = calcRemaining(item.month);
+    var wv  = (idx === 0) ? waiver   : 0;
+    var lf  = (idx === d.items.length - 1) ? lateFeeV : 0;
+    return Math.max(0, due - wv) + lf;
+});
+
+var remaining = paidAmt;
+var payments  = d.items.map(function(item, idx) {
+    var alloc = Math.min(remaining, adjItemDues[idx]);
     remaining -= alloc;
     return {
-      type:         'regular',
-      feeHeadId:    item.entry.feeHeadId,
-      routeId:      null,
-      monthIndex:   d.monthIndex,
-      amount:       item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
+      type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
+      monthIndex: d.monthIndex,
+      amount: item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
       paidAmount:   alloc,
-      waiverAmount: 0,
-      lateFee:      0
+      waiverAmount: idx === 0 ? waiver   : 0,
+      lateFee:      idx === d.items.length - 1 ? lateFeeV : 0
     };
-  });
+});
 
-  if (remaining > 0 && payments.length > 0) {
+if (remaining > 0 && payments.length > 0) {
     payments[payments.length - 1].paidAmount += remaining;
-  }
-  if (waiver   > 0 && payments.length > 0) payments[0].waiverAmount = waiver;
-  if (lateFeeV > 0 && payments.length > 0) {
-    var last = payments[payments.length - 1];
-    last.lateFee    = lateFeeV;
-    last.paidAmount += lateFeeV;
-  }
+}
 
   var btn = document.getElementById('mpm-confirm-btn');
   setLoading(btn, true);
@@ -2358,7 +2388,7 @@ function confirmMonthPayment() {
         totalWaiver:  totalWaiver,
         totalLateFee: totalLateFee,
         totalFeeDue:  totalFeeDue,
-        balance:      paidAmt - adjDue,
+        balance:      (paidAmt - lateFeeV) - adjDue,
         paymentMode:  'Cash \u2014 Reception',
         remark:       remark,
         items:        richItems,
@@ -2444,10 +2474,40 @@ function confirmMonthEdit() {
 
 function openMonthDeleteModal(sid, monthIndex) {
   var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  document.getElementById('mdm-sub').textContent =
-    'Delete ALL payments for ' + MONTHS[monthIndex] +
-    (stu ? ' \u2014 ' + stu.name : '') + '?';
-  pendingMonthDelete = {sid: sid, monthIndex: monthIndex};
+
+  // Detect bulk group
+  var bulkGroupId = null;
+  var bulkMonthIndices = [];
+  if (stu) {
+    (stu.entries || []).forEach(function(entry) {
+      var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
+      if (m && m.bulkGroupId) bulkGroupId = m.bulkGroupId;
+    });
+    if (bulkGroupId) {
+      (stu.entries || []).forEach(function(entry) {
+        entry.months.forEach(function(m) {
+          if (m.bulkGroupId === bulkGroupId && bulkMonthIndices.indexOf(m.monthIndex) === -1)
+            bulkMonthIndices.push(m.monthIndex);
+        });
+      });
+    }
+  }
+
+  var subText;
+  if (bulkGroupId && bulkMonthIndices.length > 1) {
+    var bNames = bulkMonthIndices
+      .sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+      .map(function(mi){ return MONTHS[mi]; }).join(', ');
+    subText = '\u26a0 This was a bulk payment covering ' + bNames +
+      '. Deleting will remove ALL ' + bulkMonthIndices.length +
+      ' months\u2019 payments for ' + (stu ? stu.name : 'this student') + '.';
+  } else {
+    subText = 'Delete ALL payments for ' + MONTHS[monthIndex] +
+      (stu ? ' \u2014 ' + stu.name : '') + '?';
+  }
+
+  document.getElementById('mdm-sub').textContent = subText;
+  pendingMonthDelete = { sid: sid, monthIndex: monthIndex };
   openModal('month-delete-modal');
 }
 
@@ -2457,10 +2517,15 @@ function confirmMonthDelete() {
   var stu = feeStatusData.find(function(s) { return s.studentId === d.sid; });
   if (!stu) return;
 
-  var paymentIds = [];
+  var paymentIds  = [];
+  var bulkGroupId = null;
+
   (stu.entries || []).forEach(function(entry) {
     var m = entry.months.find(function(mo) { return mo.monthIndex === d.monthIndex; });
-    if (m && m.paymentId) paymentIds.push(m.paymentId);
+    if (m && m.paymentId) {
+      paymentIds.push(m.paymentId);
+      if (m.bulkGroupId) bulkGroupId = m.bulkGroupId;
+    }
   });
 
   if (!paymentIds.length) { toast('No payments to delete for this month', 'error'); return; }
@@ -2468,17 +2533,50 @@ function confirmMonthDelete() {
   var btn = document.getElementById('mdm-confirm-btn');
   setLoading(btn, true);
 
-  Promise.all(paymentIds.map(function(pid) {
-    return apiDelete(API_FEE_PAY + '/' + pid, true);
-  }))
-    .then(function() {
-      toast(SHORT_MONTHS[d.monthIndex] + ' payments deleted \u2014 month reverted to unpaid');
-      closeModal('month-delete-modal');
-      pendingMonthDelete = null;
-      return loadFeeStatus();
-    })
-    .catch(function(e) { toast(e.message, 'error'); })
-    .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
+  if (bulkGroupId) {
+    // Fetch full group then delete all payments in it
+    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+      .then(function(res) {
+        var groupPayments = res.data || [];
+        var allIds = groupPayments.map(function(p) { return p._id; });
+        paymentIds.forEach(function(pid) { if (allIds.indexOf(pid) === -1) allIds.push(pid); });
+        return Promise.all(allIds.map(function(pid) {
+          return apiDelete(API_FEE_PAY + '/' + pid, true);
+        }));
+      })
+      .then(function() {
+        // Collect month names that were part of this bulk group
+        var bMIs = [];
+        (stu.entries || []).forEach(function(entry) {
+          entry.months.forEach(function(m) {
+            if (m.bulkGroupId === bulkGroupId && bMIs.indexOf(m.monthIndex) === -1)
+              bMIs.push(m.monthIndex);
+          });
+        });
+        var bNames = bMIs
+          .sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+          .map(function(mi){ return SHORT_MONTHS[mi]; }).join(', ');
+        toast('Bulk payment deleted \u2014 ' + bNames + ' reverted to unpaid');
+        closeModal('month-delete-modal');
+        pendingMonthDelete = null;
+        return loadFeeStatus();
+      })
+      .catch(function(e) { toast(e.message, 'error'); })
+      .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
+
+  } else {
+    Promise.all(paymentIds.map(function(pid) {
+      return apiDelete(API_FEE_PAY + '/' + pid, true);
+    }))
+      .then(function() {
+        toast(SHORT_MONTHS[d.monthIndex] + ' payments deleted \u2014 month reverted to unpaid');
+        closeModal('month-delete-modal');
+        pendingMonthDelete = null;
+        return loadFeeStatus();
+      })
+      .catch(function(e) { toast(e.message, 'error'); })
+      .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
+  }
 }
 
 function buildMonthTile(m, k, isTransport) {
@@ -3012,36 +3110,45 @@ function confirmRegBulkPayment() {
     return sessionOrderOf(regBulkMap[a].monthIndex) - sessionOrderOf(regBulkMap[b].monthIndex);
   });
 
-  var remaining = customAmt || sorted.reduce(function(s, k) { return s + regBulkMap[k].totalDue; }, 0);
-  var payments  = [];
-  var itemIndex = 0;
-  var totalItems = sorted.reduce(function(s, k) { return s + regBulkMap[k].items.length; }, 0);
-
+  // Build flat ordered list of all items
+  var flatItems = [];
   sorted.forEach(function(k) {
     var d = regBulkMap[k];
     d.items.forEach(function(item) {
-      var due   = calcRemaining(item.month);
-      var alloc = Math.min(remaining, due);
-      remaining -= alloc;
-      payments.push({
-        type: 'regular', feeHeadId: item.entry.feeHeadId, routeId: null,
-        monthIndex: d.monthIndex,
-        amount: item.month.baseAmount != null ? item.month.baseAmount : item.month.amount,
-        paidAmount: alloc,
-        waiverAmount: itemIndex === 0 ? waiver : 0,
-        lateFee: itemIndex === totalItems - 1 ? lateFeeV : 0
-      });
-      itemIndex++;
+      flatItems.push({ item: item, monthIndex: d.monthIndex });
+    });
+  });
+
+  var totalItems = flatItems.length;
+
+  // Compute per-item adjusted quota (waiver on first, lateFee on last)
+  var adjItemDues = flatItems.map(function(fi, idx) {
+    var due = calcRemaining(fi.item.month);
+    var wv  = (idx === 0) ? waiver   : 0;
+    var lf  = (idx === totalItems - 1) ? lateFeeV : 0;
+    return Math.max(0, due - wv) + lf;
+  });
+
+  var remaining = customAmt || adjItemDues.reduce(function(s, v) { return s + v; }, 0);
+  var payments  = [];
+
+  flatItems.forEach(function(fi, idx) {
+    var alloc = Math.min(remaining, adjItemDues[idx]);
+    remaining -= alloc;
+    payments.push({
+      type: 'regular', feeHeadId: fi.item.entry.feeHeadId, routeId: null,
+      monthIndex: fi.monthIndex,
+      amount:       fi.item.month.baseAmount != null ? fi.item.month.baseAmount : fi.item.month.amount,
+      paidAmount:   alloc,
+      waiverAmount: idx === 0 ? waiver   : 0,
+      lateFee:      idx === totalItems - 1 ? lateFeeV : 0
     });
   });
 
   if (remaining > 0 && payments.length > 0) {
     payments[payments.length - 1].paidAmount += remaining;
   }
-  // Add late fee to last item's paidAmount
-  if (lateFeeV > 0 && payments.length > 0) {
-    payments[payments.length - 1].paidAmount += lateFeeV;
-  }
+  // NOTE: late fee is already baked into adjItemDues — do NOT add again
 
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
@@ -3661,7 +3768,6 @@ function _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex) {
 }
 
 function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
-  // Group payments by monthIndex
   var monthGroups = {};
   groupPayments.forEach(function(p) {
     var mi = p.monthIndex;
@@ -3681,32 +3787,60 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
   var remark  = groupPayments[0].remark || '';
   var payMode = groupPayments[0].paymentSource === 'online' ? 'Online \u2014 App' : 'Cash \u2014 Reception';
 
+  // Look up full student data to get credit/carry info
+  var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
+
   sortedMonthIndices.forEach(function(mi) {
     var payments = monthGroups[mi];
     payments.forEach(function(p) {
-      var base    = p.amount    || 0;
+      var base    = p.amount       || 0;
       var paidAmt = (p.paidAmount != null) ? p.paidAmount : base;
       var waiver  = p.waiverAmount || 0;
       var lateFee = p.lateFee      || 0;
       var adjBase = Math.max(0, base - waiver);
-      var effDue  = adjBase + lateFee;
+
+      // ── Resolve credit and carry from feeStatusData ──
+      var credit = 0, carry = 0;
+
+      if (p.type !== 'transport' && p.feeHeadId && stuData) {
+        var entry = (stuData.entries || []).find(function(e) {
+          return String(e.feeHeadId) === String(p.feeHeadId);
+        });
+        if (entry) {
+          var monthData = (entry.months || []).find(function(m) { return m.monthIndex === mi; });
+          if (monthData) {
+            credit      = monthData.previousCredit || 0;
+            var adjBaseM = monthData.adjustedBase != null ? monthData.adjustedBase : adjBase;
+            var effDueM  = monthData.effectiveDue != null ? monthData.effectiveDue : adjBaseM;
+            carry        = Math.max(0, Math.round(effDueM + credit - adjBaseM));
+          }
+        }
+      } else if (p.type === 'transport' && stuData && stuData.transport) {
+        var tMonth = (stuData.transport.months || []).find(function(m) { return m.monthIndex === mi; });
+        if (tMonth) {
+          credit       = tMonth.previousCredit || 0;
+          var adjBaseT = tMonth.adjustedBase != null ? tMonth.adjustedBase : adjBase;
+          var effDueT  = tMonth.effectiveDue  != null ? tMonth.effectiveDue  : adjBaseT;
+          carry        = Math.max(0, Math.round(effDueT + credit - adjBaseT));
+        }
+      }
+
+      var effDue = Math.max(0, adjBase - credit) + carry + lateFee;
 
       totalBase    += base;
       totalWaiver  += waiver;
       totalLateFee += lateFee;
+      totalCarry   += carry;
+      totalCredit  += credit;
       totalDue     += effDue;
       totalPaid    += paidAmt;
 
-      // Find fee head name from feeStatusData
       var fhName = 'Fee';
       if (p.type === 'transport') {
         fhName = 'Transport Fee';
-      } else if (p.feeHeadId) {
-        var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
-        if (stuData) {
-          var entry = (stuData.entries || []).find(function(e) { return String(e.feeHeadId) === String(p.feeHeadId); });
-          if (entry) fhName = entry.feeHeadName;
-        }
+      } else if (p.feeHeadId && stuData) {
+        var e2 = (stuData.entries || []).find(function(e) { return String(e.feeHeadId) === String(p.feeHeadId); });
+        if (e2) fhName = e2.feeHeadName;
       }
 
       receiptItems.push({
@@ -3714,8 +3848,8 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
         month:        MONTHS[mi],
         base:         base,
         waiver:       waiver,
-        carry:        0,
-        credit:       0,
+        carry:        carry,
+        credit:       credit,
         lateFee:      lateFee,
         effectiveDue: effDue,
         paid:         paidAmt,
