@@ -2435,7 +2435,7 @@ if (remaining > 0 && payments.length > 0) {
 }
 
 // ADD THIS: prevents spurious zero-paid DB records for carry-only entries
-payments = payments.filter(function(p) { return p.paidAmount > 0; });
+payments = payments.filter(function(p) { return p.amount && p.amount > 0; });
 
 
   var btn = document.getElementById('mpm-confirm-btn');
@@ -3416,9 +3416,7 @@ function confirmRegBulkPayment() {
     payments[payments.length - 1].paidAmount += remaining;
   }
 
-  payments = payments.filter(function(p) { return p.paidAmount > 0; });
-
-  
+  payments = payments.filter(function(p) { return p.amount && p.amount > 0; });
 
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
