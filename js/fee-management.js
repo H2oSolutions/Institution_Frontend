@@ -2001,6 +2001,40 @@ function buildTransportMonthRow(sid, m, routeName, session, routeId, nextMonthNa
     badge += ' <span class="mr-carry" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa">+Rs.' + m.lateFee.toLocaleString() + ' late</span>';
   }
 
+  // ── Date + Bulk tag ──
+  if (m.isPaid || m.isPartial) {
+    if (m.paidAt) {
+      var pd = new Date(m.paidAt);
+      badge += ' <span class="mr-date">' +
+        pd.toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'}) +
+        ' ' + pd.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true}) +
+      '</span>';
+    }
+    if (m.bulkGroupId) {
+      var stuRef2 = feeStatusData.find(function(s) { return s.studentId === sid; });
+      if (stuRef2 && stuRef2.transport && stuRef2.transport.months) {
+        var tbMIs = [];
+        stuRef2.transport.months.forEach(function(tm) {
+          if (tm.bulkGroupId === m.bulkGroupId && tbMIs.indexOf(tm.monthIndex) === -1)
+            tbMIs.push(tm.monthIndex);
+        });
+        // Also check regular entries for same bulkGroupId (cross-type bulk)
+        (stuRef2.entries || []).forEach(function(entry) {
+          entry.months.forEach(function(em) {
+            if (em.bulkGroupId === m.bulkGroupId && tbMIs.indexOf(em.monthIndex) === -1)
+              tbMIs.push(em.monthIndex);
+          });
+        });
+        if (tbMIs.length > 1) {
+          var tbNames = tbMIs
+            .sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+            .map(function(mi){ return SHORT_MONTHS[mi]; }).join(', ');
+          badge += '<br><span class="mr-bulk-tag">&#128230; Bulk payment: ' + tbNames + '</span>';
+        }
+      }
+    }
+  }
+
   var cbHtml = (canPay && k)
     ? '<input type="checkbox" class="mp-checkbox" id="tcb-' + sid + '-' + m.monthIndex + '"' +
       ' data-key="' + k + '" style="margin-bottom:3px"' +
@@ -2023,8 +2057,8 @@ function buildTransportMonthRow(sid, m, routeName, session, routeId, nextMonthNa
         m.paymentId + '\',' + (m.paidAmount || 0) + ',\'' + escA(SHORT_MONTHS[m.monthIndex]) +
         '\',\'' + escA(m.remark || '') + '\',' + base + ',\'' + sid + '\',' +
         m.monthIndex + ',\'' + routeId + '\',\'' + session + '\')">Edit</button>' +
-      '<button class="mr-btn mr-btn-del" onclick="event.stopPropagation();openDelPay(\'' +
-        m.paymentId + '\',\'' + SHORT_MONTHS[m.monthIndex] + ' Transport\')">Del</button>' +
+      '<button class="mr-btn mr-btn-del" onclick="event.stopPropagation();openTransportMonthDeleteModal(\'' +
+        sid + '\',' + m.monthIndex + ')">Del</button>' +
       '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe"' +
   ' onclick="event.stopPropagation();printTransportMonthReceipt(\'' +
   sid + '\',' + m.monthIndex + ')">&#128424; PDF</button>';
@@ -2514,6 +2548,7 @@ function openMonthDeleteModal(sid, monthIndex) {
 function confirmMonthDelete() {
   if (!pendingMonthDelete) return;
   var d   = pendingMonthDelete;
+  if (d.isTransport) { confirmTransportMonthDelete(); return; }
   var stu = feeStatusData.find(function(s) { return s.studentId === d.sid; });
   if (!stu) return;
 
@@ -2977,6 +3012,104 @@ updateBulkAmtPreview(total);
   openModal('bulk-pay-modal');
 }
 
+function openTransportMonthDeleteModal(sid, monthIndex) {
+  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
+  if (!stu || !stu.transport) return;
+
+  var tMonth = (stu.transport.months || []).find(function(m) { return m.monthIndex === monthIndex; });
+  if (!tMonth || !tMonth.paymentId) { toast('No payment record found', 'error'); return; }
+
+  var bulkGroupId = tMonth.bulkGroupId || null;
+  var subText;
+
+  if (bulkGroupId) {
+    // Collect all monthIndices in this bulk group (transport + regular)
+    var bMIs = [];
+    (stu.transport.months || []).forEach(function(m) {
+      if (m.bulkGroupId === bulkGroupId && bMIs.indexOf(m.monthIndex) === -1)
+        bMIs.push(m.monthIndex);
+    });
+    (stu.entries || []).forEach(function(entry) {
+      entry.months.forEach(function(m) {
+        if (m.bulkGroupId === bulkGroupId && bMIs.indexOf(m.monthIndex) === -1)
+          bMIs.push(m.monthIndex);
+      });
+    });
+    var bNames = bMIs
+      .sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+      .map(function(mi){ return MONTHS[mi]; }).join(', ');
+    subText = '\u26a0 This was a bulk payment covering ' + bNames +
+      '. Deleting will remove ALL ' + bMIs.length +
+      ' months\u2019 payments for ' + (stu ? stu.name : 'this student') + '.';
+  } else {
+    subText = 'Delete transport payment for ' + MONTHS[monthIndex] +
+      (stu ? ' \u2014 ' + stu.name : '') + '?';
+  }
+
+  document.getElementById('mdm-sub').textContent = subText;
+  pendingMonthDelete = { sid: sid, monthIndex: monthIndex, isTransport: true };
+  openModal('month-delete-modal');
+}
+
+function confirmTransportMonthDelete() {
+  if (!pendingMonthDelete) return;
+  var d   = pendingMonthDelete;
+  var stu = feeStatusData.find(function(s) { return s.studentId === d.sid; });
+  if (!stu || !stu.transport) return;
+
+  var tMonth = (stu.transport.months || []).find(function(m) { return m.monthIndex === d.monthIndex; });
+  if (!tMonth || !tMonth.paymentId) { toast('No payment record found', 'error'); return; }
+
+  var btn = document.getElementById('mdm-confirm-btn');
+  setLoading(btn, true);
+
+  var bulkGroupId = tMonth.bulkGroupId || null;
+
+  if (bulkGroupId) {
+    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+      .then(function(res) {
+        var groupPayments = res.data || [];
+        var allIds = groupPayments.map(function(p) { return p._id; });
+        if (allIds.indexOf(tMonth.paymentId) === -1) allIds.push(tMonth.paymentId);
+        return Promise.all(allIds.map(function(pid) {
+          return apiDelete(API_FEE_PAY + '/' + pid, true);
+        }));
+      })
+      .then(function() {
+        var bMIs = [];
+        (stu.transport.months || []).forEach(function(m) {
+          if (m.bulkGroupId === bulkGroupId && bMIs.indexOf(m.monthIndex) === -1)
+            bMIs.push(m.monthIndex);
+        });
+        (stu.entries || []).forEach(function(entry) {
+          entry.months.forEach(function(m) {
+            if (m.bulkGroupId === bulkGroupId && bMIs.indexOf(m.monthIndex) === -1)
+              bMIs.push(m.monthIndex);
+          });
+        });
+        var bNames = bMIs
+          .sort(function(a,b){ return sessionOrderOf(a)-sessionOrderOf(b); })
+          .map(function(mi){ return SHORT_MONTHS[mi]; }).join(', ');
+        toast('Bulk payment deleted \u2014 ' + bNames + ' reverted to unpaid');
+        closeModal('month-delete-modal');
+        pendingMonthDelete = null;
+        return loadFeeStatus();
+      })
+      .catch(function(e) { toast(e.message, 'error'); })
+      .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
+  } else {
+    apiDelete(API_FEE_PAY + '/' + tMonth.paymentId, true)
+      .then(function() {
+        toast(SHORT_MONTHS[d.monthIndex] + ' transport payment deleted \u2014 reverted to unpaid');
+        closeModal('month-delete-modal');
+        pendingMonthDelete = null;
+        return loadFeeStatus();
+      })
+      .catch(function(e) { toast(e.message, 'error'); })
+      .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
+  }
+}
+
 function openRegBulkPayModal() {
   currentBulkMode = 'regular';
   var keys = Object.keys(regBulkMap); if (!keys.length) return;
@@ -3042,39 +3175,56 @@ function confirmBulkPayment() {
   var waiver    = Math.max(0, parseInt(document.getElementById('bulk-waiver').value)  || 0);
   var lateFeeV  = Math.max(0, parseInt(document.getElementById('bulk-latefee').value) || 0);
   var customAmt = parseInt(document.getElementById('bulk-custom-amount').value);
-  var remaining = customAmt || keys.reduce(function(s, k) { return s + (bulkMap[k].amount || 0); }, 0);
+  var sid       = bulkStudentId;
+  var session   = currentSession || document.getElementById('st-session').value;
 
-  var payments = keys.map(function(k, idx) {
+  // Sort keys oldest-first by session order
+  var sortedKeys = keys.slice().sort(function(a, b) {
+    return sessionOrderOf(bulkMap[a].monthIndex) - sessionOrderOf(bulkMap[b].monthIndex);
+  });
+
+  // Compute per-item adjusted quota (waiver on first, lateFee on last)
+  var adjAmounts = sortedKeys.map(function(k, idx) {
+    var d = bulkMap[k];
+    var wv = (idx === 0) ? waiver : 0;
+    var lf = (idx === sortedKeys.length - 1) ? lateFeeV : 0;
+    return Math.max(0, d.amount - wv) + lf;
+  });
+
+  var remaining = customAmt || adjAmounts.reduce(function(s, v) { return s + v; }, 0);
+
+  var payments = sortedKeys.map(function(k, idx) {
     var d     = bulkMap[k];
-    var alloc = Math.min(remaining, d.amount);
+    var alloc = Math.min(remaining, adjAmounts[idx]);
     remaining -= alloc;
     return {
       type: d.type, feeHeadId: d.feeHeadId, routeId: d.routeId,
       monthIndex: d.monthIndex, amount: d.baseAmount,
-      paidAmount: alloc,
+      paidAmount:   alloc,
       waiverAmount: idx === 0 ? waiver : 0,
-      lateFee: idx === keys.length - 1 ? lateFeeV : 0
+      lateFee:      idx === sortedKeys.length - 1 ? lateFeeV : 0
     };
   });
 
-  // Add late fee to last item's paidAmount
-  if (lateFeeV > 0 && payments.length > 0) {
-    payments[payments.length - 1].paidAmount += lateFeeV;
+  if (remaining > 0 && payments.length > 0) {
+    payments[payments.length - 1].paidAmount += remaining;
   }
+  // NOTE: late fee is already baked into adjAmounts — do NOT add again
 
-  var sid     = bulkStudentId;
-  var session = currentSession || document.getElementById('st-session').value;
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
+
   apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null}, true)
     .then(function() {
       var stu       = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
       var items     = payments.map(function(p) {
-        var d = Object.values(bulkMap).find(function(bd) { return bd.monthIndex === p.monthIndex && bd.feeHeadId === p.feeHeadId && bd.routeId === p.routeId; });
-        return {label: ((d && d.fhName) || 'Fee') + ' \u2014 ' + SHORT_MONTHS[p.monthIndex], amount: p.paidAmount};
+        var d = Object.values(bulkMap).find(function(bd) {
+          return bd.monthIndex === p.monthIndex && bd.routeId === p.routeId;
+        });
+        return { label: ((d && d.fhName) || 'Transport') + ' \u2014 ' + SHORT_MONTHS[p.monthIndex], amount: p.paidAmount };
       });
-      var totalDueForBulk = keys.reduce(function(s, k2) { return s + (bulkMap[k2].amount || 0); }, 0);
+      var totalDueForBulk = sortedKeys.reduce(function(s, k2) { return s + (bulkMap[k2].amount || 0); }, 0);
       closeModal('bulk-pay-modal');
       showReceipt({
         studentName:  (stu && stu.name) || '',
@@ -3290,6 +3440,8 @@ function printReceipt() {
     receiptType:  d.receiptType || 'Fee Receipt'
   });
 }
+
+
 
 function openEditPay(pid, amount, label, remark) {
   document.getElementById('epm-id').value         = pid;
