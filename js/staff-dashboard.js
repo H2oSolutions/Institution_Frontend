@@ -191,6 +191,23 @@ function displayStaffProfile(data) {
     // Display permissions
     const accessLevel = localStorage.getItem('accessLevel') || 'teacher';
     displayPermissions(accessLevel);
+
+    // ── Fee Management access (Phase 4) ──
+var canFee = !!(
+  data.canAccessFeeManagement ||
+  (data.additionalAccess && data.additionalAccess.canAccessFeeManagement) ||
+  (data.credential &&
+   data.credential.additionalAccess &&
+   data.credential.additionalAccess.canAccessFeeManagement)
+);
+
+console.log('💰 canFee:', canFee, 'additionalAccess:', data.additionalAccess);
+
+if (canFee) {
+  addFeePermission();
+  addFeeActionCard();
+}
+
 }
 
 // ===============================
@@ -340,6 +357,36 @@ function displayPermissions(accessLevel) {
         
         container.appendChild(item);
     });
+}
+
+
+
+function addFeePermission() {
+  var container = document.getElementById('permissions-list');
+  if (!container) return;
+  var item = document.createElement('div');
+  item.className = 'permission-item';
+  item.style.border = '2px solid #c7d2fe';
+  item.style.background = '#eef2ff';
+  item.innerHTML = '<span class="permission-icon">💰</span>' +
+    '<span class="permission-text" style="color:#4f46e5">Fee Management & Collection Reports</span>';
+  container.appendChild(item);
+}
+
+function addFeeActionCard() {
+  var grid = document.querySelector('.actions-grid');
+  if (!grid) return;
+  var card = document.createElement('div');
+  card.className = 'action-card';
+  card.style.borderColor = '#c7d2fe';
+  card.innerHTML =
+    '<span class="action-icon">💰</span>' +
+    '<h4 style="color:#4f46e5">Fee Management</h4>' +
+    '<p>Collect fees &amp; view collection reports</p>';
+  card.onclick = function() {
+    window.location.href = 'fee-management.html';
+  };
+  grid.appendChild(card);
 }
 
 // ===============================

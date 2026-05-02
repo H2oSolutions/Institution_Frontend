@@ -254,10 +254,12 @@ async function handleCreateCredentials(e) {
     try {
         showLoading('Creating credentials...');
         
-        const requestData = {
-            staffId: staffId,
-            password: password
-        };
+       var feeToggle = document.getElementById('fee-access-toggle');
+const requestData = {
+    staffId: staffId,
+    password: password,
+    canAccessFeeManagement: feeToggle ? feeToggle.checked : false
+};
         
         console.log('📤 Request:', requestData);
         
@@ -329,7 +331,12 @@ function displayCredentials() {
         
         row.innerHTML = `
             <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
-            <td><strong>${cred.staff?.name || '-'}</strong></td>
+            <td>
+  <strong>${cred.staff?.name || '-'}</strong>
+  ${cred.additionalAccess?.canAccessFeeManagement 
+    ? '<br><span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:1px 6px;font-weight:700">💰 Fee Access</span>' 
+    : ''}
+</td>
             <td>${statusBadge}</td>
             <td>${lastLogin}</td>
             <td style="white-space: nowrap;">
@@ -355,34 +362,76 @@ function displayCredentials() {
 // ===============================
 // UPDATE CREDENTIAL
 // ===============================
-async function updateCredential(id) {
-    const cred = credentialsData.find(c => c._id === id);
-    if (!cred) {
-        showError('Credential not found');
-        return;
-    }
-    
-    const staffName = cred.staff?.name || 'this staff member';
-    const newPassword = prompt(`Update password for ${staffName}\n\nEnter new password (minimum 6 characters):`);
-    
-    if (!newPassword) return;
-    
-    if (newPassword.length < 6) {
+var _updateCredentialId = null;
+
+function updateCredential(id) {
+    var cred = credentialsData.find(function(c) { return c._id === id; });
+    if (!cred) { showError('Credential not found'); return; }
+
+    _updateCredentialId = id;
+
+    // Set subtitle
+    document.getElementById('update-modal-sub').textContent =
+        'Updating: ' + (cred.staff?.name || 'Staff Member');
+
+    // Clear password field
+    document.getElementById('update-password').value = '';
+
+    // Set fee toggle to current value
+    var hasFee = !!(cred.additionalAccess?.canAccessFeeManagement);
+    var toggle = document.getElementById('update-fee-toggle');
+    var slider = document.getElementById('update-fee-slider');
+    var knob   = document.getElementById('update-fee-knob');
+
+    toggle.checked          = hasFee;
+    slider.style.background = hasFee ? '#6366f1' : '#e2e8f0';
+    knob.style.transform    = hasFee ? 'translateX(20px)' : 'translateX(0)';
+
+    // Show modal
+    var modal = document.getElementById('update-modal');
+    modal.style.display = 'flex';
+}
+
+function closeUpdateModal() {
+    document.getElementById('update-modal').style.display = 'none';
+    _updateCredentialId = null;
+}
+
+async function saveUpdatedCredential() {
+    if (!_updateCredentialId) return;
+
+    var password   = document.getElementById('update-password').value.trim();
+    var feeAccess  = document.getElementById('update-fee-toggle').checked;
+    var btn        = document.getElementById('update-save-btn');
+
+    // Validate password only if provided
+    if (password && password.length < 6) {
         showError('Password must be at least 6 characters');
         return;
     }
-    
+
+    var updateData = {
+        additionalAccess: { canAccessFeeManagement: feeAccess }
+    };
+    if (password) updateData.password = password;
+
+    btn.disabled    = true;
+    btn.textContent = '...';
+
     try {
-        showLoading('Updating password...');
-        
-        const response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + id, {
-            password: newPassword
-        }, true);
-        
+        showLoading('Saving changes...');
+
+        var response = await apiPut(
+            API_ENDPOINTS.CREDENTIALS + '/' + _updateCredentialId,
+            updateData,
+            true
+        );
+
         hideLoading();
-        
+
         if (response.success) {
-            showSuccess('Password updated successfully!');
+            closeUpdateModal();
+            showSuccess('Credentials updated successfully!');
             await loadCredentialsData();
         } else {
             showError(response.message || 'Update failed');
@@ -390,6 +439,9 @@ async function updateCredential(id) {
     } catch (error) {
         hideLoading();
         showError(error.message);
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = '💾 Save Changes';
     }
 }
 
@@ -544,6 +596,7 @@ function hideMessages() {
     const loading = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
     
+
     if (errorDiv) errorDiv.classList.remove('show');
     if (successDiv) successDiv.classList.remove('show');
     if (loading) loading.classList.remove('show');

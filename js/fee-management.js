@@ -66,6 +66,20 @@ var pendingMonthDelete = null;
   Promise.all([loadFeeHeads(), loadClasses(), loadTransportRoutes()]);
 })();
 
+(function restrictStaffTabs() {
+  var userType = localStorage.getItem('userType') || '';
+  if (userType !== 'staff') return;
+
+  // Hide tabs 1, 2, 3 buttons
+  ['tab1-btn', 'tab2-btn', 'tab3-btn'].forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (btn) btn.style.display = 'none';
+  });
+
+  // Jump straight to Tab 4 (Fee Status)
+  switchTab(4);
+})();
+
 function applySession(s) {
   var parts = s.split('-');
   var label = parts[0] + ' - 20' + parts[1];
@@ -132,7 +146,6 @@ function loadAllStudents() {
       allStudents = r.data || [];
       var pagination = r.pagination;
 
-      // If backend still caps and there are more pages, fetch them all
       if (pagination && pagination.totalPages > 1) {
         var pagePromises = [];
         for (var p = 2; p <= pagination.totalPages; p++) {
@@ -145,6 +158,15 @@ function loadAllStudents() {
           pages.forEach(function(page) {
             allStudents = allStudents.concat(page);
           });
+          // ── DEDUP: backend may return overlapping pages when limit=9999
+          //    but totalPages is calculated from a smaller default limit ──
+          var seen = {};
+          allStudents = allStudents.filter(function(s) {
+            var id = String(s._id);
+            if (seen[id]) return false;
+            seen[id] = true;
+            return true;
+          });
         });
       }
     })
@@ -152,14 +174,15 @@ function loadAllStudents() {
 }
 
 function switchTab(n) {
-  [1, 2, 3, 4].forEach(function(i) {
+  [1, 2, 3, 4, 5].forEach(function(i) {
     document.getElementById('tab' + i).style.display = i === n ? 'block' : 'none';
     document.getElementById('tab' + i + '-btn').classList.toggle('active', i === n);
   });
   
   if (n === 3) initFeeSetupTab();
-  if (n === 2) loadFleetOverview();
+  if (n === 2) { loadFleetOverview(); loadClassTransportSummary(); }
   if (n === 4) populateClassDropdowns();
+  if (n === 5) initReportTab();
 }
 
 function renderFeeHeadList() {
@@ -978,9 +1001,9 @@ function saveAssignments() {
 
   var students = [];
   document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked').forEach(function(cb) {
-  var sid   = cb.value;
+  var sid = cb.value;
+  if (!sid || sid === 'undefined') return; // ← skip invalid IDs
   var busId = pendingBusSelections[sid] || null;
-  // Fallback to global selector if no explicit selection tracked
   if (!busId) {
     var globalSel = document.getElementById('am-bus');
     busId = (globalSel && globalSel.value) ? globalSel.value : null;
@@ -2443,7 +2466,8 @@ payments = payments.filter(function(p) { return p.amount && p.amount > 0; });
 
   apiPost(API_FEE_PAY_BULK, {
     studentId: d.sid, session: d.session,
-    payments: payments, remark: remark || null
+    payments: payments, remark: remark || null,
+    markedBy: getMarkedBy()
   }, true)
     .then(function() {
       closeModal('month-pay-modal');
@@ -3035,7 +3059,8 @@ function confirmPayment() {
     type:         d.type,
     routeId:      d.routeId,
     session:      d.session,
-    remark:       remark || null
+    remark:       remark || null,
+     markedBy:     getMarkedBy() 
   }, true)
     .then(function() {
       closeModal('pay-modal');
@@ -3327,7 +3352,7 @@ function confirmBulkPayment() {
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null}, true)
+  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
     .then(function() {
       var stu       = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
@@ -3421,7 +3446,7 @@ function confirmRegBulkPayment() {
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null}, true)
+  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null,  markedBy: getMarkedBy()}, true)
     .then(function() {
       var stu       = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
@@ -4552,4 +4577,726 @@ async function exportBusRosterExcel() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Excel file downloaded');
+  
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  TAB 5 — COLLECTION REPORT DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+
+
+// ── Globals ─────────────────────────────────────────────────────
+var rptAllRows     = [];
+var rptFilteredReg = [];
+var rptFilteredTrn = [];
+var rptSummary     = {};
+var RPT_ROW_REG    = {};   // paymentId → row data (for receipt reprint)
+
+
+// ── Get current logged-in user for "Received By" tracking ──
+function getMarkedBy() {
+  var userType = localStorage.getItem('userType') || '';
+  
+  if (userType === 'staff') {
+    // Decode JWT token to extract staff name (no secret needed for payload)
+    try {
+      var token   = localStorage.getItem('token') || '';
+      var payload = JSON.parse(atob(token.split('.')[1]));
+      var name    = payload.name || payload.staffName || payload.userName || '';
+      return name ? 'Staff: ' + name : 'Staff';
+    } catch(e) {
+      var loginId = localStorage.getItem('loginId') || '';
+      return loginId ? 'Staff: ' + loginId : 'Staff';
+    }
+  }
+  
+  return 'institution'; // → shows as "Admin" in Collection Report
+}
+
+// ── Init (called when tab 5 is opened) ─────────────────────────
+function initReportTab() {
+  // Populate class dropdown from the existing `classes` array
+  var cls = document.getElementById('rpt-class');
+  if (cls && cls.options.length === 1) {
+    classes.forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c._id;
+      o.textContent = c.className + (c.nickname ? ' (' + c.nickname + ')' : '');
+      cls.appendChild(o);
+    });
+  }
+  // Default dates to today if not already set
+  var today = new Date().toISOString().split('T')[0];
+  var fromEl = document.getElementById('rpt-from');
+  var toEl   = document.getElementById('rpt-to');
+  if (fromEl && !fromEl.value) { fromEl.value = today; }
+  if (toEl   && !toEl.value)   { toEl.value   = today; }
+}
+
+// ── Quick Date Presets ──────────────────────────────────────────
+function rptPreset(preset) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var from, to;
+
+  if (preset === 'today') {
+    from = to = new Date(today);
+  } else if (preset === 'yesterday') {
+    from = new Date(today); from.setDate(from.getDate() - 1);
+    to   = new Date(from);
+  } else if (preset === 'week') {
+    from = new Date(today); from.setDate(today.getDate() - today.getDay());
+    to   = new Date(today);
+  } else if (preset === 'month') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1);
+    to   = new Date(today);
+  } else if (preset === 'last7') {
+    from = new Date(today); from.setDate(today.getDate() - 6);
+    to   = new Date(today);
+  } else if (preset === 'last30') {
+    from = new Date(today); from.setDate(today.getDate() - 29);
+    to   = new Date(today);
+  }
+
+  function fmt(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+  document.getElementById('rpt-from').value = fmt(from);
+  document.getElementById('rpt-to').value   = fmt(to);
+
+  // Highlight active preset button
+  document.querySelectorAll('.rpt-preset').forEach(function(b) {
+    b.classList.remove('active');
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'" + preset + "'") > -1) {
+      b.classList.add('active');
+    }
+  });
+}
+
+// ── Main Load ───────────────────────────────────────────────────
+function loadCollectionReport() {
+  var from    = document.getElementById('rpt-from').value;
+  var to      = document.getElementById('rpt-to').value;
+  var mode    = document.getElementById('rpt-mode').value;
+  var classId = document.getElementById('rpt-class').value;
+  var type    = document.getElementById('rpt-type').value;
+
+  if (!from || !to) { toast('Select a date range first', 'error'); return; }
+
+  var btn = document.getElementById('rpt-get-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '&#9203; Loading...';
+
+  // Reset UI
+  document.getElementById('rpt-initial-prompt').style.display       = 'none';
+  document.getElementById('rpt-no-data').style.display              = 'none';
+  document.getElementById('rpt-results').style.display              = 'block';
+  document.getElementById('rpt-regular-section').style.display      = 'block';
+  document.getElementById('rpt-transport-section').style.display    = 'block';
+  document.getElementById('rpt-recv-strip').style.display           = 'none';
+  document.getElementById('rpt-reg-tbody').innerHTML =
+    '<tr><td colspan="13" class="rpt-loading">&#9203; Fetching data...</td></tr>';
+  document.getElementById('rpt-trn-tbody').innerHTML =
+    '<tr><td colspan="15" class="rpt-loading">&#9203; Fetching data...</td></tr>';
+
+  // Build URL
+  var url = API_ENDPOINTS.FEE_REPORT +
+    '?from='  + encodeURIComponent(from) +
+    '&to='    + encodeURIComponent(to)   +
+    '&mode='  + encodeURIComponent(mode) +
+    '&type='  + encodeURIComponent(type);
+  if (classId) url += '&classId=' + encodeURIComponent(classId);
+
+  apiGet(url, true)
+    .then(function(res) {
+      rptAllRows  = (res.data && res.data.rows)    || [];
+      rptSummary  = (res.data && res.data.summary) || {};
+
+      // Build fast lookup for reprint
+      RPT_ROW_REG = {};
+      rptAllRows.forEach(function(r) { RPT_ROW_REG[r.paymentId] = r; });
+
+      rptRenderKPIs(rptSummary, rptAllRows);
+      rptRenderReceivedBy(rptSummary);
+      rptFilterRows();   // applies live search + renders tables
+
+      if (!rptAllRows.length) {
+        document.getElementById('rpt-no-data').style.display           = 'block';
+        document.getElementById('rpt-regular-section').style.display   = 'none';
+        document.getElementById('rpt-transport-section').style.display = 'none';
+      }
+    })
+    .catch(function(e) { toast(e.message, 'error'); })
+    .finally(function() {
+      btn.disabled  = false;
+      btn.innerHTML = '&#128202; Get Report';
+    });
+}
+
+// ── KPI Cards ───────────────────────────────────────────────────
+function rptRenderKPIs(summary, rows) {
+  function fmt(n) { return 'Rs.' + Number(n || 0).toLocaleString('en-IN'); }
+  var cashRows   = rows.filter(function(r) { return r.paymentSource === 'cash'; });
+  var onlineRows = rows.filter(function(r) { return r.paymentSource !== 'cash'; });
+  var regRows    = rows.filter(function(r) { return r.type === 'regular'; });
+  var trnRows    = rows.filter(function(r) { return r.type === 'transport'; });
+
+  document.getElementById('kpi-total').textContent       = fmt(summary.totalCollected);
+  document.getElementById('kpi-total-sub').textContent   = rows.length + ' transaction' + (rows.length !== 1 ? 's' : '');
+  document.getElementById('kpi-cash').textContent        = fmt(summary.totalCash);
+  document.getElementById('kpi-cash-sub').textContent    = cashRows.length + ' transaction' + (cashRows.length !== 1 ? 's' : '');
+  document.getElementById('kpi-online').textContent      = fmt(summary.totalOnline);
+  document.getElementById('kpi-online-sub').textContent  = onlineRows.length + ' transaction' + (onlineRows.length !== 1 ? 's' : '');
+  document.getElementById('kpi-regular').textContent     = fmt(summary.totalRegular);
+  document.getElementById('kpi-regular-sub').textContent = regRows.length + ' transaction' + (regRows.length !== 1 ? 's' : '');
+  document.getElementById('kpi-transport').textContent   = fmt(summary.totalTransport);
+  document.getElementById('kpi-transport-sub').textContent = trnRows.length + ' transaction' + (trnRows.length !== 1 ? 's' : '');
+  document.getElementById('kpi-students').textContent    = summary.uniqueStudents || 0;
+  document.getElementById('kpi-bulk-sub').textContent    =
+    (summary.bulkGroupCount || 0) + ' bulk group' + (summary.bulkGroupCount !== 1 ? 's' : '');
+}
+
+// ── Received By Strip ───────────────────────────────────────────
+function rptRenderReceivedBy(summary) {
+  var strip = document.getElementById('rpt-recv-strip');
+  var list  = summary.receivedBySummary || [];
+  if (!list.length) { strip.style.display = 'none'; return; }
+
+  strip.style.display = 'flex';
+  strip.innerHTML =
+    '<span style="font-size:11px;font-weight:800;color:var(--text3);align-self:center;margin-right:4px">&#128100; Cash by:</span>' +
+    list.map(function(r) {
+      var initial = (r.name || 'A').charAt(0).toUpperCase();
+      return '<div class="rpt-recv-chip">' +
+        '<div class="ra">' + initial + '</div>' +
+        escH(r.name) + '&nbsp;' +
+        '<span class="amt">Rs.' + Number(r.amount).toLocaleString('en-IN') + '</span>' +
+        '&nbsp;<span style="font-size:10px;color:var(--text3)">(' + r.count + ')</span>' +
+        '</div>';
+    }).join('');
+}
+
+// ── Live Search / Filter ────────────────────────────────────────
+function rptFilterRows() {
+  var q = (document.getElementById('rpt-search').value || '').toLowerCase().trim();
+
+  var filtered = q
+    ? rptAllRows.filter(function(r) {
+        return (r.studentName  && r.studentName.toLowerCase().includes(q))  ||
+               (r.fatherName   && r.fatherName.toLowerCase().includes(q))   ||
+               (r.rollNo       && String(r.rollNo).toLowerCase().includes(q)) ||
+               (r.className    && r.className.toLowerCase().includes(q))    ||
+               (r.feeHeadName  && r.feeHeadName.toLowerCase().includes(q)) ||
+               (r.routeName    && r.routeName.toLowerCase().includes(q))    ||
+               (r.receivedBy   && r.receivedBy.toLowerCase().includes(q))   ||
+               (r.phone        && r.phone.includes(q));
+      })
+    : rptAllRows.slice();
+
+  rptFilteredReg = filtered.filter(function(r) { return r.type === 'regular'; });
+  rptFilteredTrn = filtered.filter(function(r) { return r.type === 'transport'; });
+
+  rptRenderRegTable(rptFilteredReg);
+  rptRenderTrnTable(rptFilteredTrn);
+  rptUpdateActionBar(filtered);
+
+  document.getElementById('rpt-regular-section').style.display   = rptFilteredReg.length ? 'block' : 'none';
+  document.getElementById('rpt-transport-section').style.display = rptFilteredTrn.length ? 'block' : 'none';
+  document.getElementById('rpt-no-data').style.display           = filtered.length ? 'none' : (rptAllRows.length ? 'block' : 'none');
+}
+
+// ── Dot color map ────────────────────────────────────────────────
+var RPT_DOT_COLORS = {
+  'dot-blue': '#3b82f6', 'dot-green': '#10b981', 'dot-orange': '#f97316',
+  'dot-purple': '#8b5cf6', 'dot-red': '#ef4444', 'dot-teal': '#14b8a6'
+};
+
+// ── Regular Fee Table ───────────────────────────────────────────
+function rptRenderRegTable(rows) {
+   var tbody = document.getElementById('rpt-reg-tbody');
+  
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="rpt-empty">No regular fee records match your filters.</td></tr>';
+    return;
+  }
+
+  // ── Group by bulkGroupId (or individual paymentId if no bulk) ──
+  var groups = [];
+  var bulkSeen = {};
+  rows.forEach(function(r) {
+    if (r.bulkGroupId) {
+      if (bulkSeen[r.bulkGroupId] !== undefined) {
+        groups[bulkSeen[r.bulkGroupId]].push(r);
+      } else {
+        bulkSeen[r.bulkGroupId] = groups.length;
+        groups.push([r]);
+      }
+    } else {
+      groups.push([r]);
+    }
+  });
+  document.getElementById('rpt-reg-count').textContent = groups.length;
+
+  var rowNum = 0;
+  tbody.innerHTML = groups.map(function(grp) {
+    rowNum++;
+    var first   = grp[0];
+    var uniqueMonths = [];
+grp.forEach(function(r) {
+  if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName);
+});
+var isBulk = uniqueMonths.length > 1;
+    var modeTag = first.paymentSource === 'cash'
+      ? '<span class="rpt-mode-cash">&#128181; Cash</span>'
+      : '<span class="rpt-mode-online">&#128247; Online</span>';
+
+    // All fee heads in this group
+    var fhHtml = grp.map(function(r) {
+      var dotColor = RPT_DOT_COLORS[r.feeHeadColor] || '#6366f1';
+      return '<div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:2px">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;display:inline-block"></span>' +
+        escH(r.feeHeadName) +
+        '</div>';
+    }).join('<br>');
+
+    // All months in this group (unique)
+    var months = [];
+    grp.forEach(function(r) { if (months.indexOf(r.monthName) === -1) months.push(r.monthName); });
+    var monthHtml = months.join(', ');
+
+    // Total amount
+    var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+    var totalWaiver = grp.reduce(function(s, r) { return s + (r.waiverAmount || 0); }, 0);
+    var totalLateFee = grp.reduce(function(s, r) { return s + (r.lateFee || 0); }, 0);
+
+    return '<tr class="' + (isBulk ? 'rpt-bulk-row' : '') + '">' +
+      '<td style="color:var(--text3);font-size:11px;font-weight:700">' + rowNum + '</td>' +
+      '<td>' +
+        '<div style="font-size:12px;font-weight:700">' + escH(first.paidTime) + '</div>' +
+        '<div class="rpt-sub">' + escH(first.paidDate) + '</div>' +
+      '</td>' +
+      '<td>' +
+        '<div class="rpt-name">' + escH(first.studentName) + '</div>' +
+        (first.rollNo && first.rollNo !== '-' ? '<div class="rpt-sub">Roll ' + escH(first.rollNo) + '</div>' : '') +
+      '</td>' +
+      '<td><span style="background:#eef2ff;color:#4f46e5;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(first.className) + '</span></td>' +
+      '<td style="font-size:12px;font-weight:600">' + escH(first.fatherName) + '</td>' +
+      '<td>' +
+        (first.phone && first.phone !== '-'
+          ? '<a href="tel:' + escH(first.phone) + '" style="font-size:11px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(first.phone) + '</a>'
+          : '<span style="color:var(--text3);font-size:11px">—</span>') +
+      '</td>' +
+      '<td>' + fhHtml + (isBulk ? '<div class="rpt-bulk-tag">&#128230; Bulk (' + uniqueMonths.length + ' months)</div>' : '') + '</td>' +
+      '<td style="font-size:12px;font-weight:800;color:var(--text2)">' + escH(monthHtml) + '</td>' +
+      '<td class="mono">' +
+        'Rs.' + Number(totalAmt).toLocaleString('en-IN') +
+        (totalWaiver  ? '<div style="font-size:9px;color:#4338ca;font-weight:700">\u2212Rs.' + Number(totalWaiver).toLocaleString('en-IN') + ' waiver</div>' : '') +
+        (totalLateFee ? '<div style="font-size:9px;color:#dc2626;font-weight:700">+Rs.' + Number(totalLateFee).toLocaleString('en-IN') + ' late</div>' : '') +
+      '</td>' +
+      '<td>' + modeTag + '</td>' +
+      '<td><span class="rpt-recv-name">' + escH(first.receivedBy) + '</span></td>' +
+      '<td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(first.remark || '—') + '</td>' +
+      '<td><button class="rpt-reprint-btn" onclick="rptReprintReceipt(\'' + first.paymentId + '\')">&#128424; PDF</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── Transport Fee Table ─────────────────────────────────────────
+function rptRenderTrnTable(rows) {
+  var tbody = document.getElementById('rpt-trn-tbody');
+  document.getElementById('rpt-trn-count').textContent = rows.length;
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="14" class="rpt-empty">No transport fee records match your filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(function(r, idx) {
+    var isBulk  = !!r.bulkGroupId;
+    var modeTag = r.paymentSource === 'cash'
+      ? '<span class="rpt-mode-cash">&#128181; Cash</span>'
+      : '<span class="rpt-mode-online">&#128247; Online</span>';
+
+    return '<tr class="' + (isBulk ? 'rpt-bulk-row' : '') + '">' +
+      '<td style="color:var(--text3);font-size:11px;font-weight:700">' + (idx + 1) + '</td>' +
+      '<td>' +
+        '<div style="font-size:12px;font-weight:700">' + escH(r.paidTime) + '</div>' +
+        '<div class="rpt-sub">' + escH(r.paidDate) + '</div>' +
+      '</td>' +
+      '<td>' +
+        '<div class="rpt-name">' + escH(r.studentName) + '</div>' +
+        (r.rollNo && r.rollNo !== '-' ? '<div class="rpt-sub">Roll ' + escH(r.rollNo) + '</div>' : '') +
+      '</td>' +
+      '<td><span style="background:#fff7ed;color:#c2410c;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(r.className) + '</span></td>' +
+      '<td style="font-size:12px;font-weight:600">' + escH(r.fatherName) + '</td>' +
+      '<td>' +
+        (r.phone && r.phone !== '-'
+          ? '<a href="tel:' + escH(r.phone) + '" style="font-size:11px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(r.phone) + '</a>'
+          : '<span style="color:var(--text3);font-size:11px">—</span>') +
+      '</td>' +
+      '<td>' +
+        '<div style="font-size:12px;font-weight:800">' + escH(r.routeName) + '</div>' +
+        '<div class="rpt-sub">' + escH(r.routeFrom) + ' \u2192 ' + escH(r.routeTo) + '</div>' +
+        (isBulk ? '<div class="rpt-bulk-tag">&#128230; Bulk</div>' : '') +
+      '</td>' +
+      '<td style="font-family:\'JetBrains Mono\',monospace;font-weight:900;font-size:12px;color:#4f46e5">' + escH(r.busNumber) + '</td>' +
+      '<td>' +
+        '<div style="font-size:12px;font-weight:600">' + escH(r.driverName) + '</div>' +
+        (r.driverContact && r.driverContact !== '-'
+          ? '<a href="tel:' + escH(r.driverContact) + '" style="font-size:10px;color:var(--brand);text-decoration:none">&#128222; ' + escH(r.driverContact) + '</a>'
+          : '') +
+      '</td>' +
+      '<td style="font-size:12px;font-weight:800;color:var(--text2);white-space:nowrap">' + escH(r.monthName) + '</td>' +
+      '<td class="mono">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
+      '<td>' + modeTag + '</td>' +
+      '<td><span class="rpt-recv-name">' + escH(r.receivedBy) + '</span></td>' +
+      '<td><button class="rpt-reprint-btn" onclick="rptReprintReceipt(\'' + r.paymentId + '\')">&#128424; PDF</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+// ── Action Bar (count + total) ──────────────────────────────────
+function rptUpdateActionBar(rows) {
+  var total = rows.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+  document.getElementById('rpt-visible-count').textContent = rows.length;
+  document.getElementById('rpt-visible-total').textContent = 'Rs.' + Number(total).toLocaleString('en-IN');
+}
+
+function loadClassTransportSummary() {
+  var el = document.getElementById('class-transport-summary-container');
+  if (!el) return;
+  el.innerHTML = '<div class="fm-empty" style="padding:10px 0"><div class="ei">&#9203;</div>Loading...</div>';
+
+  var studentsPromise = allStudents.length ? Promise.resolve() : loadAllStudents();
+
+  studentsPromise.then(function() {
+    var routePromises = transportRoutes.map(function(rt) {
+      if (routeStuCache[rt._id]) return Promise.resolve();
+      return apiGet(API_TRANSPORT_ASSIGN + '?routeId=' + rt._id, true)
+        .then(function(r) { routeStuCache[rt._id] = r.data || []; });
+    });
+    return Promise.all(routePromises);
+  }).then(function() {
+
+    // Build studentId → route map
+    var assignMap = {};
+    transportRoutes.forEach(function(rt) {
+      (routeStuCache[rt._id] || []).forEach(function(a) {
+        var sid = String(a.studentId || (a.student && a.student._id));
+        assignMap[sid] = { routeName: rt.name, routeId: rt._id };
+      });
+    });
+
+    // Group by class
+    var classMap = {};
+    allStudents.forEach(function(s) {
+      var cid = s.classId && s.classId._id ? String(s.classId._id) : String(s.classId || 'unknown');
+      var cn  = (s.classId && s.classId.className) || 'Unknown Class';
+      if (!classMap[cid]) classMap[cid] = { className: cn, students: [] };
+      classMap[cid].students.push({
+        id: String(s._id), name: s.name, rollNo: s.rollNo,
+        route: assignMap[String(s._id)] || null
+      });
+    });
+
+    var entries = Object.keys(classMap).map(function(cid) {
+      return { cid: cid, className: classMap[cid].className, students: classMap[cid].students };
+    }).sort(function(a, b) { return a.className.localeCompare(b.className); });
+
+    if (!entries.length) { el.innerHTML = '<div class="fm-empty">No students found.</div>'; return; }
+
+    el.innerHTML = entries.map(function(cls) {
+      var assigned   = cls.students.filter(function(s) { return s.route; });
+      var unassigned = cls.students.filter(function(s) { return !s.route; });
+
+      var unassignedRows = unassigned.map(function(s) {
+        return '<div class="cts-stu-row" style="background:var(--red-bg);border:1.5px solid var(--red-border)">' +
+          '<div style="width:26px;height:26px;border-radius:7px;background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0">' + s.name.charAt(0).toUpperCase() + '</div>' +
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800">' + escH(s.name) + '</div>' +
+          (s.rollNo ? '<div style="font-size:10px;color:var(--text3)">Roll ' + s.rollNo + '</div>' : '') + '</div>' +
+          '<span style="font-size:10px;font-weight:800;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:5px;padding:2px 8px">No Route</span>' +
+          '</div>';
+      }).join('');
+
+      var assignedRows = assigned.map(function(s) {
+        return '<div class="cts-stu-row" style="background:var(--green-bg);border:1.5px solid var(--green-border)">' +
+          '<div style="width:26px;height:26px;border-radius:7px;background:#10b981;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;flex-shrink:0">' + s.name.charAt(0).toUpperCase() + '</div>' +
+          '<div style="flex:1"><div style="font-size:13px;font-weight:800">' + escH(s.name) + '</div>' +
+          (s.rollNo ? '<div style="font-size:10px;color:var(--text3)">Roll ' + s.rollNo + '</div>' : '') + '</div>' +
+          '<span style="font-size:11px;font-weight:800;color:#059669;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:6px;padding:3px 10px">&#128652; ' + escH(s.route.routeName) + '</span>' +
+          '</div>';
+      }).join('');
+
+      return '<div class="cts-item" id="cts-' + cls.cid + '">' +
+        '<div class="cts-header" onclick="toggleCtsItem(\'' + cls.cid + '\')">' +
+          '<div style="width:34px;height:34px;border-radius:9px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;flex-shrink:0">' + cls.className.charAt(0).toUpperCase() + '</div>' +
+          '<div style="flex:1">' +
+            '<div style="font-size:14px;font-weight:800">' + escH(cls.className) + '</div>' +
+            '<div style="font-size:11px;color:var(--text3);font-weight:600">' + cls.students.length + ' students total</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' +
+            '<span style="background:var(--green-bg);color:#059669;border:1.5px solid var(--green-border);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:800">&#10003; ' + assigned.length + ' assigned</span>' +
+            (unassigned.length > 0
+              ? '<span style="background:var(--amber-bg);color:#92400e;border:1.5px solid var(--amber-border);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:800">&#9888; ' + unassigned.length + ' not assigned</span>'
+              : '<span style="background:var(--green-bg);color:#059669;border:1.5px solid var(--green-border);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:800">All set</span>'
+            ) +
+          '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-left:5px;transition:transform .25s" id="cts-chev-' + cls.cid + '">&#9660;</div>' +
+        '</div>' +
+        '<div class="cts-body" id="ctsb-' + cls.cid + '">' +
+          (unassigned.length
+            ? '<div style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:6px">Not assigned<span style="flex:1;height:1px;background:#fecaca"></span></div>' + unassignedRows
+            : '') +
+          (assigned.length
+            ? '<div style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#059669;margin:' + (unassigned.length ? '14px' : '0') + ' 0 8px;display:flex;align-items:center;gap:6px">Assigned to routes<span style="flex:1;height:1px;background:var(--green-border)"></span></div>' + assignedRows
+            : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+  }).catch(function(e) {
+    el.innerHTML = '<div class="fm-empty">Failed: ' + escH(e.message) + '</div>';
+  });
+}
+
+function toggleCtsItem(cid) {
+  var item = document.getElementById('cts-'      + cid);
+  var body = document.getElementById('ctsb-'     + cid);
+  var chev = document.getElementById('cts-chev-' + cid);
+  if (!body) return;
+  var open = item.classList.toggle('cts-open');
+  body.style.display        = open ? 'block' : 'none';
+  if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+// ── Receipt Reprint from Report Row ────────────────────────────
+function rptReprintReceipt(paymentId) {
+  var r = RPT_ROW_REG[paymentId];
+  if (!r) { toast('Receipt data not available', 'error'); return; }
+
+  // Collect all rows with same bulkGroupId (if bulk payment)
+  var rows = [r];
+  if (r.bulkGroupId) {
+    rows = rptAllRows.filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
+  }
+
+  // Build rich items array for printDetailedReceipt
+  var totalBase = 0, totalWaiver = 0, totalLateFee = 0, totalPaid = 0;
+
+  var items = rows.map(function(row) {
+    var base    = row.amount        || 0;
+    var waiver  = row.waiverAmount  || 0;
+    var lateFee = row.lateFee       || 0;
+    var paid    = row.paidAmount    || 0;
+    var effDue  = Math.max(0, base - waiver) + lateFee;
+
+    totalBase    += base;
+    totalWaiver  += waiver;
+    totalLateFee += lateFee;
+    totalPaid    += paid;
+
+    return {
+      feeHead:      row.type === 'transport'
+        ? ('Transport Fee \u2014 ' + (row.routeName || ''))
+        : (row.feeHeadName || '-'),
+      month:        row.monthName   || '-',
+      base:         base,
+      waiver:       waiver,
+      carry:        0,
+      credit:       0,
+      lateFee:      lateFee,
+      effectiveDue: effDue,
+      paid:         paid,
+      isPaid:       row.paymentStatus !== 'partial',
+      isPartial:    row.paymentStatus === 'partial'
+    };
+  });
+
+  var totalFeeDue = totalBase - totalWaiver + totalLateFee;
+  var payMode = r.paymentSource === 'cash'
+    ? 'Cash \u2014 ' + escH(r.receivedBy)
+    : 'Online \u2014 Parent App';
+
+  // Receipt type label
+  var receiptType;
+  if (r.bulkGroupId && rows.length > 1) {
+    var mNames = rows
+      .map(function(x) { return x.monthName; })
+      .filter(function(v, i, a) { return a.indexOf(v) === i; })
+      .join(', ');
+    receiptType = 'Multi-Month Fee Receipt \u2014 ' + mNames;
+  } else {
+    receiptType = r.type === 'transport'
+      ? 'Transport Fee Receipt \u2014 ' + r.monthName
+      : 'Fee Receipt \u2014 ' + r.monthName;
+  }
+
+  printDetailedReceipt({
+    studentName:  r.studentName || '-',
+    className:    r.className   || '-',
+    rollNo:       (r.rollNo && r.rollNo !== '-') ? r.rollNo : '',
+    fatherName:   r.fatherName  || '-',
+    phone:        (r.phone && r.phone !== '-')   ? r.phone  : '',
+    session:      r.session     || currentSession,
+    total:        totalPaid,
+    totalBase:    totalBase,
+    totalCarry:   0,
+    totalCredit:  0,
+    totalWaiver:  totalWaiver,
+    totalLateFee: totalLateFee,
+    totalFeeDue:  totalFeeDue,
+    balance:      totalPaid - totalFeeDue,
+    paymentMode:  payMode,
+    remark:       r.remark || '',
+    items:        items,
+    paidAt:       r.paidAt ? new Date(r.paidAt) : new Date(),
+    receiptType:  receiptType
+  });
+}
+
+// ── Print Full Collection Report PDF ───────────────────────────
+function printCollectionReport() {
+  var from = document.getElementById('rpt-from').value;
+  var to   = document.getElementById('rpt-to').value;
+  var allVisible = rptFilteredReg.concat(rptFilteredTrn);
+
+  if (!allVisible.length) { toast('No data to print', 'error'); return; }
+
+  function sh(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  var dateLabel = from === to ? from : from + ' to ' + to;
+
+  // ── KPI row HTML
+  var kpiHtml =
+    '<div class="kpi"><div class="kl">Total Collected</div><div class="kv">Rs.' + Number(rptSummary.totalCollected || 0).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="kpi"><div class="kl">Cash</div><div class="kv">Rs.' + Number(rptSummary.totalCash || 0).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="kpi"><div class="kl">Online</div><div class="kv">Rs.' + Number(rptSummary.totalOnline || 0).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="kpi"><div class="kl">Regular Fees</div><div class="kv">Rs.' + Number(rptSummary.totalRegular || 0).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="kpi"><div class="kl">Transport</div><div class="kv">Rs.' + Number(rptSummary.totalTransport || 0).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="kpi"><div class="kl">Students Paid</div><div class="kv">' + (rptSummary.uniqueStudents || 0) + '</div></div>';
+
+  // ── Received By summary HTML
+  var recvList = rptSummary.receivedBySummary || [];
+  var recvHtml = recvList.length
+    ? '<div class="stitle">Cash Collected By</div>' +
+      '<table class="recv-tbl"><thead><tr><th>Name</th><th>Receipts</th><th>Amount</th></tr></thead><tbody>' +
+      recvList.map(function(r) {
+        return '<tr><td><b>' + sh(r.name) + '</b></td><td>' + r.count + ' receipts</td>' +
+          '<td style="font-family:monospace;font-weight:800;color:#4f46e5">Rs.' + Number(r.amount).toLocaleString('en-IN') + '</td></tr>';
+      }).join('') +
+      '</tbody></table>'
+    : '';
+
+  // ── Regular table HTML
+  var regHtml = '';
+  if (rptFilteredReg.length) {
+    var regRows = rptFilteredReg.map(function(r, i) {
+      var dotColor = RPT_DOT_COLORS[r.feeHeadColor] || '#6366f1';
+      return '<tr>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + sh(r.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.paidDate) + '</span></td>' +
+        '<td><b>' + sh(r.studentName) + '</b>' + (r.rollNo && r.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(r.rollNo) + '</span>' : '') + '</td>' +
+        '<td>' + sh(r.className) + '</td>' +
+        '<td>' + sh(r.fatherName) + '</td>' +
+        '<td>' + sh(r.phone !== '-' ? r.phone : '—') + '</td>' +
+        '<td><span style="display:inline-flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + ';display:inline-block;flex-shrink:0"></span>' + sh(r.feeHeadName) + '</span>' +
+          (r.bulkGroupId ? ' <span style="background:#f5f3ff;color:#7c3aed;border-radius:3px;padding:1px 4px;font-size:8px;font-weight:800">BULK</span>' : '') + '</td>' +
+        '<td>' + sh(r.monthName) + '</td>' +
+        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
+        '<td>' + (r.paymentSource === 'cash' ? 'Cash' : 'Online') + '</td>' +
+        '<td><b>' + sh(r.receivedBy) + '</b></td>' +
+      '</tr>';
+    }).join('');
+
+    regHtml = '<div class="stitle">Regular Fee Collections (' + rptFilteredReg.length + ')</div>' +
+      '<table><thead><tr><th>#</th><th>Time</th><th>Student</th><th>Class</th><th>Father</th><th>Contact</th><th>Fee Head</th><th>Month</th><th>Amount</th><th>Mode</th><th>Received By</th></tr></thead>' +
+      '<tbody>' + regRows +
+      '<tr class="tr-tot"><td colspan="8">Total Regular</td><td colspan="3" style="font-family:monospace">Rs.' + Number(rptSummary.totalRegular || 0).toLocaleString('en-IN') + '</td></tr>' +
+      '</tbody></table>';
+  }
+
+  // ── Transport table HTML
+  var trnHtml = '';
+  if (rptFilteredTrn.length) {
+    var trnRows = rptFilteredTrn.map(function(r, i) {
+      return '<tr>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td>' + sh(r.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.paidDate) + '</span></td>' +
+        '<td><b>' + sh(r.studentName) + '</b>' + (r.rollNo && r.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(r.rollNo) + '</span>' : '') + '</td>' +
+        '<td>' + sh(r.className) + '</td>' +
+        '<td>' + sh(r.fatherName) + '</td>' +
+        '<td>' + sh(r.phone !== '-' ? r.phone : '—') + '</td>' +
+        '<td>' + sh(r.routeName) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.routeFrom) + ' \u2192 ' + sh(r.routeTo) + '</span></td>' +
+        '<td style="font-weight:800;color:#4f46e5">' + sh(r.busNumber) + '</td>' +
+        '<td>' + sh(r.driverName) + '</td>' +
+        '<td>' + sh(r.monthName) + '</td>' +
+        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
+        '<td>' + (r.paymentSource === 'cash' ? 'Cash' : 'Online') + '</td>' +
+        '<td><b>' + sh(r.receivedBy) + '</b></td>' +
+      '</tr>';
+    }).join('');
+
+    trnHtml = '<div class="stitle">Transport Fee Collections (' + rptFilteredTrn.length + ')</div>' +
+      '<table class="trn-tbl"><thead><tr><th>#</th><th>Time</th><th>Student</th><th>Class</th><th>Father</th><th>Contact</th><th>Route</th><th>Bus No.</th><th>Driver</th><th>Month</th><th>Amount</th><th>Mode</th><th>Received By</th></tr></thead>' +
+      '<tbody>' + trnRows +
+      '<tr class="tr-tot"><td colspan="9">Total Transport</td><td colspan="3" style="font-family:monospace">Rs.' + Number(rptSummary.totalTransport || 0).toLocaleString('en-IN') + '</td></tr>' +
+      '</tbody></table>';
+  }
+
+  var css = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'body{font-family:"Segoe UI",Arial,sans-serif;background:#f1f5f9;padding:24px;color:#0f172a}',
+    '.wrap{max-width:1150px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.12)}',
+    '.hdr{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:22px 28px}',
+    '.hdr h1{font-size:19px;font-weight:900;margin-bottom:3px}',
+    '.hdr p{font-size:11px;opacity:.75}',
+    '.kpi-row{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid #e2e8f0}',
+    '.kpi{padding:12px 14px;border-right:1px solid #e2e8f0;text-align:center}',
+    '.kpi:last-child{border-right:none}',
+    '.kl{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin-bottom:4px}',
+    '.kv{font-size:14px;font-weight:900;color:#1e293b;font-family:monospace}',
+    '.body{padding:20px 28px}',
+    '.stitle{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:16px 0 9px;display:flex;align-items:center;gap:8px}',
+    '.stitle::after{content:"";flex:1;height:1px;background:#e2e8f0}',
+    'table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:14px}',
+    'thead tr{background:linear-gradient(135deg,#4f46e5,#7c3aed)}',
+    'thead th{padding:7px 8px;font-size:8px;font-weight:800;text-transform:uppercase;color:#fff;text-align:left;white-space:nowrap}',
+    'tbody tr:nth-child(even){background:#f8fafc}',
+    'tbody td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}',
+    '.tr-tot td{font-weight:900;background:#eef2ff;color:#4f46e5;font-size:11px}',
+    '.recv-tbl thead tr{background:linear-gradient(135deg,#059669,#10b981)}',
+    '.trn-tbl thead tr{background:linear-gradient(135deg,#ea580c,#f97316)}',
+    '.foot{padding:12px 28px;background:#f8fafc;border-top:1px dashed #e2e8f0;font-size:10px;color:#94a3b8;display:flex;justify-content:space-between}',
+    '.pabtn{display:flex;justify-content:center;gap:10px;padding:14px 28px 20px}',
+    '.pabtn button{border-radius:8px;padding:9px 22px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:none}',
+    '@media print{body{padding:0;background:#fff}.wrap{box-shadow:none;border-radius:0}.pabtn{display:none!important}}'
+  ].join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Fee Collection Report</title><style>' + css + '</style></head><body>' +
+    '<div class="wrap">' +
+    '<div class="hdr">' +
+      '<h1>&#128202; Fee Collection Report &mdash; Hello School</h1>' +
+      '<p>Date Range: ' + sh(dateLabel) + ' &nbsp;&middot;&nbsp; Session: ' + sh(currentSession) + ' &nbsp;&middot;&nbsp; Generated: ' + new Date().toLocaleString('en-IN') + '</p>' +
+    '</div>' +
+    '<div class="kpi-row">' + kpiHtml + '</div>' +
+    '<div class="body">' + recvHtml + regHtml + trnHtml + '</div>' +
+    '<div class="foot">' +
+      '<span>Hello School &middot; Fee Management &middot; ' + sh(currentSession) + '</span>' +
+      '<span>Grand Total: Rs.' + Number(rptSummary.totalCollected || 0).toLocaleString('en-IN') + '</span>' +
+    '</div>' +
+    '<div class="pabtn">' +
+      '<button style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff" onclick="window.print()">&#128424;&nbsp; Print Report</button>' +
+      '<button style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0!important" onclick="window.close()">Close</button>' +
+    '</div>' +
+    '</div></body></html>';
+
+  var w = window.open('', '_blank', 'width=1150,height=900');
+  if (!w) { toast('Please allow popups to print', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }

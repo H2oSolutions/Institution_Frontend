@@ -1,8 +1,8 @@
 // config-v2.js - API Configuration with Level-Designation Mapping Endpoint
 
-   const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
+    const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
 
-  //  const API_BASE_URL = 'http://localhost:5000/api';                   // Turn this on for the local development environment and turn off the above line
+   // const API_BASE_URL = 'http://localhost:5000/api';                   // Turn this on for the local development environment and turn off the above line
 
 const API_ENDPOINTS = {
     // ===== INSTITUTION ===== 
@@ -64,6 +64,9 @@ const API_ENDPOINTS = {
     // ===== NOTICES =====
     NOTICES: `${API_BASE_URL}/notices`,
     NOTICES_BY_CLASS: `${API_BASE_URL}/notices/by-class`,
+
+    // ===== FEE REPORT =====
+    FEE_REPORT: `${API_BASE_URL}/fee/payments/report`,
 
     // ===== COMPLAINTS =====
     COMPLAINTS: `${API_BASE_URL}/complaints`,
