@@ -1099,6 +1099,7 @@ function onSessionChange() {
   loadExistingStructure(session);
 }
 
+
 function onStartMonthChange() {
   startMonth = parseInt(document.getElementById('fs-start-month').value) || 3;
   feeHeads.forEach(function(fh) { if (fbs[fh._id] && fbs[fh._id].enabled) renderFBMonths(fh._id); });
