@@ -997,50 +997,109 @@ function filterAssignStudents() {
 function saveAssignments() {
   var rid     = document.getElementById('am-route-id').value;
   var session = currentSession || document.getElementById('st-session').value;
-  if (!session) { toast('Session not loaded yet', 'error'); return; }
+
+  if (!session) {
+    toast('Session not loaded yet', 'error');
+    return;
+  }
 
   var students = [];
-  document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked').forEach(function(cb) {
-  var sid = cb.value;
-  if (!sid || sid === 'undefined') return; // ← skip invalid IDs
-  var busId = pendingBusSelections[sid] || null;
-  if (!busId) {
-    var globalSel = document.getElementById('am-bus');
-    busId = (globalSel && globalSel.value) ? globalSel.value : null;
-  }
-  students.push({ studentId: sid, busId: busId });
-});
 
-  if (!students.length) { toast('Select at least one student', 'error'); return; }
+  // Newly selected students
+  document.querySelectorAll('#assign-student-list input[type="checkbox"]:checked')
+    .forEach(function(cb) {
+
+      var sid = cb.value;
+
+      // Skip invalid IDs
+      if (!sid || sid === 'undefined' || sid === 'null') return;
+
+      var busId = pendingBusSelections[sid] || null;
+
+      // Apply global selected bus if exists
+      if (!busId) {
+        var globalSel = document.getElementById('am-bus');
+        busId = (globalSel && globalSel.value) ? globalSel.value : null;
+      }
+
+      students.push({
+        studentId: String(sid),
+        busId: busId
+      });
+    });
+
+  if (!students.length) {
+    toast('Select at least one student', 'error');
+    return;
+  }
 
   var btn = document.getElementById('am-save-btn');
   setLoading(btn, true);
 
-  // Merge with existing assignments so server doesn't remove them
-  var existing = (routeStuCache[rid] || []).map(function(a) {
-    var sid = String(a.studentId || (a.student && a.student._id));
-    var bid = a.busId ? String(a.busId._id || a.busId) : null;
-    return { studentId: sid, busId: bid };
-  });
+  // Existing assignments
+  var existing = (routeStuCache[rid] || [])
+    .map(function(a) {
 
+      var sid = a.studentId || (a.student && a.student._id);
+
+      // Skip broken records
+      if (!sid || sid === 'undefined' || sid === 'null') {
+        return null;
+      }
+
+      var bid = a.busId
+        ? String(a.busId._id || a.busId)
+        : null;
+
+      return {
+        studentId: String(sid),
+        busId: bid
+      };
+    })
+    .filter(Boolean);
+
+  // Merge old + new
   var allStudentsPayload = existing.concat(students);
 
-  apiPost(API_TRANSPORT_ASSIGN, { routeId: rid, students: allStudentsPayload, session: session }, true)
+  apiPost(
+    API_TRANSPORT_ASSIGN,
+    {
+      routeId: rid,
+      students: allStudentsPayload,
+      session: session
+    },
+    true
+  )
     .then(function() {
       toast(students.length + ' student(s) assigned');
+
       closeModal('assign-modal');
+
       pendingBusSelections = {};
+
       routeStuCache[rid] = null;
       routeBusCache[rid] = null;
+
       return loadRouteStats(rid);
     })
     .then(function() {
+
       var card = document.getElementById('rc-' + rid);
-      if (card && card.classList.contains('expanded')) renderRouteBody(rid);
+
+      if (card && card.classList.contains('expanded')) {
+        renderRouteBody(rid);
+      }
+
       loadFleetOverview();
     })
-    .catch(function(e) { toast(e.message, 'error'); })
-    .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
+    .catch(function(e) {
+      toast(e.message || 'Failed to assign students', 'error');
+      console.error('saveAssignments error:', e);
+    })
+    .finally(function() {
+      setLoading(btn, false);
+      btn.innerHTML = 'Save';
+    });
 }
 
 function removeAssignment(aid, rid) {
