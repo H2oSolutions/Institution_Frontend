@@ -182,7 +182,7 @@ function switchTab(n) {
   if (n === 3) initFeeSetupTab();
   if (n === 2) { loadFleetOverview(); loadClassTransportSummary(); }
   if (n === 4) populateClassDropdowns();
-  if (n === 5) initReportTab();
+  if (n === 5) { initReportTab(); initFinancialOverview(); }
 }
 
 function renderFeeHeadList() {
@@ -1018,10 +1018,12 @@ function saveAssignments() {
 
   // Merge with existing assignments so server doesn't remove them
   var existing = (routeStuCache[rid] || []).map(function(a) {
-    var sid = String(a.studentId || (a.student && a.student._id));
+    var sid = String(a.studentId || (a.student && a.student._id) || '');
     var bid = a.busId ? String(a.busId._id || a.busId) : null;
     return { studentId: sid, busId: bid };
-  });
+}).filter(function(x) {
+    return x.studentId && x.studentId !== 'undefined' && x.studentId !== 'null';
+});
 
   var allStudentsPayload = existing.concat(students);
 
@@ -4617,6 +4619,8 @@ function getMarkedBy() {
 
 // ── Init (called when tab 5 is opened) ─────────────────────────
 function initReportTab() {
+
+  initFinancialOverview();
   // Populate class dropdown from the existing `classes` array
   var cls = document.getElementById('rpt-class');
   if (cls && cls.options.length === 1) {
@@ -5300,4 +5304,171 @@ function printCollectionReport() {
   var w = window.open('', '_blank', 'width=1150,height=900');
   if (!w) { toast('Please allow popups to print', 'error'); return; }
   w.document.open(); w.document.write(html); w.document.close();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  FINANCIAL OVERVIEW — Admin Only
+// ═══════════════════════════════════════════════════════════════
+
+var _foData = null;
+
+// Called when Tab 5 opens — show/hide section based on userType
+function initFinancialOverview() {
+  var userType = localStorage.getItem('userType') || '';
+  var section  = document.getElementById('fo-section');
+  if (!section) return;
+
+  if (userType !== 'institution') {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+
+  // Populate session selector
+  var sel = document.getElementById('fo-session');
+  if (sel && sel.options.length <= 1) {
+    var y1 = parseInt(currentSession.split('-')[0]);
+    var sessions = [
+      (y1 - 1) + '-' + String(y1).slice(2),
+      y1 + '-' + String(y1 + 1).slice(2),
+      (y1 + 1) + '-' + String(y1 + 2).slice(2)
+    ];
+    sel.innerHTML = sessions.map(function(s) {
+      var p = s.split('-');
+      return '<option value="' + s + '"' + (s === currentSession ? ' selected' : '') + '>' +
+        p[0] + '-20' + p[1] + (s === currentSession ? ' (Current)' : '') + '</option>';
+    }).join('');
+  }
+}
+
+function loadFinancialOverview() {
+  var session = document.getElementById('fo-session').value;
+  if (!session) { toast('Select a session first', 'error'); return; }
+
+  var btn = document.getElementById('fo-load-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '...';
+
+  document.getElementById('fo-initial').style.display  = 'none';
+  document.getElementById('fo-loading').style.display  = 'block';
+  document.getElementById('fo-results').style.display  = 'none';
+
+  apiGet(API_ENDPOINTS.FEE_FINANCIAL_OVERVIEW + '?session=' + encodeURIComponent(session), true)
+    .then(function(res) {
+      _foData = res.data;
+      foRenderAll(_foData);
+      document.getElementById('fo-loading').style.display = 'none';
+      document.getElementById('fo-results').style.display = 'block';
+    })
+    .catch(function(e) {
+      toast(e.message, 'error');
+      document.getElementById('fo-loading').style.display = 'none';
+      document.getElementById('fo-initial').style.display = 'block';
+    })
+    .finally(function() {
+      btn.disabled  = false;
+      btn.innerHTML = '&#128200; Generate';
+    });
+}
+
+function foRenderAll(d) {
+  foRenderYearSummary(d);
+  foRenderBreakdown('fo-regular-card',   d.regular,   '&#127991; Regular Fees',  '#6366f1');
+  foRenderBreakdown('fo-transport-card', d.transport, '&#128652; Transport Fees', '#ea580c');
+  foRenderTrendChart(d.monthlyTrend);
+}
+
+function foRenderYearSummary(d) {
+  var el  = document.getElementById('fo-year-summary');
+  var pct = d.collectionPercent || 0;
+  var barColor = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">' +
+      '<div style="font-size:14px;font-weight:900;color:#1e293b">&#127974; Session ' + escH(d.session) + ' — Overall Summary</div>' +
+      '<div style="font-size:12px;font-weight:800;background:#fff;border:1.5px solid #c7d2fe;border-radius:999px;padding:4px 14px;color:#4f46e5">' +
+        pct + '% Collected' +
+      '</div>' +
+    '</div>' +
+    '<div class="fo-year-grid">' +
+      foStatBox('Expected Total',   'Rs.' + Number(d.expectedTotal).toLocaleString('en-IN'),   'All students × all months', 'fo-expected') +
+      foStatBox('Collected So Far', 'Rs.' + Number(d.collectedTotal).toLocaleString('en-IN'),  'Cash + Online combined',    'fo-collected') +
+      foStatBox('Outstanding Dues', 'Rs.' + Number(d.outstandingTotal).toLocaleString('en-IN'),'Still unpaid',              'fo-outstanding') +
+      foStatBox('Late Fee Earned',  'Rs.' + Number(d.lateFeeTotal || 0).toLocaleString('en-IN'),'Extra income',             'fo-percent') +
+    '</div>' +
+    '<div class="fo-progress-bar" style="margin-top:12px">' +
+      '<div class="fo-progress-fill" style="width:' + Math.min(pct, 100) + '%;background:linear-gradient(135deg,' + barColor + ',#059669)"></div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;color:var(--text3);margin-top:5px">' +
+      '<span>0%</span><span>' + pct + '% collected</span><span>100%</span>' +
+    '</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">' +
+      '<div style="background:#fff;border:1.5px solid #c7d2fe;border-radius:8px;padding:7px 13px;font-size:11px;font-weight:700;color:#4f46e5">&#128181; Cash: Rs.' + Number(d.cashTotal || 0).toLocaleString('en-IN') + '</div>' +
+      '<div style="background:#fff;border:1.5px solid #c7d2fe;border-radius:8px;padding:7px 13px;font-size:11px;font-weight:700;color:#4f46e5">&#128247; Online: Rs.' + Number(d.onlineTotal || 0).toLocaleString('en-IN') + '</div>' +
+      '<div style="background:#fff;border:1.5px solid #fecaca;border-radius:8px;padding:7px 13px;font-size:11px;font-weight:700;color:#dc2626">&#128281; Waiver Given: Rs.' + Number(d.waiverTotal || 0).toLocaleString('en-IN') + '</div>' +
+    '</div>';
+}
+
+function foStatBox(label, val, sub, cls) {
+  return '<div class="fo-stat ' + cls + '">' +
+    '<div class="fo-stat-label">' + label + '</div>' +
+    '<div class="fo-stat-val">' + val + '</div>' +
+    '<div class="fo-stat-sub">' + sub + '</div>' +
+  '</div>';
+}
+
+function foRenderBreakdown(containerId, data, title, color) {
+  var el = document.getElementById(containerId);
+  if (!el || !data) return;
+
+  var pct = data.expected > 0 ? Math.round((data.collected / data.expected) * 100) : 0;
+
+  el.innerHTML =
+    '<div class="fo-breakdown-card">' +
+      '<div class="fo-bc-head" style="color:' + color + '">' + title + '</div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">Expected</span><span class="fo-bc-val purple">Rs.' + Number(data.expected).toLocaleString('en-IN') + '</span></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">Collected</span><span class="fo-bc-val green">Rs.' + Number(data.collected).toLocaleString('en-IN') + '</span></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">Outstanding</span><span class="fo-bc-val red">Rs.' + Number(data.outstanding).toLocaleString('en-IN') + '</span></div>' +
+      '<div style="height:1px;background:#f1f5f9;margin:6px 0"></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">&#128181; Cash</span><span class="fo-bc-val green">Rs.' + Number(data.cash || 0).toLocaleString('en-IN') + '</span></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">&#128247; Online</span><span class="fo-bc-val blue">Rs.' + Number(data.online || 0).toLocaleString('en-IN') + '</span></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">Late Fee</span><span class="fo-bc-val amber">Rs.' + Number(data.lateFee || 0).toLocaleString('en-IN') + '</span></div>' +
+      '<div class="fo-bc-row"><span class="fo-bc-label">Waiver Given</span><span class="fo-bc-val red">Rs.' + Number(data.waiver || 0).toLocaleString('en-IN') + '</span></div>' +
+      '<div style="height:5px;background:#f1f5f9;border-radius:999px;margin-top:10px;overflow:hidden">' +
+        '<div style="height:100%;width:' + Math.min(pct,100) + '%;background:' + color + ';border-radius:999px;transition:width .6s"></div>' +
+      '</div>' +
+      '<div style="font-size:10px;font-weight:800;color:var(--text3);margin-top:4px;text-align:right">' + pct + '% collected</div>' +
+    '</div>';
+}
+
+function foRenderTrendChart(trend) {
+  var el = document.getElementById('fo-trend-card');
+  if (!el || !trend || !trend.length) {
+    el.innerHTML = '<div class="fo-trend-card"><div class="fm-empty" style="padding:14px 0">No collection data available for chart.</div></div>';
+    return;
+  }
+
+  var maxVal = Math.max.apply(null, trend.map(function(t) { return t.total || 0; })) || 1;
+
+  var bars = trend.map(function(t) {
+    var regH = Math.round(((t.regular || 0) / maxVal) * 110);
+    var trnH = Math.round(((t.transport || 0) / maxVal) * 110);
+    return '<div class="fo-bar-group">' +
+      '<div class="fo-bars">' +
+        '<div class="fo-bar fo-bar-reg" style="height:' + Math.max(regH, 2) + 'px" title="Regular: Rs.' + Number(t.regular || 0).toLocaleString('en-IN') + '"></div>' +
+        '<div class="fo-bar fo-bar-trn" style="height:' + Math.max(trnH, 2) + 'px" title="Transport: Rs.' + Number(t.transport || 0).toLocaleString('en-IN') + '"></div>' +
+      '</div>' +
+      '<div class="fo-bar-month">' + escH(t.monthName ? t.monthName.slice(0, 3) : '') + '</div>' +
+      '<div style="font-size:9px;font-weight:700;color:var(--text3)">Rs.' + (t.total >= 1000 ? (t.total / 1000).toFixed(1) + 'k' : t.total) + '</div>' +
+    '</div>';
+  }).join('');
+
+  el.innerHTML =
+    '<div style="font-size:13px;font-weight:900;color:#1e293b;margin-bottom:10px">&#128200; Month-wise Collection Trend</div>' +
+    '<div class="fo-chart-legend">' +
+      '<div class="fo-legend-item"><div class="fo-legend-dot" style="background:#6366f1"></div>Regular Fees</div>' +
+      '<div class="fo-legend-item"><div class="fo-legend-dot" style="background:#ea580c"></div>Transport Fees</div>' +
+    '</div>' +
+    '<div class="fo-chart-wrap"><div class="fo-chart">' + bars + '</div></div>';
 }
