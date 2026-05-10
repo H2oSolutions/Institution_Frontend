@@ -1,6 +1,6 @@
 // config-v2.js - API Configuration with Level-Designation Mapping Endpoint
 
-    const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
+     const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
 
    // const API_BASE_URL = 'http://localhost:5000/api';                   // Turn this on for the local development environment and turn off the above line
 
@@ -16,6 +16,9 @@ const API_ENDPOINTS = {
     INSTITUTION_FORGOT_PASSWORD: `${API_BASE_URL}/auth/forgot-password`,
     INSTITUTION_VERIFY_RESET_OTP: `${API_BASE_URL}/auth/verify-reset-otp`,
     INSTITUTION_RESET_PASSWORD: `${API_BASE_URL}/auth/reset-password`,
+
+    // Inside API_ENDPOINTS object, add:
+    FEE_FINANCIAL_OVERVIEW: `${API_BASE_URL}/fee/financial-overview`,
 
     // ===== STAFF ===== 
     STAFF: `${API_BASE_URL}/staff`,

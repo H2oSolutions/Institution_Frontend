@@ -591,6 +591,43 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
 .mr-bulk-tag{font-size:10px;font-weight:700;color:#7c3aed;background:#f5f3ff;border-radius:4px;padding:1px 7px;border:1px solid #ddd6fe;display:inline-block;margin-top:2px}
 
+
+/* ── Financial Overview ── */
+.fo-year-card{background:linear-gradient(135deg,#f8faff,#eef2ff);border:1.5px solid #c7d2fe;border-radius:14px;padding:18px;margin-bottom:14px}
+.fo-year-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.fo-stat{background:#fff;border-radius:10px;padding:12px 14px;border:1.5px solid var(--border);text-align:center}
+.fo-stat-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:4px}
+.fo-stat-val{font-size:18px;font-weight:900;font-family:'JetBrains Mono',monospace}
+.fo-stat-sub{font-size:10px;font-weight:600;color:var(--text3);margin-top:2px}
+.fo-stat.fo-expected .fo-stat-val{color:#6366f1}
+.fo-stat.fo-collected .fo-stat-val{color:#059669}
+.fo-stat.fo-outstanding .fo-stat-val{color:#ef4444}
+.fo-stat.fo-percent .fo-stat-val{color:#f59e0b}
+.fo-progress-bar{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:10px}
+.fo-progress-fill{height:100%;border-radius:999px;background:linear-gradient(135deg,#10b981,#059669);transition:width .6s ease}
+.fo-breakdown-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.fo-breakdown-card{background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:16px}
+.fo-bc-head{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.fo-bc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:700}
+.fo-bc-row:last-child{border-bottom:none}
+.fo-bc-label{color:var(--text2)}
+.fo-bc-val{font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--text)}
+.fo-bc-val.green{color:#059669}.fo-bc-val.red{color:#ef4444}.fo-bc-val.blue{color:#3b82f6}.fo-bc-val.amber{color:#d97706}.fo-bc-val.purple{color:#7c3aed}
+.fo-trend-card{background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:16px;margin-bottom:14px}
+.fo-chart-wrap{overflow-x:auto;padding-bottom:4px}
+.fo-chart{display:flex;align-items:flex-end;gap:8px;min-height:140px;padding:0 4px}
+.fo-bar-group{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:52px}
+.fo-bars{display:flex;gap:3px;align-items:flex-end;height:120px}
+.fo-bar{border-radius:4px 4px 0 0;min-width:18px;transition:height .5s ease;position:relative;cursor:default}
+.fo-bar-reg{background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+.fo-bar-trn{background:linear-gradient(135deg,#ea580c,#f97316)}
+.fo-bar-month{font-size:9px;font-weight:800;text-transform:uppercase;color:var(--text3);letter-spacing:.04em}
+.fo-chart-legend{display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap}
+.fo-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--text2)}
+.fo-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+@media(max-width:600px){.fo-breakdown-grid{grid-template-columns:1fr}}
+
+
 </style>
 </head>
 
@@ -655,7 +692,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       <div style="font-size:12px;font-weight:900;color:var(--brand);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Add New Route</div>
       <div class="fm-grid-2" style="margin-bottom:11px">
         <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Route Name *</label><input type="text" id="rt-name" class="fm-input" placeholder="e.g. City Centre Route"></div>
-        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (Rs.) *</label><input type="number" id="rt-amount" class="fm-input" placeholder="e.g. 1500" min="1"></div>
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (Rs.) *</label><input type="number" id="rt-amount" class="fm-input" placeholder="e.g. 1500" min=""></div>
       </div>
       <div class="fm-grid-2" style="margin-bottom:12px">
         <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">From *</label><input type="text" id="rt-from" class="fm-input" placeholder="e.g. Bus Stand"></div>
@@ -675,7 +712,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <div class="fm-empty" style="padding:14px 0">Switch to this tab to load fleet.</div>
   </div>
 </div>
-<div class="fm-card" style="margin-bottom:16px">
+<!-- <div class="fm-card" style="margin-bottom:16px"> -->
+  <div class="fm-card" style="margin-bottom:16px; display:none;">
   <div class="fm-card-title">&#128101; Students by Class — Transport Assignment</div>
   <div class="fm-card-sub">Tap a class to see who's assigned to which route and who's still unassigned.</div>
   <div id="class-transport-summary-container">
@@ -762,6 +800,42 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
   <!-- TAB 5: COLLECTION REPORT DASHBOARD -->
 <div id="tab5" style="display:none">
+
+  <!-- ── Financial Overview (Admin Only) ── -->
+<div id="fo-section" style="display:none">
+  <!-- <div class="fm-card"> -->    
+    <div class="fm-card" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div>
+        <div class="fm-card-title">&#128200; Financial Overview</div>
+        <div class="fm-card-sub" style="margin-bottom:0">Session-wise expected vs collected vs outstanding — admin eyes only</div>
+      </div>
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+        <select id="fo-session" class="fm-select" style="width:auto;min-width:140px;font-weight:800"></select>
+        <button class="btn-primary" id="fo-load-btn" onclick="loadFinancialOverview()">&#128200; Generate</button>
+      </div>
+    </div>
+
+    <div id="fo-initial" style="text-align:center;padding:16px 0;color:var(--text3);font-size:13px;font-weight:600">
+      Select a session above and click <b>Generate</b> to view financial overview.
+    </div>
+    <div id="fo-loading" style="display:none;text-align:center;padding:20px;color:var(--text3);font-size:13px;font-weight:600;animation:pulse 1.5s ease-in-out infinite">&#9203; Loading financial data...</div>
+
+    <div id="fo-results" style="display:none">
+      <!-- Year Summary -->
+      <div class="fo-year-card" id="fo-year-summary"></div>
+
+      <!-- Regular + Transport Breakdown -->
+      <div class="fo-breakdown-grid" id="fo-breakdown-grid">
+        <div id="fo-regular-card"></div>
+        <div id="fo-transport-card"></div>
+      </div>
+
+      <!-- Monthly Trend Chart -->
+      <div class="fo-trend-card" id="fo-trend-card"></div>
+    </div>
+  </div>
+</div>
  
   <!-- ── CSS for Tab 5 (inject once inside a <style> block anywhere in <head>) ── -->
   <style>
@@ -1107,7 +1181,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <input type="hidden" id="er-id">
     <div class="fm-grid-2" style="margin-bottom:11px">
       <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Route Name *</label><input type="text" id="er-name" class="fm-input"></div>
-      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount *</label><input type="number" id="er-amount" class="fm-input" min="1"></div>
+      <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount *</label><input type="number" id="er-amount" class="fm-input" min="0"></div>
     </div>
     <div class="fm-grid-2">
       <div class="fm-form-group"><label class="fm-label">From *</label><input type="text" id="er-from" class="fm-input"></div>

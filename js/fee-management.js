@@ -252,9 +252,10 @@ function addRoute() {
   var name   = document.getElementById('rt-name').value.trim();
   var from   = document.getElementById('rt-from').value.trim();
   var to     = document.getElementById('rt-to').value.trim();
-  var amount = parseInt(document.getElementById('rt-amount').value) || 0;
+  var amount = document.getElementById('rt-amount').value.trim() !== '' ? parseInt(document.getElementById('rt-amount').value) : null;
+  if (amount === null) { toast('Amount is required (enter 0 if free)', 'error'); return; }
   if (!name || !from || !to) { toast('Name, From, To required', 'error'); return; }
-  if (!amount || amount < 1) { toast('Enter valid amount', 'error'); return; }
+  if (amount < 0 || isNaN(amount)) { toast('Enter a valid amount (0 or more)', 'error'); return; }
   var btn = document.getElementById('add-route-btn');
   setLoading(btn, true);
   apiPost(API_TRANSPORT_ROUTES, {name: name, from: from, to: to, amount: amount}, true)
@@ -764,7 +765,7 @@ function saveEditRoute() {
   var amount = parseInt(document.getElementById('er-amount').value) || 0;
   var from   = document.getElementById('er-from').value.trim();
   var to     = document.getElementById('er-to').value.trim();
-  if (!name || !from || !to || !amount) { toast('All fields required', 'error'); return; }
+  if (!name || !from || !to || amount == null || isNaN(amount) || amount < 0) { toast('All fields required', 'error'); return; }
   var btn = document.getElementById('er-save-btn');
   setLoading(btn, true);
   apiPut(API_TRANSPORT_ROUTES + '/' + id, {name: name, amount: amount, from: from, to: to}, true)
