@@ -1436,53 +1436,179 @@ function updateFBSummary(id) {
 }
 
 function buildPreview() {
-  var active = feeHeads.filter(function(fh) {
-    var s = fbs[fh._id];
-    return s && s.enabled && s.amount && s.classIds && s.classIds.length && s.dueMonths && s.dueMonths.length;
-  });
+
   var pc = document.getElementById('preview-card');
-  if (!active.length) { pc.style.display = 'none'; return; }
+  if (!pc) return;
+
   pc.style.display = 'block';
 
+  // Hide old table
+  document.querySelector('#preview-table').style.display = 'none';
+
+  var active = feeHeads.filter(function(fh) {
+    return fbs[fh._id] && fbs[fh._id].enabled;
+  });
+
   var classMap = {};
+
   active.forEach(function(fh) {
-    var s = fbs[fh._id];
-    s.classIds.forEach(function(cid) {
+
+    var fb = fbs[fh._id];
+
+    (fb.classIds || []).forEach(function(cid) {
+
       if (!classMap[cid]) classMap[cid] = {};
-      classMap[cid][fh._id] = {amount: s.amount, months: s.dueMonths};
+
+      classMap[cid][fh._id] = {
+        amount: fb.amount,
+        months: fb.dueMonths || []
+      };
+
     });
+
   });
 
-  var thead = document.querySelector('#preview-table thead');
-  var tbody = document.querySelector('#preview-table tbody');
-  thead.innerHTML = '<tr><th>Class</th>' + active.map(function(fh) { return '<th>' + escH(fh.name) + '</th>'; }).join('') + '<th>Transport</th><th>Actions</th></tr>';
-
+  // Session
   var session = document.getElementById('fs-session').value;
-  var rows = '';
-  Object.keys(classMap).forEach(function(cid) {
-    var fhMap   = classMap[cid];
-    var cls     = classes.find(function(c) { return String(c._id) === cid; });
+
+  // Build Cards
+  var cardsHtml = Object.keys(classMap).map(function(cid) {
+
+    var fhMap = classMap[cid];
+
+    var cls = classes.find(function(c) {
+      return String(c._id) === cid;
+    });
+
     var clsName = (cls && cls.className) || cid;
-    var cells   = active.map(function(fh) {
+
+    // Fee Head Rows
+    var fhRows = active.map(function(fh) {
+
       var d = fhMap[fh._id];
-      if (!d) return '<td style="color:var(--text3);font-size:12px">-</td>';
-      return '<td class="amount-mono" style="min-width:80px;white-space:nowrap">' +
-  'Rs.' + Number(d.amount).toLocaleString() + ' &times; ' + d.months.length + 'mo' +
-  '<div style="font-size:10px;color:var(--text3);font-weight:600;margin-top:2px">' +
-    SHORT_MONTHS[d.months[0]] + '&ndash;' + SHORT_MONTHS[d.months[d.months.length - 1]] +
-  '</div></td>';
+
+      if (!d) return '';
+
+      var dotClass = fh.color || 'dot-blue';
+
+      return '' +
+
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9">' +
+
+        '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text2)">' +
+
+          '<span class="color-dot ' + dotClass + '"></span>' +
+          escH(fh.name) +
+
+        '</div>' +
+
+        '<span style="font-family:\'JetBrains Mono\',monospace;font-size:12px;font-weight:800;color:var(--text)">' +
+
+          'Rs.' + Number(d.amount).toLocaleString() +
+          ' × ' + d.months.length + 'mo' +
+
+        '</span>' +
+
+      '</div>';
+
     }).join('');
-    var rtNote = transportRoutes.length
-      ? '<td style="font-size:11px;color:var(--orange);font-weight:700">Auto per student</td>'
-      : '<td style="color:var(--text3);font-size:11px">-</td>';
-    rows += '<tr><td><span class="class-badge" onclick="openClassBreakdown(\'' + cid + '\',\'' + escA(clsName) + '\',\'' + session + '\')">' + escH(clsName) + '</span></td>' +
-      cells + rtNote +
-      '<td><div style="display:flex;gap:5px">' +
-      '<button class="btn-edit" onclick="openEditEntryModal(\'' + cid + '\',\'' + escA(clsName) + '\')">Edit</button>' +
-      '<button class="btn-danger" onclick="removeClassFromEntries(\'' + cid + '\',\'' + escA(clsName) + '\')">Del</button>' +
-      '</div></td></tr>';
-  });
-  tbody.innerHTML = rows || '<tr><td colspan="99" style="text-align:center;color:var(--text3);padding:13px;font-size:12px">Toggle on fee heads to see preview.</td></tr>';
+
+    // Transport Row
+    var transportRow = transportRoutes.length
+
+      ? '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">' +
+
+          '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#ea580c">' +
+
+            '🚌 Transport' +
+
+          '</div>' +
+
+          '<span style="font-size:11px;color:#ea580c;font-weight:700">' +
+
+            'Auto per student' +
+
+          '</span>' +
+
+        '</div>'
+
+      : '';
+
+    // Final Card
+    return '' +
+
+    '<div style="background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:14px 16px;transition:.18s"' +
+
+      ' onmouseover="this.style.borderColor=\'#c7d2fe\'"' +
+
+      ' onmouseout="this.style.borderColor=\'var(--border)\'">' +
+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+
+        '<span class="class-badge" style="font-size:13px;padding:4px 12px"' +
+
+          ' onclick="openClassBreakdown(\'' + cid + '\',\'' + escA(clsName) + '\',\'' + session + '\')">' +
+
+          escH(clsName) +
+
+        '</span>' +
+
+        '<div style="display:flex;gap:5px">' +
+
+          '<button class="btn-edit"' +
+
+            ' onclick="openEditEntryModal(\'' + cid + '\',\'' + escA(clsName) + '\')">' +
+
+            'Edit' +
+
+          '</button>' +
+
+          '<button class="btn-danger"' +
+
+            ' onclick="removeClassFromEntries(\'' + cid + '\',\'' + escA(clsName) + '\')">' +
+
+            'Del' +
+
+          '</button>' +
+
+        '</div>' +
+
+      '</div>' +
+
+      fhRows +
+
+      transportRow +
+
+    '</div>';
+
+  }).join('');
+
+  // Create Grid Container
+  var gridEl = document.getElementById('preview-card-grid');
+
+  if (!gridEl) {
+
+    gridEl = document.createElement('div');
+
+    gridEl.id = 'preview-card-grid';
+
+    gridEl.style.cssText =
+      'display:grid;' +
+      'grid-template-columns:repeat(auto-fill,minmax(280px,1fr));' +
+      'gap:10px;' +
+      'margin-top:12px';
+
+    document.getElementById('preview-card').appendChild(gridEl);
+  }
+
+  // Empty State
+  gridEl.innerHTML = cardsHtml ||
+
+    '<div style="text-align:center;color:var(--text3);padding:13px;font-size:12px">' +
+
+      'Toggle on fee heads to see preview.' +
+
+    '</div>';
 }
 
 function openEditEntryModal(cid, clsName) {
@@ -4870,18 +4996,30 @@ var isBulk = uniqueMonths.length > 1;
       : '<span class="rpt-mode-online">&#128247; Online</span>';
 
     // All fee heads in this group
-    var fhHtml = grp.map(function(r) {
-      var dotColor = RPT_DOT_COLORS[r.feeHeadColor] || '#6366f1';
-      return '<div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:2px">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:' + dotColor + ';flex-shrink:0;display:inline-block"></span>' +
-        escH(r.feeHeadName) +
+    // Deduplicated fee heads
+var seenFHs = {};
+var uniqueFHList = [];
+grp.forEach(function(r) {
+    if (!seenFHs[r.feeHeadName]) {
+        seenFHs[r.feeHeadName] = true;
+        uniqueFHList.push({ name: r.feeHeadName, color: r.feeHeadColor });
+    }
+});
+var fhHtml = uniqueFHList.map(function(fh) {
+    var dotColor = RPT_DOT_COLORS[fh.color] || '#6366f1';
+    return '<div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:2px">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + dotColor +
+        ';flex-shrink:0;display:inline-block"></span>' +
+        escH(fh.name) +
         '</div>';
-    }).join('<br>');
+}).join('<br>');
 
     // All months in this group (unique)
     var months = [];
     grp.forEach(function(r) { if (months.indexOf(r.monthName) === -1) months.push(r.monthName); });
-    var monthHtml = months.join(', ');
+    var monthHtml = months.length > 4
+    ? months.slice(0, 3).join(', ') + ' +' + (months.length - 3) + ' more'
+    : months.join(', ');
 
     // Total amount
     var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
@@ -4923,53 +5061,83 @@ var isBulk = uniqueMonths.length > 1;
 // ── Transport Fee Table ─────────────────────────────────────────
 function rptRenderTrnTable(rows) {
   var tbody = document.getElementById('rpt-trn-tbody');
-  document.getElementById('rpt-trn-count').textContent = rows.length;
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="14" class="rpt-empty">No transport fee records match your filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="rpt-empty">No transport fee records match your filters.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = rows.map(function(r, idx) {
-    var isBulk  = !!r.bulkGroupId;
-    var modeTag = r.paymentSource === 'cash'
+  // ── Group by bulkGroupId (same logic as regular fees) ──
+  var groups = [];
+  var bulkSeen = {};
+  rows.forEach(function(r) {
+    if (r.bulkGroupId) {
+      if (bulkSeen[r.bulkGroupId] !== undefined) {
+        groups[bulkSeen[r.bulkGroupId]].push(r);
+      } else {
+        bulkSeen[r.bulkGroupId] = groups.length;
+        groups.push([r]);
+      }
+    } else {
+      groups.push([r]);
+    }
+  });
+
+  document.getElementById('rpt-trn-count').textContent = groups.length;
+
+  tbody.innerHTML = groups.map(function(grp, idx) {
+    var first    = grp[0];
+    var isBulk   = grp.length > 1;
+    var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+
+    var uniqueMonths = [];
+    grp.forEach(function(r) {
+      if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName);
+    });
+    var monthHtml = uniqueMonths.length > 3
+      ? uniqueMonths.slice(0, 2).join(', ') + ' +' + (uniqueMonths.length - 2) + ' more'
+      : uniqueMonths.join(', ');
+
+    var modeTag = first.paymentSource === 'cash'
       ? '<span class="rpt-mode-cash">&#128181; Cash</span>'
       : '<span class="rpt-mode-online">&#128247; Online</span>';
 
     return '<tr class="' + (isBulk ? 'rpt-bulk-row' : '') + '">' +
       '<td style="color:var(--text3);font-size:11px;font-weight:700">' + (idx + 1) + '</td>' +
       '<td>' +
-        '<div style="font-size:12px;font-weight:700">' + escH(r.paidTime) + '</div>' +
-        '<div class="rpt-sub">' + escH(r.paidDate) + '</div>' +
+        '<div style="font-size:12px;font-weight:700">' + escH(first.paidTime) + '</div>' +
+        '<div class="rpt-sub">' + escH(first.paidDate) + '</div>' +
       '</td>' +
+      // Student + Father + Phone in one cell
       '<td>' +
-        '<div class="rpt-name">' + escH(r.studentName) + '</div>' +
-        (r.rollNo && r.rollNo !== '-' ? '<div class="rpt-sub">Roll ' + escH(r.rollNo) + '</div>' : '') +
-      '</td>' +
-      '<td><span style="background:#fff7ed;color:#c2410c;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(r.className) + '</span></td>' +
-      '<td style="font-size:12px;font-weight:600">' + escH(r.fatherName) + '</td>' +
-      '<td>' +
-        (r.phone && r.phone !== '-'
-          ? '<a href="tel:' + escH(r.phone) + '" style="font-size:11px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(r.phone) + '</a>'
-          : '<span style="color:var(--text3);font-size:11px">—</span>') +
-      '</td>' +
-      '<td>' +
-        '<div style="font-size:12px;font-weight:800">' + escH(r.routeName) + '</div>' +
-        '<div class="rpt-sub">' + escH(r.routeFrom) + ' \u2192 ' + escH(r.routeTo) + '</div>' +
-        (isBulk ? '<div class="rpt-bulk-tag">&#128230; Bulk</div>' : '') +
-      '</td>' +
-      '<td style="font-family:\'JetBrains Mono\',monospace;font-weight:900;font-size:12px;color:#4f46e5">' + escH(r.busNumber) + '</td>' +
-      '<td>' +
-        '<div style="font-size:12px;font-weight:600">' + escH(r.driverName) + '</div>' +
-        (r.driverContact && r.driverContact !== '-'
-          ? '<a href="tel:' + escH(r.driverContact) + '" style="font-size:10px;color:var(--brand);text-decoration:none">&#128222; ' + escH(r.driverContact) + '</a>'
+        '<div class="rpt-name">' + escH(first.studentName) + '</div>' +
+        (first.rollNo && first.rollNo !== '-' ? '<div class="rpt-sub">Roll ' + escH(first.rollNo) + '</div>' : '') +
+        (first.fatherName ? '<div class="rpt-sub">S/O ' + escH(first.fatherName) + '</div>' : '') +
+        (first.phone && first.phone !== '-'
+          ? '<a href="tel:' + escH(first.phone) + '" style="font-size:10px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(first.phone) + '</a>'
           : '') +
       '</td>' +
-      '<td style="font-size:12px;font-weight:800;color:var(--text2);white-space:nowrap">' + escH(r.monthName) + '</td>' +
-      '<td class="mono">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
+      '<td><span style="background:#fff7ed;color:#c2410c;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(first.className) + '</span></td>' +
+      // Route + Bus No + Driver in one cell
+      '<td>' +
+        '<div style="font-size:12px;font-weight:800">' + escH(first.routeName) + '</div>' +
+        '<div class="rpt-sub">' + escH(first.routeFrom) + ' \u2192 ' + escH(first.routeTo) + '</div>' +
+        (first.busNumber && first.busNumber !== '-'
+  ? '<div style="font-size:11px;font-weight:800;color:#4f46e5;margin-top:2px">&#128652; ' +
+    escH(first.busNumber) +
+    (first.driverName && first.driverName !== '-' ? ' &middot; ' + escH(first.driverName) : '') +
+    '</div>'
+  : '') +
+(first.driverContact && first.driverContact !== '-'
+  ? '<a href="tel:' + escH(first.driverContact) + '" style="font-size:10px;font-weight:700;color:#ea580c;text-decoration:none">&#128222; ' + escH(first.driverContact) + '</a>'
+  : '') +
+        (isBulk ? '<div class="rpt-bulk-tag">&#128230; Bulk (' + uniqueMonths.length + ' months)</div>' : '') +
+      '</td>' +
+      '<td style="font-size:12px;font-weight:800;color:var(--text2)">' + escH(monthHtml) + '</td>' +
+      '<td class="mono" style="font-weight:800">Rs.' + Number(totalAmt).toLocaleString('en-IN') + '</td>' +
       '<td>' + modeTag + '</td>' +
-      '<td><span class="rpt-recv-name">' + escH(r.receivedBy) + '</span></td>' +
-      '<td><button class="rpt-reprint-btn" onclick="rptReprintReceipt(\'' + r.paymentId + '\')">&#128424; PDF</button></td>' +
+      '<td><span class="rpt-recv-name">' + escH(first.receivedBy) + '</span></td>' +
+      '<td><button class="rpt-reprint-btn" onclick="rptReprintReceipt(\'' + first.paymentId + '\')">&#128424; PDF</button></td>' +
     '</tr>';
   }).join('');
 }
