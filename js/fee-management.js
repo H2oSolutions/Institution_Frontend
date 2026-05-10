@@ -1145,8 +1145,14 @@ function loadExistingStructure(session) {
 function updateTransportNote() {
   var el = document.getElementById('transport-note-text');
   if (!el) return;
-  if (!transportRoutes.length) { el.textContent = 'No transport routes. Add routes in Tab 2 first.'; return; }
-  el.textContent = 'Transport fees auto-added: ' + transportRoutes.map(function(r) { return r.name + ' (Rs.' + r.amount + '/mo)'; }).join(', ');
+  if (!transportRoutes.length) {
+    el.textContent = 'No transport routes. Add routes in Tab 2 first.';
+    return;
+  }
+  el.textContent = transportRoutes.length + ' transport route' +
+    (transportRoutes.length !== 1 ? 's' : '') +
+    ' auto-added to fee structure. Fee per student is set per route in Tab 2. ' +
+    'Use the cards above to configure which months each route is charged.';
 }
 
 function renderTransportFeeBuilder() {
@@ -1460,8 +1466,11 @@ function buildPreview() {
     var cells   = active.map(function(fh) {
       var d = fhMap[fh._id];
       if (!d) return '<td style="color:var(--text3);font-size:12px">-</td>';
-      return '<td class="amount-mono">Rs.' + Number(d.amount).toLocaleString() + ' x ' + d.months.length + '<br>' +
-        d.months.map(function(m) { return '<span class="month-tag">' + SHORT_MONTHS[m] + '</span>'; }).join('') + '</td>';
+      return '<td class="amount-mono" style="min-width:80px;white-space:nowrap">' +
+  'Rs.' + Number(d.amount).toLocaleString() + ' &times; ' + d.months.length + 'mo' +
+  '<div style="font-size:10px;color:var(--text3);font-weight:600;margin-top:2px">' +
+    SHORT_MONTHS[d.months[0]] + '&ndash;' + SHORT_MONTHS[d.months[d.months.length - 1]] +
+  '</div></td>';
     }).join('');
     var rtNote = transportRoutes.length
       ? '<td style="font-size:11px;color:var(--orange);font-weight:700">Auto per student</td>'
