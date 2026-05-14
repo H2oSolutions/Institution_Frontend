@@ -803,8 +803,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
   <!-- ── Financial Overview (Admin Only) ── -->
 <div id="fo-section" style="display:none">
-  <!-- <div class="fm-card"> -->    
-    <div class="fm-card" style="display:none;">
+  <div class="fm-card">    
+    
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
       <div>
         <div class="fm-card-title">&#128200; Financial Overview</div>
@@ -985,6 +985,14 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
           <option value="transport">Transport Only</option>
         </select>
       </div>
+
+      <!-- Received By filter -->
+<div class="rpt-filter-group">
+  <label>Received By</label>
+  <select id="rpt-recv-by" onchange="rptFilterRows()">
+    <option value="">All</option>
+  </select>
+</div>
  
       <!-- Get Report Button -->
       <button class="rpt-get-btn" id="rpt-get-btn" onclick="loadCollectionReport()">

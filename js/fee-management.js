@@ -4808,6 +4808,9 @@ function rptPreset(preset) {
   document.getElementById('rpt-from').value = fmt(from);
   document.getElementById('rpt-to').value   = fmt(to);
 
+  var recvSel = document.getElementById('rpt-recv-by');
+if (recvSel) recvSel.innerHTML = '<option value="">All</option>';
+
   // Highlight active preset button
   document.querySelectorAll('.rpt-preset').forEach(function(b) {
     b.classList.remove('active');
@@ -4861,6 +4864,29 @@ function loadCollectionReport() {
       rptAllRows.forEach(function(r) { RPT_ROW_REG[r.paymentId] = r; });
 
       rptRenderKPIs(rptSummary, rptAllRows);
+
+      // Populate Received By dropdown
+var recvSel2 = document.getElementById('rpt-recv-by');
+
+if (recvSel2) {
+  var currentVal = recvSel2.value;
+
+  recvSel2.innerHTML = '<option value="">All</option>';
+
+  var recvList2 = rptSummary.receivedBySummary || [];
+
+  recvList2.forEach(function(r) {
+    var o = document.createElement('option');
+
+    o.value = r.name;
+    o.textContent = r.name;
+
+    recvSel2.appendChild(o);
+  });
+
+  // restore old selection
+  if (currentVal) recvSel2.value = currentVal;
+}
       rptRenderReceivedBy(rptSummary);
       rptFilterRows();   // applies live search + renders tables
 
@@ -4922,31 +4948,80 @@ function rptRenderReceivedBy(summary) {
 
 // ── Live Search / Filter ────────────────────────────────────────
 function rptFilterRows() {
-  var q = (document.getElementById('rpt-search').value || '').toLowerCase().trim();
 
-  var filtered = q
-    ? rptAllRows.filter(function(r) {
-        return (r.studentName  && r.studentName.toLowerCase().includes(q))  ||
-               (r.fatherName   && r.fatherName.toLowerCase().includes(q))   ||
-               (r.rollNo       && String(r.rollNo).toLowerCase().includes(q)) ||
-               (r.className    && r.className.toLowerCase().includes(q))    ||
-               (r.feeHeadName  && r.feeHeadName.toLowerCase().includes(q)) ||
-               (r.routeName    && r.routeName.toLowerCase().includes(q))    ||
-               (r.receivedBy   && r.receivedBy.toLowerCase().includes(q))   ||
-               (r.phone        && r.phone.includes(q));
-      })
-    : rptAllRows.slice();
+  var q = (
+    document.getElementById('rpt-search').value || ''
+  ).toLowerCase().trim();
 
-  rptFilteredReg = filtered.filter(function(r) { return r.type === 'regular'; });
-  rptFilteredTrn = filtered.filter(function(r) { return r.type === 'transport'; });
+  var recvBy = (
+    document.getElementById('rpt-recv-by') &&
+    document.getElementById('rpt-recv-by').value
+  ) || '';
+
+  var filtered = rptAllRows.filter(function(r) {
+
+    // Search filter
+    if (q) {
+
+      var matchQ =
+
+        (r.studentName &&
+          r.studentName.toLowerCase().includes(q)) ||
+
+        (r.fatherName &&
+          r.fatherName.toLowerCase().includes(q)) ||
+
+        (r.rollNo &&
+          String(r.rollNo).toLowerCase().includes(q)) ||
+
+        (r.className &&
+          r.className.toLowerCase().includes(q)) ||
+
+        (r.feeHeadName &&
+          r.feeHeadName.toLowerCase().includes(q)) ||
+
+        (r.routeName &&
+          r.routeName.toLowerCase().includes(q)) ||
+
+        (r.receivedBy &&
+          r.receivedBy.toLowerCase().includes(q)) ||
+
+        (r.phone &&
+          r.phone.includes(q));
+
+      if (!matchQ) return false;
+    }
+
+    // Received By filter
+    if (recvBy && r.receivedBy !== recvBy) {
+      return false;
+    }
+
+    return true;
+  });
+
+  rptFilteredReg = filtered.filter(function(r) {
+    return r.type === 'regular';
+  });
+
+  rptFilteredTrn = filtered.filter(function(r) {
+    return r.type === 'transport';
+  });
 
   rptRenderRegTable(rptFilteredReg);
+
   rptRenderTrnTable(rptFilteredTrn);
+
   rptUpdateActionBar(filtered);
 
-  document.getElementById('rpt-regular-section').style.display   = rptFilteredReg.length ? 'block' : 'none';
-  document.getElementById('rpt-transport-section').style.display = rptFilteredTrn.length ? 'block' : 'none';
-  document.getElementById('rpt-no-data').style.display           = filtered.length ? 'none' : (rptAllRows.length ? 'block' : 'none');
+  document.getElementById('rpt-regular-section').style.display =
+    rptFilteredReg.length ? 'block' : 'none';
+
+  document.getElementById('rpt-transport-section').style.display =
+    rptFilteredTrn.length ? 'block' : 'none';
+
+  document.getElementById('rpt-no-data').style.display =
+    filtered.length ? 'none' : (rptAllRows.length ? 'block' : 'none');
 }
 
 // ── Dot color map ────────────────────────────────────────────────
