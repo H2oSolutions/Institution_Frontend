@@ -30,6 +30,7 @@ var expandedStudentId = null;
 var fhEditId          = null;
 var currentSession    = '';
 var lastReceiptData   = null;
+var feeStatusDirty = false;
 
 var pendingBusSelections = {};
 
@@ -181,7 +182,14 @@ function switchTab(n) {
   
   if (n === 3) initFeeSetupTab();
   if (n === 2) { loadFleetOverview(); loadClassTransportSummary(); }
-  if (n === 4) populateClassDropdowns();
+  if (n === 4) {
+  populateClassDropdowns();
+
+  if (feeStatusDirty && feeStatusData.length > 0) {
+    feeStatusDirty = false;
+    loadFeeStatus();
+  }
+}
   if (n === 5) { initReportTab(); initFinancialOverview(); }
 }
 
@@ -261,6 +269,7 @@ function addRoute() {
   apiPost(API_TRANSPORT_ROUTES, {name: name, from: from, to: to, amount: amount}, true)
     .then(function() {
       toast('Route added');
+      feeStatusDirty = true;
       ['rt-name', 'rt-from', 'rt-to', 'rt-amount'].forEach(function(id) { document.getElementById(id).value = ''; });
       return loadTransportRoutes();
     })
@@ -770,10 +779,13 @@ function saveEditRoute() {
   setLoading(btn, true);
   apiPut(API_TRANSPORT_ROUTES + '/' + id, {name: name, amount: amount, from: from, to: to}, true)
     .then(function() {
-      toast('Route updated \u2014 fee status will now reflect the new amount automatically');
-      closeModal('edit-route-modal');
-      return loadTransportRoutes();
-    })
+  toast('Route updated — fee status will now reflect the new amount automatically');
+  closeModal('edit-route-modal');
+
+  feeStatusDirty = true;
+
+  return loadTransportRoutes();
+})
     .catch(function(e) { toast(e.message, 'error'); })
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
 }
@@ -797,7 +809,7 @@ function openBusRosterFromReg(k) {
 function deleteRoute(id) {
   if (!confirm('Delete this route?')) return;
   apiDelete(API_TRANSPORT_ROUTES + '/' + id, true)
-    .then(function() { toast('Route deleted'); return loadTransportRoutes(); })
+    .then(function() { toast('Route deleted'); feeStatusDirty = true; return loadTransportRoutes(); })
     .catch(function(e) { toast(e.message, 'error'); });
 }
 
