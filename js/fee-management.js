@@ -5606,6 +5606,313 @@ function printBusDirectoryRoster() {
   w.document.open(); w.document.write(html); w.document.close();
 }
 
+async function exportBusDirectoryExcel() {
+  var d = window._busDirRosterData;
+  if (!d) return;
+
+  var totalStudents  = d.routeGroups.reduce(function(s, g) { return s + g.students.length; }, 0);
+  var monthlyRevenue = d.routeGroups.reduce(function(s, g) {
+    return s + g.students.length * (g.route.amount || 0);
+  }, 0);
+
+  var workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Hello School';
+  workbook.created = new Date();
+
+  var sheetName = ('Bus ' + (d.busNumber || 'Roster')).slice(0, 31);
+  var ws = workbook.addWorksheet(sheetName);
+
+  ws.columns = [
+    { width: 5  },   // #
+    { width: 26 },   // Student Name
+    { width: 14 },   // Class
+    { width: 26 },   // Father's Name
+    { width: 18 },   // Contact
+    { width: 22 },   // Route
+    { width: 18 },   // Transport Fee
+    { width: 22 },   // Signature
+  ];
+
+  var C = {
+    purple:      'FF4F46E5',
+    purple2:     'FF7C3AED',
+    lightPurple: 'FFEEF2FF',
+    white:       'FFFFFFFF',
+    gray:        'FFF8FAFC',
+    darkText:    'FF0F172A',
+    mutedText:   'FF94A3B8',
+    orange:      'FFEA580C',
+    lightOrange: 'FFFFF7ED',
+    green:       'FF059669',
+    lightGreen:  'FFF0FDF4',
+    sectionBg:   'FFFFEDD5',
+    sectionBdr:  'FFFED7AA',
+  };
+
+  function mkFill(argb) { return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } }; }
+  function mkFont(opts) { return Object.assign({ name: 'Arial' }, opts); }
+  function mkBorder(col) {
+    var s = { style: 'thin', color: { argb: col || 'FFE2E8F0' } };
+    return { top: s, left: s, bottom: s, right: s };
+  }
+  function mkAlign(h, v) { return { horizontal: h || 'left', vertical: v || 'middle', wrapText: false }; }
+
+  function mergeStyle(r1, c1, r2, c2, val, fontOpts, fillArgb, alignH) {
+    var addr = ws.getCell(r1, c1).address + ':' + ws.getCell(r2, c2).address;
+    ws.mergeCells(addr);
+    var cell = ws.getCell(r1, c1);
+    cell.value     = val;
+    cell.font      = mkFont(fontOpts);
+    cell.fill      = mkFill(fillArgb);
+    cell.alignment = mkAlign(alignH || 'left', 'middle');
+    return cell;
+  }
+
+  var row = 1;
+
+  // ── Row 1: Big header ──
+  ws.getRow(row).height = 40;
+  mergeStyle(row, 1, row, 8, '🏫  Hello School — Bus Roster',
+    { bold: true, size: 16, color: { argb: C.white } }, C.purple, 'center');
+  row++;
+
+  // ── Row 2: Bus number title ──
+  ws.getRow(row).height = 26;
+  mergeStyle(row, 1, row, 8, 'Bus: ' + (d.busNumber || 'No Bus No.'),
+    { bold: true, size: 13, color: { argb: C.white } }, C.purple2, 'center');
+  row++;
+
+  // ── Row 3: Session | Date ──
+  ws.getRow(row).height = 20;
+  var a3a = ws.getCell(row, 1).address + ':' + ws.getCell(row, 4).address;
+  ws.mergeCells(a3a);
+  var c3a = ws.getCell(row, 1);
+  c3a.value = 'Session: ' + (currentSession || '');
+  c3a.font  = mkFont({ size: 10, color: { argb: C.darkText } });
+  c3a.fill  = mkFill(C.lightPurple);
+  c3a.alignment = mkAlign('left', 'middle');
+
+  var a3b = ws.getCell(row, 5).address + ':' + ws.getCell(row, 8).address;
+  ws.mergeCells(a3b);
+  var c3b = ws.getCell(row, 5);
+  c3b.value = 'Printed: ' + new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  c3b.font  = mkFont({ size: 10, color: { argb: C.darkText } });
+  c3b.fill  = mkFill(C.lightPurple);
+  c3b.alignment = mkAlign('right', 'middle');
+  row++;
+
+  // ── Spacer ──
+  ws.getRow(row).height = 10;
+  row++;
+
+  // ── Bus Info block ──
+  ws.getRow(row).height = 18;
+  mergeStyle(row, 1, row, 8, 'BUS INFORMATION',
+    { bold: true, size: 9, color: { argb: C.purple } }, C.lightPurple, 'left');
+  row++;
+
+  var infoData = [
+    ['Bus Number',    d.busNumber    || '—'],
+    ['Driver Name',   d.driverName   || '—'],
+    ['Driver Contact', String(d.driverContact || '—')],
+    ['Capacity',      d.capacity ? d.capacity + ' seats' : 'Not set'],
+    ['Total Students', totalStudents + ' students'],
+    ['Est. Monthly Revenue', 'Rs.' + monthlyRevenue.toLocaleString()],
+  ];
+
+  for (var i = 0; i < infoData.length; i += 2) {
+    ws.getRow(row).height = 20;
+
+    var lc1 = ws.getCell(row, 1);
+    lc1.value = infoData[i][0];
+    lc1.font  = mkFont({ bold: true, size: 9, color: { argb: C.mutedText } });
+    lc1.fill  = mkFill(C.gray);
+    lc1.alignment = mkAlign('left', 'middle');
+
+    var av1 = ws.getCell(row, 2).address + ':' + ws.getCell(row, 4).address;
+    ws.mergeCells(av1);
+    var vc1 = ws.getCell(row, 2);
+    vc1.value = infoData[i][1];
+    vc1.font  = mkFont({ bold: true, size: 11, color: { argb: i === 10 ? C.green : C.darkText } });
+    vc1.fill  = mkFill(C.white);
+    vc1.alignment = mkAlign('left', 'middle');
+
+    if (infoData[i + 1]) {
+      var lc2 = ws.getCell(row, 5);
+      lc2.value = infoData[i + 1][0];
+      lc2.font  = mkFont({ bold: true, size: 9, color: { argb: C.mutedText } });
+      lc2.fill  = mkFill(C.gray);
+      lc2.alignment = mkAlign('left', 'middle');
+
+      var av2 = ws.getCell(row, 6).address + ':' + ws.getCell(row, 8).address;
+      ws.mergeCells(av2);
+      var vc2 = ws.getCell(row, 6);
+      vc2.value = infoData[i + 1][1];
+      vc2.font  = mkFont({ bold: true, size: 11, color: { argb: i === 8 ? C.green : C.darkText } });
+      vc2.fill  = mkFill(C.white);
+      vc2.alignment = mkAlign('left', 'middle');
+    }
+    row++;
+  }
+
+  ws.getRow(row).height = 10;
+  row++;
+
+  // ── Student Roster header ──
+  ws.getRow(row).height = 18;
+  mergeStyle(row, 1, row, 8,
+    'STUDENT ROSTER — ' + totalStudents + ' STUDENT' + (totalStudents !== 1 ? 'S' : ''),
+    { bold: true, size: 9, color: { argb: C.purple } }, C.lightPurple, 'left');
+  row++;
+
+  // ── Loop route groups ──
+  var serial = 1;
+
+  d.routeGroups.forEach(function(g) {
+    if (!g.students.length) return;
+
+    // Route section header
+    ws.getRow(row).height = 22;
+    var routeLabel = '🚌  ' + g.route.name + '   ' + g.route.from + ' → ' + g.route.to +
+      '     Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month  ×  ' +
+      g.students.length + ' students  =  Rs.' +
+      Number(g.students.length * (g.route.amount || 0)).toLocaleString() + '/month';
+
+    mergeStyle(row, 1, row, 8, routeLabel,
+      { bold: true, size: 10, color: { argb: C.orange } }, C.sectionBg, 'left');
+    row++;
+
+    // Column headers for this group
+    ws.getRow(row).height = 24;
+    var colHeaders = ['#', 'Student Name', 'Class', "Father's Name", 'Contact', 'Route', 'Transport Fee', 'Signature'];
+    colHeaders.forEach(function(h, ci) {
+      var cell = ws.getCell(row, ci + 1);
+      cell.value     = h;
+      cell.font      = mkFont({ bold: true, size: 9, color: { argb: C.white } });
+      cell.fill      = mkFill(C.purple);
+      cell.alignment = mkAlign('center', 'middle');
+      cell.border    = mkBorder('FF4F46E5');
+    });
+    row++;
+
+    // Student rows
+    g.students.forEach(function(s, idx) {
+      ws.getRow(row).height = 22;
+      var rowFill = idx % 2 === 1 ? C.gray : C.white;
+      var vals = [
+        serial++,
+        s.name || '',
+        s.class || '',
+        s.fatherName || '',
+        String(s.phone || ''),
+        g.route.name,
+        'Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month',
+        ''
+      ];
+      vals.forEach(function(v, ci) {
+        var cell = ws.getCell(row, ci + 1);
+        cell.value     = v;
+        cell.font      = mkFont({
+          size: 10,
+          color: { argb: ci === 6 ? C.green : C.darkText },
+          bold: ci === 1 || ci === 6
+        });
+        cell.fill      = mkFill(rowFill);
+        cell.alignment = mkAlign(ci === 0 ? 'center' : 'left', 'middle');
+        cell.border    = mkBorder();
+      });
+      row++;
+    });
+
+    ws.getRow(row).height = 8;
+    row++;
+  });
+
+  // ── Revenue Summary ──
+  ws.getRow(row).height = 18;
+  mergeStyle(row, 1, row, 8, 'ROUTE-WISE REVENUE SUMMARY',
+    { bold: true, size: 9, color: { argb: C.green } }, C.lightGreen, 'left');
+  row++;
+
+  // Revenue header
+  ws.getRow(row).height = 22;
+  var revHeaders = ['Route', 'Path', 'Students', 'Fee / Student', 'Monthly Revenue'];
+  revHeaders.forEach(function(h, ci) {
+    var cell = ws.getCell(row, ci + 1);
+    cell.value     = h;
+    cell.font      = mkFont({ bold: true, size: 9, color: { argb: C.white } });
+    cell.fill      = mkFill(C.green);
+    cell.alignment = mkAlign('center', 'middle');
+    cell.border    = mkBorder('FF059669');
+  });
+  row++;
+
+  d.routeGroups.forEach(function(g, idx) {
+    ws.getRow(row).height = 20;
+    var revFill = idx % 2 === 1 ? C.gray : C.white;
+    var revVals = [
+      g.route.name,
+      g.route.from + ' → ' + g.route.to,
+      g.students.length,
+      'Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month',
+      'Rs.' + Number(g.students.length * (g.route.amount || 0)).toLocaleString() + '/month'
+    ];
+    revVals.forEach(function(v, ci) {
+      var cell = ws.getCell(row, ci + 1);
+      cell.value     = v;
+      cell.font      = mkFont({ size: 10, color: { argb: ci === 4 ? C.green : C.darkText }, bold: ci === 4 });
+      cell.fill      = mkFill(revFill);
+      cell.alignment = mkAlign(ci === 2 ? 'center' : 'left', 'middle');
+      cell.border    = mkBorder();
+    });
+    row++;
+  });
+
+  // Total row
+  ws.getRow(row).height = 24;
+  var totVals = ['TOTAL', '', totalStudents + ' students', '', 'Rs.' + monthlyRevenue.toLocaleString() + '/month'];
+  totVals.forEach(function(v, ci) {
+    var cell = ws.getCell(row, ci + 1);
+    cell.value     = v;
+    cell.font      = mkFont({ bold: true, size: 11, color: { argb: ci === 4 ? C.green : C.darkText } });
+    cell.fill      = mkFill(C.lightGreen);
+    cell.alignment = mkAlign(ci === 2 ? 'center' : 'left', 'middle');
+    cell.border    = mkBorder('FF059669');
+  });
+  row++;
+
+  // ── Footer ──
+  ws.getRow(row).height = 20;
+  var afL = ws.getCell(row, 1).address + ':' + ws.getCell(row, 5).address;
+  ws.mergeCells(afL);
+  var fL = ws.getCell(row, 1);
+  fL.value     = 'Hello School · Transport Management · ' + (currentSession || '');
+  fL.font      = mkFont({ size: 9, color: { argb: C.mutedText }, italic: true });
+  fL.fill      = mkFill(C.lightPurple);
+  fL.alignment = mkAlign('left', 'middle');
+
+  var afR = ws.getCell(row, 6).address + ':' + ws.getCell(row, 8).address;
+  ws.mergeCells(afR);
+  var fR = ws.getCell(row, 6);
+  fR.value     = 'Authorised Signatory';
+  fR.font      = mkFont({ size: 9, color: { argb: C.mutedText } });
+  fR.fill      = mkFill(C.lightPurple);
+  fR.alignment = mkAlign('center', 'middle');
+
+  // ── Download ──
+  var buffer = await workbook.xlsx.writeBuffer();
+  var blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var url    = URL.createObjectURL(blob);
+  var a      = document.createElement('a');
+  a.href     = url;
+  a.download = ('Bus_' + (d.busNumber || 'Roster')).replace(/[^a-z0-9]/gi, '_') + '.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Excel file downloaded');
+}
+
 function loadClassTransportSummary() {
   var el = document.getElementById('class-transport-summary-container');
   if (!el) return;

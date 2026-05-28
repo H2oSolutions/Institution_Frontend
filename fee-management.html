@@ -1621,8 +1621,9 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <p class="modal-sub" id="bdm-sub">Student list with route and transport fee details.</p>
     <div id="bdm-info" style="margin-bottom:18px"></div>
     <div style="display:flex;justify-content:flex-end;gap:9px;margin-bottom:14px">
-      <button class="btn-primary" onclick="printBusDirectoryRoster()">&#128424; Print Roster</button>
-    </div>
+  <button class="btn-secondary" onclick="exportBusDirectoryExcel()">&#128196; Export Excel</button>
+  <button class="btn-primary" onclick="printBusDirectoryRoster()">&#128424; Print Roster</button>
+</div>
     <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:8px">
       Student Roster &nbsp;<span id="bdm-count" style="color:var(--brand);font-size:13px;font-weight:900"></span>
       <span style="flex:1;height:1px;background:var(--border);margin-left:4px"></span>
