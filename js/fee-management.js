@@ -40,6 +40,9 @@ function regPay(d) { var k = 'p' + (payIdx++); PAY_REG[k] = d; return k; }
 
 var FLEET_REG = {};
 var fleetIdx  = 0;
+var BUS_DIR_REG = {};
+var busDirIdx   = 0;
+function regBusDir(d) { var k = 'bd' + (busDirIdx++); BUS_DIR_REG[k] = d; return k; }
 function regFleet(d) { 
   var k = 'f' + (fleetIdx++); 
   FLEET_REG[k] = d; 
@@ -181,7 +184,7 @@ function switchTab(n) {
   });
   
   if (n === 3) initFeeSetupTab();
-  if (n === 2) { loadFleetOverview(); loadClassTransportSummary(); }
+  if (n === 2) { loadFleetOverview(); loadBusDirectory(); loadClassTransportSummary(); }
   if (n === 4) {
   populateClassDropdowns();
 
@@ -5234,6 +5237,373 @@ function rptUpdateActionBar(rows) {
   var total = rows.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
   document.getElementById('rpt-visible-count').textContent = rows.length;
   document.getElementById('rpt-visible-total').textContent = 'Rs.' + Number(total).toLocaleString('en-IN');
+}
+function loadBusDirectory() {
+  BUS_DIR_REG = {};
+  busDirIdx   = 0;
+  var el = document.getElementById('bus-directory-container');
+  if (!el) return;
+  el.innerHTML = '<div class="fm-empty" style="padding:18px 0"><div class="ei">&#9203;</div>Loading buses...</div>';
+
+  var session = currentSession;
+  if (!session) return;
+
+  apiGet(API_TRANSPORT_ROSTER + '?session=' + encodeURIComponent(session), true)
+    .then(function(r) {
+      var routes = r.data || [];
+
+      // Deduplicate buses by busNumber — same physical bus can serve multiple routes
+      var busMap = {}; // busNumber → { busNumber, driverName, driverContact, capacity, routeGroups: [{route, students}] }
+
+      routes.forEach(function(route) {
+        (route.buses || []).forEach(function(bus) {
+          var key = (bus.busNumber || ('__noid__' + bus._id)).toUpperCase().trim();
+          if (!busMap[key]) {
+            busMap[key] = {
+              busNumber:    bus.busNumber,
+              driverName:   bus.driverName,
+              driverContact: bus.driverContact,
+              capacity:     bus.capacity,
+              routeGroups:  []
+            };
+          }
+          if (bus.students && bus.students.length > 0) {
+            busMap[key].routeGroups.push({
+              route:    route,
+              students: bus.students
+            });
+          } else {
+            // Bus exists but no students — still show it
+            if (!busMap[key].routeGroups.length) {
+              busMap[key].routeGroups.push({ route: route, students: [] });
+            }
+          }
+        });
+      });
+
+      var busList = Object.values(busMap);
+
+      if (!busList.length) {
+        el.innerHTML = '<div class="fm-empty">No buses found. Add buses to routes first.</div>';
+        return;
+      }
+
+      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px">';
+
+      busList.forEach(function(item) {
+        var k = regBusDir(item);
+
+        var totalStudents = item.routeGroups.reduce(function(s, g) { return s + g.students.length; }, 0);
+        var occ    = item.capacity ? Math.round((totalStudents / item.capacity) * 100) : null;
+        var oc     = occ === null ? '#6366f1' : occ >= 90 ? '#ef4444' : occ >= 70 ? '#f59e0b' : '#10b981';
+        var pct    = item.capacity ? Math.min(100, Math.round((totalStudents / item.capacity) * 100)) : 0;
+
+        // Monthly revenue from this bus
+        var monthlyRevenue = item.routeGroups.reduce(function(s, g) {
+          return s + g.students.length * (g.route.amount || 0);
+        }, 0);
+
+        // Route pills (unique routes)
+        var routePills = item.routeGroups.map(function(g) {
+          return '<span style="display:inline-flex;align-items:center;gap:3px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:800;color:#c2410c;margin:1px">' +
+            '&#128652; ' + escH(g.route.name) +
+            ' <span style="color:#ea580c;font-family:\'JetBrains Mono\',monospace">Rs.' + (g.route.amount || 0).toLocaleString() + '</span>' +
+          '</span>';
+        }).join('');
+
+        html +=
+          '<div style="background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:14px 15px;cursor:pointer;transition:.2s" ' +
+          'onmouseover="this.style.borderColor=\'#c7d2fe\';this.style.transform=\'translateY(-2px)\';this.style.boxShadow=\'0 4px 18px rgba(99,102,241,.12)\'"' +
+          'onmouseout="this.style.borderColor=\'var(--border)\';this.style.transform=\'\';this.style.boxShadow=\'\'"' +
+          'onclick="openBusDirectoryRoster(\'' + k + '\')">' +
+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">' +
+            '<div style="font-size:14px;font-weight:900;color:#4f46e5;font-family:\'JetBrains Mono\',monospace;letter-spacing:.02em">' + escH(item.busNumber || 'No No.') + '</div>' +
+            (occ !== null ? '<div style="font-size:9px;font-weight:800;background:' + oc + '18;color:' + oc + ';border:1.5px solid ' + oc + '33;border-radius:4px;padding:2px 6px">' + occ + '%</div>' : '') +
+          '</div>' +
+
+          '<div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#128100; ' + escH(item.driverName) + '</div>' +
+          '<div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:7px">&#128222; ' + escH(item.driverContact) + '</div>' +
+
+          '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:8px">' + routePills + '</div>' +
+
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">' +
+            '<div style="font-size:18px;font-weight:900;font-family:\'JetBrains Mono\',monospace;color:' + oc + '">' +
+              totalStudents + '<span style="font-size:11px;font-weight:600;color:var(--text3)">/' + (item.capacity || '?') + ' seats</span>' +
+            '</div>' +
+            '<div style="font-size:10px;font-weight:900;color:#059669;font-family:\'JetBrains Mono\',monospace;text-align:right">' +
+              'Rs.' + monthlyRevenue.toLocaleString() + '<br>' +
+              '<span style="font-size:9px;font-weight:600;color:var(--text3)">/month revenue</span>' +
+            '</div>' +
+          '</div>' +
+
+          (item.capacity ?
+            '<div style="height:4px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-bottom:7px">' +
+              '<div style="height:100%;width:' + pct + '%;background:' + oc + ';border-radius:99px"></div>' +
+            '</div>'
+          : '') +
+
+          '<div style="font-size:10px;color:var(--brand);font-weight:700">Tap to view roster &#8594;</div>' +
+          '</div>';
+      });
+
+      html += '</div>';
+      el.innerHTML = html;
+    })
+    .catch(function(e) {
+      el.innerHTML = '<div class="fm-empty">Failed: ' + escH(e.message) + '</div>';
+    });
+}
+
+function openBusDirectoryRoster(k) {
+  var d = BUS_DIR_REG[k];
+  if (!d) return;
+
+  window._busDirRosterData = d;
+
+  var totalStudents = d.routeGroups.reduce(function(s, g) { return s + g.students.length; }, 0);
+  var monthlyRevenue = d.routeGroups.reduce(function(s, g) {
+    return s + g.students.length * (g.route.amount || 0);
+  }, 0);
+
+  document.getElementById('bdm-title').textContent =
+    'Bus ' + (d.busNumber || 'No No.') + ' \u2014 Full Student Roster';
+
+  document.getElementById('bdm-sub').textContent =
+    d.routeGroups.length + ' route' + (d.routeGroups.length !== 1 ? 's' : '') +
+    ' \u2014 ' + totalStudents + ' student' + (totalStudents !== 1 ? 's' : '') +
+    ' \u2014 Rs.' + monthlyRevenue.toLocaleString() + '/month estimated revenue';
+
+  // Bus info block
+  var routeNames = d.routeGroups.map(function(g) { return g.route.name; }).join(', ');
+  document.getElementById('bdm-info').innerHTML =
+    '<div class="brm-info-grid">' +
+      '<div><div class="brm-il">Bus Number</div><div class="brm-iv brm-bus-no">' + escH(d.busNumber || 'Not Set') + '</div></div>' +
+      '<div><div class="brm-il">Driver Name</div><div class="brm-iv">&#128100; ' + escH(d.driverName) + '</div></div>' +
+      '<div><div class="brm-il">Driver Contact</div><div class="brm-iv">&#128222; ' + escH(d.driverContact) + '</div></div>' +
+      '<div><div class="brm-il">Capacity</div><div class="brm-iv">' + (d.capacity ? d.capacity + ' seats' : 'Not set') + '</div></div>' +
+      '<div><div class="brm-il">Routes Served</div><div class="brm-iv" style="font-size:12px">' + escH(routeNames) + '</div></div>' +
+      '<div><div class="brm-il">Est. Monthly Revenue</div><div class="brm-iv" style="color:#059669;font-size:15px">Rs.' + monthlyRevenue.toLocaleString() + '</div></div>' +
+    '</div>';
+
+  document.getElementById('bdm-count').textContent =
+    totalStudents + ' student' + (totalStudents !== 1 ? 's' : '');
+
+  var tbody = document.getElementById('bdm-tbody');
+
+  if (!totalStudents) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--text3)">No students assigned to this bus.</td></tr>';
+  } else {
+    var rows = '';
+    var serial = 1;
+    d.routeGroups.forEach(function(g) {
+      if (!g.students.length) return;
+      // Section header row for each route group
+      rows += '<tr>' +
+        '<td colspan="7" style="padding:6px 10px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border-top:2px solid #fed7aa">' +
+          '<span style="font-size:11px;font-weight:900;color:#c2410c;text-transform:uppercase;letter-spacing:.06em">&#128652; ' + escH(g.route.name) + '</span>' +
+          '<span style="font-size:11px;font-weight:700;color:#ea580c;margin-left:8px">' + escH(g.route.from) + ' \u2192 ' + escH(g.route.to) + '</span>' +
+          '<span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;font-weight:900;color:#059669;float:right">Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month</span>' +
+        '</td>' +
+      '</tr>';
+      g.students.forEach(function(s) {
+        rows += '<tr style="border-bottom:1px solid #f1f5f9">' +
+          '<td style="padding:9px 10px;color:var(--text3);font-size:11px;font-weight:600">' + serial++ + '</td>' +
+          '<td style="padding:9px 10px">' +
+            '<div style="font-size:13px;font-weight:800;color:#0f172a">' + escH(s.name) + '</div>' +
+            (s.rollNo ? '<div style="font-size:10px;color:var(--text3)">Roll ' + escH(s.rollNo) + '</div>' : '') +
+          '</td>' +
+          '<td style="padding:9px 10px;font-size:12px;font-weight:800;color:#4f46e5">' + escH(s.class || '\u2014') + '</td>' +
+          '<td style="padding:9px 10px;font-size:12px;font-weight:700">' + escH(s.fatherName || '\u2014') + '</td>' +
+          '<td style="padding:9px 10px">' +
+            (s.phone
+              ? '<a href="tel:' + escH(s.phone) + '" style="font-size:12px;font-weight:700;color:var(--brand);text-decoration:none">&#128222; ' + escH(s.phone) + '</a>'
+              : '<span style="color:var(--text3);font-size:11px">\u2014</span>') +
+          '</td>' +
+          '<td style="padding:9px 10px">' +
+            '<div style="font-size:11px;font-weight:800;color:#c2410c;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:6px;padding:3px 8px;display:inline-block">&#128652; ' + escH(g.route.name) + '</div>' +
+          '</td>' +
+          '<td style="padding:9px 10px;font-family:\'JetBrains Mono\',monospace;font-weight:900;color:#059669;font-size:13px">Rs.' + Number(g.route.amount || 0).toLocaleString() + '/mo</td>' +
+        '</tr>';
+      });
+    });
+    tbody.innerHTML = rows;
+  }
+
+  // Update table header to include Class
+  var thead = document.querySelector('#bus-dir-modal table thead tr');
+  if (thead) {
+    thead.innerHTML =
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left;width:36px">#</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Student</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Class</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Father\'s Name</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Contact</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Route</th>' +
+      '<th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Transport Fee</th>';
+  }
+
+  openModal('bus-dir-modal');
+}
+
+function printBusDirectoryRoster() {
+  var d = window._busDirRosterData;
+  if (!d) return;
+
+  var dateStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  var totalStudents  = d.routeGroups.reduce(function(s, g) { return s + g.students.length; }, 0);
+  var monthlyRevenue = d.routeGroups.reduce(function(s, g) {
+    return s + g.students.length * (g.route.amount || 0);
+  }, 0);
+  var routeNames = d.routeGroups.map(function(g) { return g.route.name; }).join(', ');
+
+  // Build table body with route section headers
+  var rows = '';
+  var serial = 1;
+  d.routeGroups.forEach(function(g) {
+    if (!g.students.length) return;
+    rows += '<tr>' +
+      '<td colspan="7" style="padding:7px 11px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border-top:2px solid #fed7aa">' +
+        '<span style="font-size:11px;font-weight:900;color:#c2410c;text-transform:uppercase;letter-spacing:.06em">&#128652; ' + escH(g.route.name) + '</span>' +
+        '<span style="font-size:11px;color:#ea580c;font-weight:700;margin-left:8px">' + escH(g.route.from) + ' \u2192 ' + escH(g.route.to) + '</span>' +
+        '<span style="font-family:monospace;font-size:11px;font-weight:900;color:#059669;float:right">Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month \u00d7 ' + g.students.length + ' students = Rs.' + (g.students.length * (g.route.amount || 0)).toLocaleString() + '/month</span>' +
+      '</td>' +
+    '</tr>';
+    g.students.forEach(function(s) {
+      rows += '<tr>' +
+        '<td>' + serial++ + '</td>' +
+        '<td>' +
+          '<div style="font-size:13px;font-weight:700;color:#0f172a">' + escH(s.name) + '</div>' +
+          (s.rollNo ? '<div style="font-size:10px;color:#94a3b8">Roll ' + escH(s.rollNo) + '</div>' : '') +
+        '</td>' +
+        '<td style="font-weight:800;color:#4f46e5">' + escH(s.class || '\u2014') + '</td>' +
+        '<td style="font-weight:700">' + escH(s.fatherName || '\u2014') + '</td>' +
+        '<td style="font-weight:700;color:#4f46e5">' + escH(s.phone || '\u2014') + '</td>' +
+        '<td>' +
+          '<div style="font-weight:800;color:#c2410c">' + escH(g.route.name) + '</div>' +
+          '<div style="font-size:10px;color:#94a3b8">' + escH(g.route.from) + ' \u2192 ' + escH(g.route.to) + '</div>' +
+        '</td>' +
+        '<td style="font-family:monospace;font-weight:900;color:#059669">Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month</td>' +
+        '<td style="width:90px"></td>' +
+      '</tr>';
+    });
+  });
+
+  // Revenue summary rows per route
+  var revRows = d.routeGroups.map(function(g) {
+    return '<tr>' +
+      '<td style="font-size:12px;font-weight:800;color:#c2410c">&#128652; ' + escH(g.route.name) + '</td>' +
+      '<td style="font-family:monospace;font-weight:700">' + g.students.length + ' students</td>' +
+      '<td style="font-family:monospace;font-weight:700">Rs.' + Number(g.route.amount || 0).toLocaleString() + '/month</td>' +
+      '<td style="font-family:monospace;font-weight:900;color:#059669">Rs.' + Number(g.students.length * (g.route.amount || 0)).toLocaleString() + '/month</td>' +
+    '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<title>Bus Roster \u2014 ' + escH(d.busNumber || '') + '</title>' +
+    '<style>' +
+      '*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:"Segoe UI",Arial,sans-serif;background:#eef2ff;padding:28px;color:#0f172a}' +
+      '.wrap{max-width:980px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(99,102,241,.18)}' +
+      '.hdr{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:26px 32px;position:relative;overflow:hidden}' +
+      '.hdr::before{content:"";position:absolute;right:-40px;top:-40px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.06)}' +
+      '.hdr-title{font-size:22px;font-weight:900;margin-bottom:4px;position:relative}' +
+      '.hdr-sub{font-size:11px;opacity:.75;position:relative}' +
+      '.body{padding:26px 32px}' +
+      '.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}' +
+      '.ibox{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px}' +
+      '.il{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#94a3b8;font-weight:700;margin-bottom:3px}' +
+      '.iv{font-size:14px;font-weight:800;color:#1e293b}' +
+      '.iv.green{color:#059669;font-size:16px}' +
+      '.sec-lbl{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin:16px 0 9px;display:flex;align-items:center;gap:8px}' +
+      '.sec-lbl::after{content:"";flex:1;height:1px;background:#e2e8f0;margin-left:4px}' +
+      'table.main-tbl{width:100%;border-collapse:collapse;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:22px}' +
+      'table.main-tbl thead tr{background:linear-gradient(135deg,#4f46e5,#7c3aed)}' +
+      'table.main-tbl thead th{padding:10px 11px;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#fff;font-weight:800;text-align:left;white-space:nowrap}' +
+      'table.main-tbl tbody tr:nth-child(even){background:#f8fafc}' +
+      'table.main-tbl tbody td{padding:9px 11px;border-bottom:1px solid #f1f5f9;vertical-align:middle}' +
+      'table.rev-tbl{width:100%;border-collapse:collapse;border:1.5px solid #e2e8f0;border-radius:10px;overflow:hidden}' +
+      'table.rev-tbl thead tr{background:linear-gradient(135deg,#059669,#10b981)}' +
+      'table.rev-tbl thead th{padding:9px 11px;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#fff;font-weight:800;text-align:left}' +
+      'table.rev-tbl tbody td{padding:9px 11px;border-bottom:1px solid #f1f5f9;font-size:12px}' +
+      '.tr-tot td{background:#f0fdf4;font-weight:900;font-size:13px;color:#059669;border-top:2px solid #bbf7d0;font-family:monospace}' +
+      '.foot{border-top:2px dashed #e2e8f0;padding:18px 32px;display:flex;justify-content:space-between;align-items:flex-end;background:#fafbff}' +
+      '.sig{text-align:center}.sig-line{width:130px;border-top:1.5px solid #cbd5e1;margin-bottom:4px}' +
+      '.sig-lbl{font-size:10px;color:#94a3b8;font-weight:600}' +
+      '.pabtn{display:flex;justify-content:center;gap:12px;padding:16px 32px 24px}' +
+      '.pabtn button{border-radius:9px;padding:10px 24px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;border:none}' +
+      '@media print{body{background:#fff;padding:0}.wrap{box-shadow:none;border-radius:0}.pabtn{display:none!important}}' +
+    '</style></head><body>' +
+    '<div class="wrap">' +
+
+    '<div class="hdr">' +
+      '<div class="hdr-title">&#127979; Hello School \u2014 Bus Roster</div>' +
+      '<div class="hdr-sub">' +
+        'Bus: <b>' + escH(d.busNumber || 'No No.') + '</b>' +
+        ' &nbsp;&middot;&nbsp; Routes: <b>' + escH(routeNames) + '</b>' +
+        ' &nbsp;&middot;&nbsp; ' + dateStr +
+      '</div>' +
+    '</div>' +
+
+    '<div class="body">' +
+
+      '<div class="info-grid">' +
+        '<div class="ibox"><div class="il">Bus Number</div><div class="iv">' + escH(d.busNumber || 'Not Set') + '</div></div>' +
+        '<div class="ibox"><div class="il">Driver Name</div><div class="iv">' + escH(d.driverName) + '</div></div>' +
+        '<div class="ibox"><div class="il">Driver Contact</div><div class="iv">' + escH(d.driverContact) + '</div></div>' +
+        '<div class="ibox"><div class="il">Capacity</div><div class="iv">' + (d.capacity ? d.capacity + ' seats' : 'Not set') + '</div></div>' +
+        '<div class="ibox"><div class="il">Total Students</div><div class="iv">' + totalStudents + ' students</div></div>' +
+        '<div class="ibox"><div class="il">Est. Monthly Revenue</div><div class="iv green">Rs.' + monthlyRevenue.toLocaleString() + '</div></div>' +
+      '</div>' +
+
+      '<div class="sec-lbl">Student Roster &nbsp;<span style="color:#4f46e5;font-size:13px;font-weight:900">' + totalStudents + ' students</span></div>' +
+
+      '<table class="main-tbl"><thead><tr>' +
+        '<th style="width:34px">#</th>' +
+        '<th>Student Name</th>' +
+        '<th>Class</th>' +
+        '<th>Father\'s Name</th>' +
+        '<th>Contact</th>' +
+        '<th>Route</th>' +
+        '<th>Transport Fee</th>' +
+        '<th style="width:90px">Signature</th>' +
+      '</tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="8" style="text-align:center;padding:18px;color:#94a3b8">No students assigned.</td></tr>') + '</tbody>' +
+      '</table>' +
+
+      '<div class="sec-lbl">Route-wise Revenue Summary</div>' +
+      '<table class="rev-tbl"><thead><tr>' +
+        '<th>Route</th><th>Students</th><th>Fee per Student</th><th>Monthly Revenue</th>' +
+      '</tr></thead><tbody>' +
+        revRows +
+        '<tr class="tr-tot">' +
+          '<td colspan="2">Total</td>' +
+          '<td>' + totalStudents + ' students</td>' +
+          '<td>Rs.' + monthlyRevenue.toLocaleString() + '/month</td>' +
+        '</tr>' +
+      '</tbody></table>' +
+
+    '</div>' +
+
+    '<div class="foot">' +
+      '<div>' +
+        '<div style="font-size:11px;color:#64748b;font-weight:700">Hello School &middot; Transport Management &middot; ' + escH(currentSession || '') + '</div>' +
+        '<div style="font-size:10px;color:#94a3b8;margin-top:3px">Printed: ' + dateStr + '</div>' +
+      '</div>' +
+      '<div class="sig"><div class="sig-line"></div><div class="sig-lbl">Authorised Signatory</div></div>' +
+    '</div>' +
+
+    '<div class="pabtn">' +
+      '<button style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff" onclick="window.print()">&#128424; Print Roster</button>' +
+      '<button style="background:#f1f5f9;color:#475569;border:1.5px solid #e2e8f0" onclick="window.close()">Close</button>' +
+    '</div>' +
+
+    '</div></body></html>';
+
+  var w = window.open('', '_blank', 'width=990,height=980');
+  if (!w) { toast('Please allow popups to print', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 function loadClassTransportSummary() {

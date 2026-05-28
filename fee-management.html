@@ -712,9 +712,17 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <div class="fm-empty" style="padding:14px 0">Switch to this tab to load fleet.</div>
   </div>
 </div>
-<!-- <div class="fm-card" style="margin-bottom:16px"> -->
-  <div class="fm-card" style="margin-bottom:16px; display:none;">
+<div class="fm-card" style="margin-bottom:16px">
+  <div class="fm-card-title">&#128652; Bus Directory</div>
+  <div class="fm-card-sub">All buses at a glance. Tap any bus card to view and print the student roster with route and fee details.</div>
+  <div id="bus-directory-container">
+    <div class="fm-empty" style="padding:14px 0">Switch to this tab to load.</div>
+  </div>
+</div>
+<div class="fm-card" style="margin-bottom:16px">
+  
   <div class="fm-card-title">&#128101; Students by Class — Transport Assignment</div>
+  
   <div class="fm-card-sub">Tap a class to see who's assigned to which route and who's still unassigned.</div>
   <div id="class-transport-summary-container">
     <div class="fm-empty" style="padding:14px 0">Switch to this tab to load summary.</div>
@@ -1600,6 +1608,44 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('change-bus-modal')">Cancel</button>
       <button class="btn-confirm-primary" id="cbm2-save-btn" onclick="saveChangeBus()">Save</button>
+    </div>
+  </div>
+</div>
+<!-- Bus Directory Roster Modal -->
+<div class="modal-overlay" id="bus-dir-modal">
+  <div class="modal-box xl">
+    <div class="modal-head">
+      <h3 id="bdm-title">Bus Roster</h3>
+      <button class="modal-close" onclick="closeModal('bus-dir-modal')">X</button>
+    </div>
+    <p class="modal-sub" id="bdm-sub">Student list with route and transport fee details.</p>
+    <div id="bdm-info" style="margin-bottom:18px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:9px;margin-bottom:14px">
+      <button class="btn-primary" onclick="printBusDirectoryRoster()">&#128424; Print Roster</button>
+    </div>
+    <div style="font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      Student Roster &nbsp;<span id="bdm-count" style="color:var(--brand);font-size:13px;font-weight:900"></span>
+      <span style="flex:1;height:1px;background:var(--border);margin-left:4px"></span>
+    </div>
+    <div style="overflow-x:auto;border-radius:10px;border:1.5px solid var(--border)">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:linear-gradient(135deg,#4f46e5,#7c3aed)">
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left;width:36px">#</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Student</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Father's Name</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Contact</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Route</th>
+            <th style="padding:9px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#fff;font-weight:800;text-align:left">Transport Fee</th>
+          </tr>
+        </thead>
+        <tbody id="bdm-tbody">
+          <tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text3)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-secondary" onclick="closeModal('bus-dir-modal')">Close</button>
     </div>
   </div>
 </div>
