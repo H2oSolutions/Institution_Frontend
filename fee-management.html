@@ -161,6 +161,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 .stu-row.expanded .stu-chevron{transform:rotate(180deg)}
 .stu-detail{display:none;padding:17px;border-top:1.5px solid var(--border);background:linear-gradient(135deg,#f8faff,#fafffe)}
 .stu-row.expanded .stu-detail{display:block}
+.stu-row.expanded{overflow:visible}
 .stu-detail-header{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap}
 .stu-detail-av{width:48px;height:48px;border-radius:12px;background:var(--brand-grad);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:900;color:#fff;flex-shrink:0}
 .stu-full-name{font-size:16px;font-weight:900;margin-bottom:2px}
@@ -627,6 +628,74 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 .fo-legend-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
 @media(max-width:600px){.fo-breakdown-grid{grid-template-columns:1fr}}
 
+/* Fix Dues Report Table Overflow */
+.rpt-table {
+    table-layout: fixed;
+    width: 100%;
+}
+.rpt-table th, .rpt-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Allow more space for names */
+.rpt-table th:nth-child(2), .rpt-table td:nth-child(2) { width: 180px; }
+
+/* Hide Tab 6 Button and Content */
+#tab6-btn, #tab6 {
+    display: none !important;
+}
+
+
+/* --- LIVE CASHIER CONSOLE --- */
+.live-checkout {
+  position: sticky;
+  top: 75px;
+  z-index: 100;
+  background: #fff;
+  border: 2px solid var(--brand);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 10px 30px rgba(99,102,241,0.2);
+  display: block;
+  animation: fadeUp 0.3s ease;
+}
+.lc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  border-bottom: 1.5px dashed var(--border);
+  padding-bottom: 8px;
+}
+.lc-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  background: var(--surface2);
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+.lc-stat-item { flex: 1; }
+.lc-stat-lbl { font-size: 10px; color: var(--text3); font-weight: 800; text-transform: uppercase; }
+.lc-stat-val { font-size: 18px; font-weight: 900; font-family: 'JetBrains Mono', monospace; color: var(--text); }
+.lc-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.lc-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+/* Hide the old bottom bulk bar permanently */
+#bulk-bar { display: none !important; }
 
 </style>
 </head>
@@ -652,6 +721,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <button class="fm-tab" id="tab3-btn" onclick="switchTab(3)"><div class="fm-tab-num">3</div>Fee Setup</button>
     <button class="fm-tab" id="tab4-btn" onclick="switchTab(4)"><div class="fm-tab-num">4</div>Fee Status</button>
     <button class="fm-tab" id="tab5-btn" onclick="switchTab(5)"><div class="fm-tab-num">5</div>Collection Report</button>
+    <button class="fm-tab" id="tab6-btn" onclick="switchTab(6)"><div class="fm-tab-num">6</div>Dues Report</button>
   </div>
 
   <!-- TAB 1: FEE HEADS -->
@@ -804,6 +874,67 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       </div>
     </div>
     <div id="stu-list-container"><div class="fm-card"><div class="fm-empty"><div class="ei">&#128070;</div>Select class to load students.</div></div></div>
+  </div>
+
+  <div id="tab6" style="display:none">
+    <div class="fm-card">
+      <div class="fm-card-title">&#128176; Dues & Defaulters Report</div>
+      <div class="fm-card-sub">View and export students with outstanding fee balances (includes previous month carry-forwards).</div>
+      
+      <div class="rpt-filter-bar">
+        <div class="rpt-filter-group">
+          <label>Session</label>
+          <select id="dues-session" class="fm-select"></select>
+        </div>
+        <div class="rpt-filter-group">
+          <label>Class</label>
+          <select id="dues-class" class="fm-select" onchange="loadDuesReport()">
+            <option value="">All Classes</option>
+          </select>
+        </div>
+        
+        <div class="search-wrap fm-form-group" style="flex:2; margin-bottom: 0;">
+          <label class="fm-label">Search Defaulters</label>
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="dues-search" class="fm-input" placeholder="Search by student name..." oninput="renderDuesTable()">
+        </div>
+
+        <button class="rpt-get-btn" id="dues-get-btn" onclick="loadDuesReport()">
+          &#128202; Get Dues
+        </button>
+      </div>
+    </div>
+
+    <div id="dues-results" style="display:none">
+      <div class="rpt-action-bar">
+        <div class="rpt-total-strip">
+          Defaulters: <span id="dues-count" style="color:var(--red)">0</span> &nbsp;&middot;&nbsp; Total Outstanding: <span id="dues-total" style="color:var(--red)">Rs.0</span>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-secondary" onclick="exportDuesExcel()">&#128196; Export Excel</button>
+          <button class="rpt-print-btn" onclick="printDuesPDF()">&#128424; Print PDF</button>
+        </div>
+      </div>
+
+      <div class="rpt-table-wrap">
+        <table class="rpt-table">
+          <thead>
+            <tr style="background:linear-gradient(135deg, #ef4444, #dc2626)">
+              <th>#</th>
+              <th>Student Name</th>
+              <th>Class</th>
+              <th>Father's Name</th>
+              <th>Contact No.</th>
+              <th style="text-align:right">Regular Fee</th>
+              <th style="text-align:right">Transport Fee</th>
+              <th style="text-align:right">Total Due</th>
+            </tr>
+          </thead>
+          <tbody id="dues-tbody">
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- TAB 5: COLLECTION REPORT DASHBOARD -->
@@ -973,6 +1104,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
           <option value="all">All Modes</option>
           <option value="cash">Cash Only</option>
           <option value="online">Online Only</option>
+          <option value="manual_online">Online (At Desk)</option>
         </select>
       </div>
  
@@ -1308,6 +1440,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
         <input type="number" id="mpm-latefee" class="fm-input" placeholder="0" min="0" oninput="updateMonthPayPreview()">
       </div>
     </div>
+    <div class="fm-form-group" style="margin-top:4px; margin-bottom: 10px;">
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)">
+        <input type="checkbox" id="mpm-manual-online" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">
+        Mark as Online Payment (NEFT/UPI done at desk)
+      </label>
+    </div>
     <div id="mpm-preview" class="pay-preview"></div>
     <div class="fm-form-group" style="margin-top:10px;margin-bottom:0">
       <label class="fm-label">Remark (optional)</label>
@@ -1393,6 +1531,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
         <input type="number" id="pay-latefee" class="fm-input" placeholder="0" min="0" oninput="updatePayPreview()">
       </div>
     </div>
+    <div class="fm-form-group" style="margin-top:4px; margin-bottom: 10px;">
+      <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)">
+        <input type="checkbox" id="pay-manual-online" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">
+        Mark as Online Payment (NEFT/UPI done at desk)
+      </label>
+    </div>
     <div id="pay-preview" class="pay-preview"></div>
     <div class="fm-form-group" style="margin-top:10px;margin-bottom:0">
       <label class="fm-label">Remark (optional)</label>
@@ -1432,6 +1576,12 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <label class="fm-label">Late Fee <span style="font-size:10px;color:var(--text3)">optional</span></label>
     <input type="number" id="bulk-latefee" class="fm-input" placeholder="0" min="0" oninput="updateBulkAmtPreview(document.getElementById('bulk-custom-amount').value)">
   </div>
+</div>
+<div class="fm-form-group" style="margin-top:4px; margin-bottom: 10px;">
+  <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text2)">
+    <input type="checkbox" id="bulk-manual-online" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">
+    Mark as Online Payment (NEFT/UPI done at desk)
+  </label>
 </div>
 <div id="bulk-preview" class="pay-preview"></div>
     <div class="fm-form-group" style="margin-top:11px;margin-bottom:0">
@@ -1647,6 +1797,68 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     </div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn-secondary" onclick="closeModal('bus-dir-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ STUDENT CONCESSION MODAL ═══════════════ -->
+<div class="modal-overlay" id="concession-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>&#127942; Grant Concession</h3>
+      <button class="modal-close" onclick="closeModal('concession-modal')">X</button>
+    </div>
+    <p class="modal-sub" id="cm-sub"></p>
+    <input type="hidden" id="cm-sid">
+
+    <div class="fm-form-group">
+      <label class="fm-label">Category</label>
+      <select id="cm-category" class="fm-select">
+        <option value="staff_ward">Staff Ward</option>
+        <option value="sibling">Sibling</option>
+        <option value="merit">Merit / Scholarship</option>
+        <option value="rte">RTE</option>
+        <option value="financial">Financial Aid</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="fm-grid-2">
+      <div class="fm-form-group">
+        <label class="fm-label">Type</label>
+        <select id="cm-type" class="fm-select">
+          <option value="percent">Percent (%)</option>
+          <option value="flat">Flat (Rs./month)</option>
+        </select>
+      </div>
+      <div class="fm-form-group">
+        <label class="fm-label">Value</label>
+        <input type="number" id="cm-value" class="fm-input" placeholder="e.g. 25" min="1">
+      </div>
+    </div>
+
+    <div class="fm-form-group">
+      <label class="fm-label">Applies To</label>
+      <select id="cm-applies" class="fm-select">
+        <option value="regular">Regular fees only</option>
+        <option value="transport">Transport only</option>
+        <option value="both">Regular + Transport</option>
+      </select>
+    </div>
+
+    <div class="fm-form-group">
+      <label class="fm-label">Fee Heads <span style="font-size:10px;color:var(--text3)">leave ALL unchecked = applies to all heads</span></label>
+      <div id="cm-feeheads" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+
+    <div class="fm-form-group" style="margin-bottom:0">
+      <label class="fm-label">Remark (optional)</label>
+      <input type="text" id="cm-remark" class="fm-input" placeholder="e.g. Son of Mr. Sharma (Maths teacher)">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('concession-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="cm-save-btn" onclick="saveConcession()">Grant Concession</button>
     </div>
   </div>
 </div>
