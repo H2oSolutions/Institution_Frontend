@@ -1891,6 +1891,18 @@ function calcDueTillNow(stu) {
   return { reg: reg, trn: trn, total: reg + trn };
 }
 
+// Full-session dues split into regular & transport (no current-month cutoff)
+function calcSessionDue(stu) {
+  var reg = 0, trn = 0;
+  (stu.entries || []).forEach(function(entry) {
+    (entry.months || []).forEach(function(m) { reg += calcRemaining(m); });
+  });
+  if (stu.transport && stu.transport.months) {
+    stu.transport.months.forEach(function(m) { trn += calcRemaining(m); });
+  }
+  return { reg: reg, trn: trn, total: reg + trn };
+}
+
 function buildStudentDetail(stu) {
   var session = currentSession || document.getElementById('st-session').value;
   var sid     = stu.studentId;
@@ -1994,6 +2006,13 @@ function buildStudentDetail(stu) {
       );
     });
     html += '</div>';
+    var regRem = gatherTrueRemaining(sid, 'reg');
+    var regRemTotal = regRem.reduce(function(s, i) { return s + i.due; }, 0);
+    if (regRemTotal > 0) {
+      html += '<div style="display:flex;justify-content:flex-end;margin-top:4px">' +
+        '<button class="btn-primary" style="font-size:12px;padding:9px 18px" onclick="payRemainingBalance(\'' + sid + '\',\'reg\')">' +
+        '&#128176; Pay Remaining Balance \u2014 Rs.' + regRemTotal.toLocaleString('en-IN') + '</button></div>';
+    }
   } else {
     html += '<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">No regular fee entries for this student.</div>';
   }
@@ -2033,17 +2052,37 @@ function buildStudentDetail(stu) {
       );
     }).join('') +
     '</div>';
+    var trnRem = gatherTrueRemaining(sid, 'trn');
+    var trnRemTotal = trnRem.reduce(function(s, i) { return s + i.due; }, 0);
+    if (trnRemTotal > 0) {
+      html += '<div style="display:flex;justify-content:flex-end;margin-top:8px">' +
+        '<button class="btn-primary" style="font-size:12px;padding:9px 18px;background:linear-gradient(135deg,#ea580c,#f97316)" onclick="payRemainingBalance(\'' + sid + '\',\'trn\')">' +
+        '&#128176; Pay Remaining Transport \u2014 Rs.' + trnRemTotal.toLocaleString('en-IN') + '</button></div>';
+    }
   }
 
   var sessionBalance = stu.totalDue;
   if (sessionBalance > 0) {
-    html += '<div style="margin-top:14px;padding:12px 14px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1.5px solid #fecaca;border-radius:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-        '<span style="font-size:18px">&#9888;</span>' +
-        '<div><div style="font-size:12px;font-weight:900;color:#b91c1c;text-transform:uppercase;letter-spacing:.06em">Session Outstanding</div>' +
-        '<div style="font-size:11px;color:#dc2626;font-weight:600;margin-top:2px">Total remaining dues for ' + (currentSession || 'this session') + '</div></div>' +
+    var sd = calcSessionDue(stu);
+    html += '<div style="margin-top:14px;padding:12px 14px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1.5px solid #fecaca;border-radius:10px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<span style="font-size:18px">&#9888;</span>' +
+          '<div><div style="font-size:12px;font-weight:900;color:#b91c1c;text-transform:uppercase;letter-spacing:.06em">Session Outstanding</div>' +
+          '<div style="font-size:11px;color:#dc2626;font-weight:600;margin-top:2px">Total remaining dues for ' + (currentSession || 'this session') + '</div></div>' +
+        '</div>' +
+        '<div style="font-family:\'JetBrains Mono\',monospace;font-size:18px;font-weight:900;color:#dc2626">Rs.' + sessionBalance.toLocaleString('en-IN') + '</div>' +
       '</div>' +
-      '<div style="font-family:\'JetBrains Mono\',monospace;font-size:18px;font-weight:900;color:#dc2626">Rs.' + sessionBalance.toLocaleString('en-IN') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+        '<div style="flex:1;min-width:120px;background:#fff;border:1.5px solid #fecaca;border-radius:8px;padding:7px 11px;display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:11px;font-weight:800;color:#6366f1">&#127991; Regular</span>' +
+          '<span style="font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:900;color:#6366f1">Rs.' + sd.reg.toLocaleString('en-IN') + '</span>' +
+        '</div>' +
+        '<div style="flex:1;min-width:120px;background:#fff;border:1.5px solid #fed7aa;border-radius:8px;padding:7px 11px;display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:11px;font-weight:800;color:#ea580c">&#128652; Transport</span>' +
+          '<span style="font-family:\'JetBrains Mono\',monospace;font-size:13px;font-weight:900;color:#ea580c">Rs.' + sd.trn.toLocaleString('en-IN') + '</span>' +
+        '</div>' +
+      '</div>' +
     '</div>';
   } else if (stu.totalPaid > 0) {
     html += '<div style="margin-top:14px;padding:12px 14px;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1.5px solid #bbf7d0;border-radius:10px;display:flex;align-items:center;gap:8px">' +
@@ -3718,6 +3757,134 @@ function confirmRegBulkPayment() {
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Confirm All'; });
 }
 
+// ── PAY REMAINING BALANCE — settle leftover when partial months hide the Pay button ──
+function gatherTrueRemaining(sid, type) {
+  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
+  if (!stu) return [];
+
+  function trueRem(m) {
+    if (m.isPaid && !m.isPartial) return 0;       // fully paid → leave it alone
+    var base = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
+    return Math.max(0, base - (m.waiverAmount || 0) + (m.lateFee || 0) - (m.paidAmount || 0));
+  }
+
+  var items = [];
+  if (type === 'reg') {
+    (stu.entries || []).forEach(function(entry) {
+      (entry.months || []).forEach(function(m) {
+        var rem = trueRem(m);
+        if (rem > 0) items.push({
+          type: 'regular', feeHeadId: entry.feeHeadId, routeId: null,
+          label: entry.feeHeadName, monthIndex: m.monthIndex,
+          base: (m.baseAmount != null ? m.baseAmount : m.amount) || 1, due: rem
+        });
+      });
+    });
+  } else if (stu.transport && stu.transport.months) {
+    stu.transport.months.forEach(function(m) {
+      var rem = trueRem(m);
+      if (rem > 0) items.push({
+        type: 'transport', feeHeadId: null, routeId: stu.transport.routeId,
+        label: 'Transport \u2014 ' + stu.transport.routeName, monthIndex: m.monthIndex,
+        base: (m.baseAmount != null ? m.baseAmount : m.amount) || 1, due: rem
+      });
+    });
+  }
+  items.sort(function(a, b) { return sessionOrderOf(a.monthIndex) - sessionOrderOf(b.monthIndex); });
+  return items;
+}
+
+function payRemainingBalance(sid, type) {
+  var items = gatherTrueRemaining(sid, type);
+  if (!items.length) { toast('Nothing left to pay', 'info'); return; }
+  var total = items.reduce(function(s, i) { return s + i.due; }, 0);
+  var stu   = feeStatusData.find(function(s) { return s.studentId === sid; });
+
+  window._payRemCtx = { sid: sid, type: type, items: items, total: total };
+  document.getElementById('prm-title').textContent =
+    (type === 'reg' ? 'Pay Remaining Regular Balance' : 'Pay Remaining Transport Balance');
+  document.getElementById('prm-sub').textContent =
+    (stu ? stu.name + ' \u2014 ' : '') + 'Settles the leftover across unpaid months. Paid months stay untouched.';
+  document.getElementById('prm-items').innerHTML = items.map(function(i) {
+    return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:12px">' +
+      '<span style="font-weight:700">' + escH(i.label) + ' <span style="color:var(--text3)">' + SHORT_MONTHS[i.monthIndex] + '</span></span>' +
+      '<span style="font-family:\'JetBrains Mono\',monospace;font-weight:700">Rs.' + Number(i.due).toLocaleString() + '</span></div>';
+  }).join('');
+  document.getElementById('prm-total-display').textContent = 'Rs.' + total.toLocaleString();
+  document.getElementById('prm-amount').value = total;
+  document.getElementById('prm-remark').value = '';
+  var mo = document.getElementById('prm-manual-online'); if (mo) mo.checked = false;
+  updateRemainingPreview();
+  openModal('pay-remaining-modal');
+}
+
+function updateRemainingPreview() {
+  var ctx = window._payRemCtx; if (!ctx) return;
+  var paid = parseInt(document.getElementById('prm-amount').value) || 0;
+  var box  = document.getElementById('prm-preview');
+  box.className = 'pay-preview';
+  if (!paid) { box.classList.remove('show'); return; }
+  if (paid < ctx.total) {
+    box.innerHTML = '&#9888; Partial \u2014 Rs.' + (ctx.total - paid).toLocaleString() + ' will still remain';
+    box.classList.add('show', 'partial');
+  } else if (paid > ctx.total) {
+    box.innerHTML = '&#10003; Full + Rs.' + (paid - ctx.total).toLocaleString() + ' advance (credited forward)';
+    box.classList.add('show', 'advance');
+  } else {
+    box.innerHTML = '&#10003; Exact \u2014 clears the entire remaining balance';
+    box.classList.add('show', 'full');
+  }
+}
+
+function confirmPayRemaining() {
+  var ctx = window._payRemCtx; if (!ctx) return;
+  var paidAmt = parseInt(document.getElementById('prm-amount').value) || ctx.total;
+  var remark  = document.getElementById('prm-remark').value.trim();
+  var isManualOnline = document.getElementById('prm-manual-online').checked;
+  var pSource = isManualOnline ? 'manual_online' : 'cash';
+
+  // Oldest-first, top each month up to its OWN base (never overpays a month)
+  var remaining = paidAmt;
+  var payments = ctx.items.map(function(i) {
+    var alloc = Math.min(remaining, i.due);
+    remaining -= alloc;
+    return {
+      type: i.type, feeHeadId: i.feeHeadId, routeId: i.routeId,
+      monthIndex: i.monthIndex, amount: i.base, paidAmount: alloc, paymentSource: pSource
+    };
+  }).filter(function(p) { return p.paidAmount > 0; });
+
+  if (remaining > 0 && payments.length > 0) payments[payments.length - 1].paidAmount += remaining;
+  if (!payments.length) { toast('Enter an amount to pay', 'error'); return; }
+
+  var btn = document.getElementById('prm-confirm-btn');
+  setLoading(btn, true);
+
+  apiPost(API_FEE_PAY_BULK, { studentId: ctx.sid, session: currentSession, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
+    .then(function() {
+      var stu = feeStatusData.find(function(s) { return s.studentId === ctx.sid; });
+      var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
+      var rItems = ctx.items.map(function(i) {
+        return { label: i.label + ' \u2014 ' + SHORT_MONTHS[i.monthIndex], amount: i.due };
+      });
+      closeModal('pay-remaining-modal');
+      showReceipt({
+        studentName: (stu && stu.name) || '', className: (stu && stu.class && stu.class.className) || '',
+        fatherName: (stu && stu.fatherName) || '', session: currentSession,
+        total: collected, totalFeeDue: ctx.total, totalWaiver: 0, totalLateFee: 0,
+        balance: collected - ctx.total,
+        paymentMode: isManualOnline ? 'Online \u2014 Desk' : 'Cash \u2014 Reception',
+        remark: remark, items: rItems,
+        receiptType: ctx.type === 'reg' ? 'Remaining Balance Receipt' : 'Transport Remaining Balance Receipt'
+      });
+      window._payRemCtx = null;
+      feeStatusDirty = true;
+      return loadFeeStatus();
+    })
+    .catch(function(e) { toast(e.message, 'error'); })
+    .finally(function() { setLoading(btn, false); btn.innerHTML = 'Pay Remaining'; });
+}
+
 function showReceipt(data) {
   lastReceiptData = data;
 
@@ -4304,7 +4471,10 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
 
   var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
 
+  var earliestMi = sortedMonthIndices[0];
+
   sortedMonthIndices.forEach(function(mi) {
+    var isEarliest = (mi === earliestMi);
     var payments = monthGroups[mi];
     payments.forEach(function(p) {
       var mData = null;
@@ -4324,31 +4494,38 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
       var base    = mData && mData.baseAmount != null ? mData.baseAmount : (p.amount || 0);
       var waiver  = mData ? (mData.waiverAmount || 0) : (p.waiverAmount || 0);
       var lateFee = mData ? (mData.lateFee || 0) : (p.lateFee || 0);
-      var credit  = mData ? (mData.previousCredit || 0) : 0;
       var paidAmt = mData ? (mData.paidAmount || 0) : (p.paidAmount || 0);
-      
+
+      // Carry/credit BETWEEN months inside this receipt is internal — counting it on
+      // every line double-counts the same rolling balance. Only the carry/credit
+      // flowing INTO the earliest covered month is genuinely incoming (0 at session start).
+      var rawCredit = mData ? (mData.previousCredit || 0) : 0;
+      var rawCarry  = mData && mData.previousDue != null ? mData.previousDue : (mData ? (mData.carryDue || 0) : 0);
+      var credit = isEarliest ? rawCredit : 0;
+      var carry  = isEarliest ? rawCarry  : 0;
+
       var adjBase = Math.max(0, base - waiver);
-      var effDue  = mData && mData.effectiveDue != null ? mData.effectiveDue : adjBase;
-      var carry   = mData && mData.previousDue != null ? mData.previousDue : (mData ? (mData.carryDue || 0) : 0);
+      var lineEffDue = Math.max(0, adjBase - credit + carry + lateFee);
 
       totalBase    += base;
       totalCarry   += carry;
       totalCredit  += credit;
       totalWaiver  += waiver;
       totalLateFee += lateFee;
-      totalDue     += effDue + lateFee;
       totalPaid    += paidAmt;
 
       receiptItems.push({
-        feeHead: fhName, month: MONTHS[mi], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue + lateFee, paid: paidAmt, isPaid: mData ? (mData.isPaid && !mData.isPartial) : (p.isPaid && p.paymentStatus !== 'partial'), isPartial: mData ? mData.isPartial : (p.paymentStatus === 'partial')
+        feeHead: fhName, month: MONTHS[mi], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: lineEffDue, paid: paidAmt, isPaid: mData ? (mData.isPaid && !mData.isPartial) : (p.isPaid && p.paymentStatus !== 'partial'), isPartial: mData ? mData.isPartial : (p.paymentStatus === 'partial')
       });
     });
   });
 
+  var totalFeeDue = Math.max(0, totalBase - totalWaiver) - totalCredit + totalCarry + totalLateFee;
+
   var monthNames = sortedMonthIndices.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
 
   printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalDue, balance: totalPaid - totalDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Multi-Month Fee Receipt \u2014 ' + monthNames
+    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalFeeDue, balance: totalPaid - totalFeeDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Multi-Month Fee Receipt \u2014 ' + monthNames
   });
 }
 
@@ -6638,12 +6815,18 @@ function openConcessionModal(sid) {
   document.getElementById('cm-type').value     = 'percent';
   document.getElementById('cm-applies').value  = 'regular';
 
-  document.getElementById('cm-feeheads').innerHTML = feeHeads.map(function(fh) {
-    return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;' +
-      'background:#f8fafc;border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer">' +
-      '<input type="checkbox" class="cm-fh-cb" value="' + fh._id + '" style="accent-color:var(--brand)">' +
-      escH(fh.name) + '</label>';
-  }).join('');
+  // Only fee heads that apply to THIS student's class — stu.entries is already class-filtered by the backend
+  var applicableHeads = (stu.entries || []).map(function(e) {
+    return { _id: e.feeHeadId, name: e.feeHeadName };
+  });
+  document.getElementById('cm-feeheads').innerHTML = applicableHeads.length
+    ? applicableHeads.map(function(fh) {
+        return '<label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;' +
+          'background:#f8fafc;border:1.5px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer">' +
+          '<input type="checkbox" class="cm-fh-cb" value="' + fh._id + '" style="accent-color:var(--brand)">' +
+          escH(fh.name) + '</label>';
+      }).join('')
+    : '<span style="font-size:11px;color:var(--text3)">No regular fee heads for this class.</span>';
 
   openModal('concession-modal');
 }
