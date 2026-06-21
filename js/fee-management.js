@@ -1831,7 +1831,12 @@ function renderStudentList() {
           ? '<span class="s-badge sb-due">Rs.' + od.total.toLocaleString() + ' overdue</span>'
           : '<span class="s-badge sb-zero">Rs.0 overdue</span>';
       })() +
-      (s.totalDue > 0 ? '<span class="s-badge sb-due" style="opacity:.7">Rs.' + s.totalDue.toLocaleString() + ' session</span>' : '<span class="s-badge sb-zero">All clear</span>') +
+      (function() {
+        var sd = calcSessionDue(s);
+        return sd.total > 0
+          ? '<span class="s-badge sb-due" style="opacity:.7">Rs.' + sd.total.toLocaleString() + ' session</span>'
+          : '<span class="s-badge sb-zero">All clear</span>';
+      })() +
       '</div><div class="stu-chevron">&#9660;</div></div>' +
       '<div class="stu-detail" id="sd-' + s.studentId + '">' + buildStudentDetail(s) + '</div></div>';
   }).join('');
@@ -1874,38 +1879,31 @@ function calcRemaining(m) {
   return Math.max(0, effDue);
 }
 
-// Dues up to the CURRENT month — split into regular & transport
+// Dues up to the CURRENT month — now from the SAME source as the Pay Remaining buttons
 function calcDueTillNow(stu) {
   var currentOrder = sessionOrderOf(new Date().getMonth());
-  var reg = 0, trn = 0;
-  (stu.entries || []).forEach(function(entry) {
-    (entry.months || []).forEach(function(m) {
-      if (sessionOrderOf(m.monthIndex) <= currentOrder) reg += calcRemaining(m);
-    });
-  });
-  if (stu.transport && stu.transport.months) {
-    stu.transport.months.forEach(function(m) {
-      if (sessionOrderOf(m.monthIndex) <= currentOrder) trn += calcRemaining(m);
-    });
-  }
+  var regItems = gatherTrueRemaining(stu.studentId, 'reg');
+  var trnItems = gatherTrueRemaining(stu.studentId, 'trn');
+  var reg = regItems.reduce(function(s, i) {
+    return sessionOrderOf(i.monthIndex) <= currentOrder ? s + i.due : s;
+  }, 0);
+  var trn = trnItems.reduce(function(s, i) {
+    return sessionOrderOf(i.monthIndex) <= currentOrder ? s + i.due : s;
+  }, 0);
   return { reg: reg, trn: trn, total: reg + trn };
 }
 
-// Full-session dues split into regular & transport (no current-month cutoff)
+// Full-session dues — identical source as the Pay Remaining buttons
 function calcSessionDue(stu) {
-  var reg = 0, trn = 0;
-  (stu.entries || []).forEach(function(entry) {
-    (entry.months || []).forEach(function(m) { reg += calcRemaining(m); });
-  });
-  if (stu.transport && stu.transport.months) {
-    stu.transport.months.forEach(function(m) { trn += calcRemaining(m); });
-  }
+  var reg = gatherTrueRemaining(stu.studentId, 'reg').reduce(function(s, i) { return s + i.due; }, 0);
+  var trn = gatherTrueRemaining(stu.studentId, 'trn').reduce(function(s, i) { return s + i.due; }, 0);
   return { reg: reg, trn: trn, total: reg + trn };
 }
 
 function buildStudentDetail(stu) {
   var session = currentSession || document.getElementById('st-session').value;
   var sid     = stu.studentId;
+  var sessDue = calcSessionDue(stu);   // single source of truth — matches the Pay Remaining buttons
 
   var monthMap = {};
   (stu.entries || []).forEach(function(entry) {
@@ -1940,8 +1938,8 @@ function buildStudentDetail(stu) {
       return '<div class="sum-box sum-due"><div class="sl">Reg Due till ' + mn + '</div><div class="sv">Rs.' + od.reg.toLocaleString('en-IN') + '</div></div>' +
              '<div class="sum-box sum-due" style="border-color:#fed7aa;background:#fff7ed"><div class="sl" style="color:#fdba74">&#128652; Trn Due till ' + mn + '</div><div class="sv" style="color:#ea580c">Rs.' + od.trn.toLocaleString('en-IN') + '</div></div>';
     })() +
-    '<div class="sum-box sum-due" style="opacity:.8"><div class="sl">Session Due</div><div class="sv">Rs.' + stu.totalDue.toLocaleString('en-IN') + '</div></div>' +
-    '<div class="sum-box sum-total"><div class="sl">Total</div><div class="sv">Rs.' + (stu.totalPaid + stu.totalDue).toLocaleString('en-IN') + '</div></div>' +
+    '<div class="sum-box sum-due" style="opacity:.8"><div class="sl">Session Due</div><div class="sv">Rs.' + sessDue.total.toLocaleString('en-IN') + '</div></div>' +
+    '<div class="sum-box sum-total"><div class="sl">Total</div><div class="sv">Rs.' + (stu.totalPaid + sessDue.total).toLocaleString('en-IN') + '</div></div>' +
     '</div></div>';
 
   html += '<div class="transport-row">' +
@@ -2061,9 +2059,9 @@ function buildStudentDetail(stu) {
     }
   }
 
-  var sessionBalance = stu.totalDue;
+  var sessionBalance = sessDue.total;
   if (sessionBalance > 0) {
-    var sd = calcSessionDue(stu);
+    var sd = sessDue;
     html += '<div style="margin-top:14px;padding:12px 14px;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1.5px solid #fecaca;border-radius:10px">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
         '<div style="display:flex;align-items:center;gap:8px">' +
@@ -3864,8 +3862,12 @@ function confirmPayRemaining() {
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === ctx.sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
-      var rItems = ctx.items.map(function(i) {
-        return { label: i.label + ' \u2014 ' + SHORT_MONTHS[i.monthIndex], amount: i.due };
+      var rItems = payments.map(function(p) {
+        var match = ctx.items.find(function(i) {
+          return i.monthIndex === p.monthIndex && i.feeHeadId === p.feeHeadId && i.routeId === p.routeId;
+        });
+        var lbl = match ? match.label : (ctx.type === 'reg' ? 'Fee' : 'Transport');
+        return { label: lbl + ' \u2014 ' + SHORT_MONTHS[p.monthIndex], amount: p.paidAmount };
       });
       closeModal('pay-remaining-modal');
       showReceipt({
@@ -6815,9 +6817,15 @@ function openConcessionModal(sid) {
   document.getElementById('cm-type').value     = 'percent';
   document.getElementById('cm-applies').value  = 'regular';
 
-  // Only fee heads that apply to THIS student's class — stu.entries is already class-filtered by the backend
-  var applicableHeads = (stu.entries || []).map(function(e) {
-    return { _id: e.feeHeadId, name: e.feeHeadName };
+  // Only the fee heads assigned to THIS student's class (same list as the
+  // Monthly Fee Schedule). De-duped by id so a head can never appear twice.
+  var _seen = {};
+  var applicableHeads = [];
+  (stu.entries || []).forEach(function(e) {
+    var id = String(e.feeHeadId);
+    if (_seen[id]) return;
+    _seen[id] = true;
+    applicableHeads.push({ _id: id, name: e.feeHeadName });
   });
   document.getElementById('cm-feeheads').innerHTML = applicableHeads.length
     ? applicableHeads.map(function(fh) {
