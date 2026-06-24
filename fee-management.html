@@ -908,17 +908,21 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
           Defaulters: <span id="dues-count" style="color:var(--red)">0</span> &nbsp;&middot;&nbsp; Total Outstanding: <span id="dues-total" style="color:var(--red)">Rs.0</span>
         </div>
         <div style="display:flex;gap:10px;">
-          <button class="btn-secondary" onclick="exportDuesExcel()">&#128196; Export Excel</button>
-          <button class="rpt-print-btn" onclick="printDuesPDF()">&#128424; Print PDF</button>
-        </div>
+  <button class="btn-primary" id="dues-send-app-btn" onclick="sendDuesViaApp()" disabled>
+    &#128241; Send Reminder via App (<span id="dues-selected-count">0</span>)
+  </button>
+  <button class="btn-secondary" onclick="exportDuesExcel()">&#128196; Export Excel</button>
+  <button class="rpt-print-btn" onclick="printDuesPDF()">&#128424; Print PDF</button>
+</div>
       </div>
 
       <div class="rpt-table-wrap">
         <table class="rpt-table">
           <thead>
             <tr style="background:linear-gradient(135deg, #ef4444, #dc2626)">
-              <th>#</th>
-              <th>Student Name</th>
+  <th style="width:36px;text-align:center"><input type="checkbox" id="dues-select-all" onchange="toggleAllDues(this)" style="width:15px;height:15px;cursor:pointer"></th>
+  <th>#</th>
+  <th>Student Name</th>
               <th>Class</th>
               <th>Father's Name</th>
               <th>Contact No.</th>

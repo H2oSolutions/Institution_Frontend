@@ -6538,9 +6538,10 @@ function renderDuesTable() {
   });
 
   if (!filteredDues.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="rpt-empty">No pending dues match your search. All clear! &#10003;</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="rpt-empty">No pending dues match your search. All clear! &#10003;</td></tr>';
     document.getElementById('dues-count').textContent = '0';
     document.getElementById('dues-total').textContent = 'Rs.0';
+    updateDuesSendBar();
     return;
   }
 
@@ -6548,21 +6549,17 @@ function renderDuesTable() {
   var html = filteredDues.map(function(s, i) {
     totalOutstanding += s.calculatedTotalDue;
     var clsName = (s.class && s.class.className) ? s.class.className : '-';
-    
-    // 1. Prepare Contact Number Text
     var phoneText = (s.phone && s.phone !== '-') ? s.phone : '—';
-    
-    // 2. Prepare WhatsApp Button logic
+
     var waBtn = '';
     if (s.phone && s.phone !== '-') {
       var waMsg = encodeURIComponent(
         "Dear Parent (" + (s.fatherName || "Guardian") + "),\n\n" +
-        "Reminder from Hello School: Pending dues of Rs. " + s.calculatedTotalDue.toLocaleString('en-IN') + 
+        "Reminder from Hello School: Pending dues of Rs. " + s.calculatedTotalDue.toLocaleString('en-IN') +
         " for *" + s.name + "* (Class: " + clsName + "). Please clear at your earliest convenience."
       );
       var cleanPhone = s.phone.replace(/\D/g,'');
       if(cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
-
       waBtn = '<br><a href="https://wa.me/' + cleanPhone + '?text=' + waMsg + '" target="_blank" ' +
               'style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800;color:#059669;background:#dcfce7;border:1px solid #bbf7d0;padding:2px 6px;border-radius:4px;text-decoration:none;margin-top:4px">' +
               '&#128222; WhatsApp Reminder</a>';
@@ -6572,6 +6569,10 @@ function renderDuesTable() {
     var warningIcon = s.calculatedTotalDue >= 5000 ? '<span style="font-size:10px;margin-right:4px">⚠️</span>' : '';
 
     return '<tr>' +
+      '<td style="text-align:center">' +
+        '<input type="checkbox" class="dues-cb" value="' + s.studentId + '"' +
+          ' onchange="updateDuesSendBar()" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer">' +
+      '</td>' +
       '<td style="color:var(--text3);font-size:11px;font-weight:700">' + (i + 1) + '</td>' +
       '<td>' +
         '<div class="rpt-name">' + escH(s.name) + '</div>' +
@@ -6579,7 +6580,6 @@ function renderDuesTable() {
       '</td>' +
       '<td><span style="background:#fff7ed;color:#c2410c;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(clsName) + '</span></td>' +
       '<td style="font-size:12px;font-weight:600">' + escH(s.fatherName || '-') + '</td>' +
-      // UPDATED: Showing Phone Number AND WhatsApp Button
       '<td style="font-size:12px;font-weight:700">' + escH(phoneText) + waBtn + '</td>' +
       '<td style="font-family:\'JetBrains Mono\',monospace;font-weight:800;font-size:13px;text-align:right;color:#6366f1">' +
         'Rs.' + s.calculatedRegDue.toLocaleString('en-IN') +
@@ -6596,6 +6596,101 @@ function renderDuesTable() {
   tbody.innerHTML = html;
   document.getElementById('dues-count').textContent = filteredDues.length;
   document.getElementById('dues-total').textContent = 'Rs.' + totalOutstanding.toLocaleString('en-IN');
+  updateDuesSendBar();
+}
+
+// ── Select-all toggle for dues checkboxes ──
+function toggleAllDues(masterCb) {
+  document.querySelectorAll('#dues-tbody .dues-cb').forEach(function(cb) {
+    cb.checked = masterCb.checked;
+  });
+  updateDuesSendBar();
+}
+
+// ── Update the "send" bar count + button state ──
+function updateDuesSendBar() {
+  var checked = document.querySelectorAll('#dues-tbody .dues-cb:checked').length;
+  var btn = document.getElementById('dues-send-app-btn');
+  var lbl = document.getElementById('dues-selected-count');
+  if (lbl) lbl.textContent = checked;
+  if (btn) btn.disabled = checked === 0;
+
+  // keep master checkbox in sync
+  var master = document.getElementById('dues-select-all');
+  var total  = document.querySelectorAll('#dues-tbody .dues-cb').length;
+  if (master) master.checked = total > 0 && checked === total;
+}
+
+// ── Send in-app fee reminder to all selected defaulters ──
+function sendDuesViaApp() {
+  var userType = localStorage.getItem('userType') || '';
+  if (userType !== 'institution') {
+    toast('Only the institution admin can send app reminders', 'error');
+    return;
+  }
+
+  var selectedIds = Array.prototype.map.call(
+    document.querySelectorAll('#dues-tbody .dues-cb:checked'),
+    function(cb) { return cb.value; }
+  );
+  if (!selectedIds.length) { toast('Select at least one defaulter', 'error'); return; }
+
+  var selected = duesData.filter(function(s) {
+    return selectedIds.indexOf(String(s.studentId)) > -1;
+  });
+  if (!selected.length) { toast('No matching students found', 'error'); return; }
+
+  if (!confirm('Send an in-app fee reminder to ' + selected.length + ' parent(s)? It will appear in their Fee Notices section.')) return;
+
+  var btn = document.getElementById('dues-send-app-btn');
+  setLoading(btn, true);
+
+  var now = new Date();
+  var dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  var dueDateStr = dueDate.toISOString().split('T')[0];
+  var monthLabel = MONTHS[now.getMonth()];
+
+  // Build the per-student payload with custom title + description each
+  var studentsPayload = selected.map(function(s) {
+    var parts = [];
+    if (s.calculatedRegDue > 0) parts.push('Regular Rs.' + s.calculatedRegDue.toLocaleString('en-IN'));
+    if (s.calculatedTrnDue > 0) parts.push('Transport Rs.' + s.calculatedTrnDue.toLocaleString('en-IN'));
+    var splitText = parts.length ? ' (' + parts.join(' + ') + ')' : '';
+
+    return {
+      studentId:   s.studentId,
+      amount:      s.calculatedTotalDue,
+      title:       'Fee Reminder — Rs.' + s.calculatedTotalDue.toLocaleString('en-IN') + ' due',
+      description: 'Pending fee dues up to ' + monthLabel +
+                   ' total Rs.' + s.calculatedTotalDue.toLocaleString('en-IN') + splitText +
+                   '. Kindly clear the outstanding amount at the school office or via the app.'
+    };
+  });
+
+  apiPost(API_ENDPOINTS.FEE_NOTICES + '/bulk-personal', {
+    title:   'Fee Reminder',
+    dueDate: dueDateStr,
+    students: studentsPayload
+  }, true)
+  .then(function(res) {
+    var sent    = res.created || 0;
+    var skipped = res.skipped || 0;
+    if (skipped === 0) {
+      toast(sent + ' reminder(s) sent to the app');
+    } else {
+      toast(sent + ' sent, ' + skipped + ' skipped', 'error');
+      console.warn('Skipped reminders:', res.skippedDetails);
+    }
+    document.querySelectorAll('#dues-tbody .dues-cb:checked').forEach(function(cb){ cb.checked = false; });
+    var master = document.getElementById('dues-select-all');
+    if (master) master.checked = false;
+  })
+  .catch(function(e) { toast(e.message || 'Failed to send reminders', 'error'); })
+  .finally(function() {
+    setLoading(btn, false);
+    btn.innerHTML = '&#128241; Send Reminder via App (<span id="dues-selected-count">0</span>)';
+    updateDuesSendBar();
+  });
 }
 
 function printDuesPDF() {
