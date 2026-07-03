@@ -3778,9 +3778,15 @@ function gatherTrueRemaining(sid, type) {
   if (!stu) return [];
 
   function trueRem(m) {
+    if (m.isRecovered) return 0;
     if (m.isPaid && !m.isPartial) return 0;       // fully paid → leave it alone
-    var base = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
-    return Math.max(0, base - (m.waiverAmount || 0) + (m.lateFee || 0) - (m.paidAmount || 0));
+    var base    = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
+    var effDue  = m.effectiveDue != null ? m.effectiveDue : base;
+    var lateFee = m.lateFee || 0;
+    if (m.isPartial) {
+      return Math.max(0, effDue + lateFee - (m.paidAmount || 0));
+    }
+    return Math.max(0, effDue);
   }
 
   var items = [];
@@ -6115,6 +6121,8 @@ function rptReprintReceipt(paymentId) {
   var totalFeeDue = totalBase - totalWaiver + totalLateFee;
   var payMode = r.paymentSource === 'cash'
     ? 'Cash \u2014 ' + escH(r.receivedBy)
+    : r.paymentSource === 'manual_online'
+    ? 'Online \u2014 Desk'
     : 'Online \u2014 Parent App';
 
   // Receipt type label
