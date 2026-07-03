@@ -3233,10 +3233,14 @@ function submitLiveCheckout(sid, type) {
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
-      var rItems = items.map(function(i) {
-        return { label: i.label + ' \u2014 ' + SHORT_MONTHS[i.monthIndex], amount: i.due };
-      });
-      showReceipt({
+      var byMonthR = {}, monthOrderR = [];
+items.forEach(function(i) {
+  var mn = MONTHS[i.monthIndex];
+  if (byMonthR[mn] == null) { byMonthR[mn] = 0; monthOrderR.push(mn); }
+  byMonthR[mn] += i.due;
+});
+var rItems = monthOrderR.map(function(mn) { return { month: mn, amount: byMonthR[mn] }; });
+showReceipt({
         studentName: (stu && stu.name) || '', className: (stu && stu.class && stu.class.className) || '',
         fatherName: (stu && stu.fatherName) || '', session: currentSession,
         total: collected, totalFeeDue: total, totalWaiver: waiver, totalLateFee: lateFeeV,
@@ -3659,10 +3663,13 @@ function confirmBulkPayment() {
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
-      var items = payments.map(function(p) {
-        var d = Object.values(bulkMap).find(function(bd) { return bd.monthIndex === p.monthIndex && bd.routeId === p.routeId; });
-        return { label: ((d && d.fhName) || 'Transport') + ' \u2014 ' + SHORT_MONTHS[p.monthIndex], amount: p.paidAmount };
+      var byMonthB = {}, monthOrderB = [];
+      payments.forEach(function(p) {
+        var mn = MONTHS[p.monthIndex];
+        if (byMonthB[mn] == null) { byMonthB[mn] = 0; monthOrderB.push(mn); }
+        byMonthB[mn] += p.paidAmount || 0;
       });
+      var items = monthOrderB.map(function(mn) { return { month: mn, amount: byMonthB[mn] }; });
       var totalDueForBulk = sortedKeys.reduce(function(s, k2) { return s + (bulkMap[k2].amount || 0); }, 0);
       closeModal('bulk-pay-modal');
       showReceipt({
@@ -4026,10 +4033,18 @@ function showReceipt(data) {
   lastReceiptData = data;
 
   // Normalise items: rich format uses .feeHead + .paid; simple uses .label + .amount
-  var displayItems = (data.items || []).map(function(i) {
-    var lbl = i.label  != null ? i.label  : (i.feeHead || '-');
-    var amt = i.amount != null ? i.amount : (i.paid    != null ? i.paid : 0);
+  var _rawItems = (data.items || []).map(function(i) {
+    var lbl = i.label != null ? i.label : (i.month != null ? i.month : (i.feeHead || '-'));
+    var amt = i.amount != null ? i.amount : (i.paid != null ? i.paid : 0);
     return { label: lbl, amount: amt };
+  });
+  var _grouped = {}, _groupOrder = [];
+  _rawItems.forEach(function(di) {
+    if (_grouped[di.label] == null) { _grouped[di.label] = 0; _groupOrder.push(di.label); }
+    _grouped[di.label] += di.amount;
+  });
+  var displayItems = _groupOrder.map(function(lbl) {
+    return { label: lbl, amount: _grouped[lbl] };
   });
 
   document.getElementById('rc-amount').textContent  = 'Rs.' + Number(data.total || 0).toLocaleString();
@@ -4257,8 +4272,12 @@ function printDetailedReceipt(data) {
   var monthOrder = [];
   var monthSums  = {};
   (data.items || []).forEach(function(item) {
-    var month = item.month || 'Fee';
-    var amt = item.paid != null ? item.paid : (item.amount != null ? item.amount : (item.effectiveDue || 0));
+    var month = item.month || item.label || item.feeHead || 'Fee';
+    var amt = (item.effectiveDue != null && item.effectiveDue > 0)
+  ? item.effectiveDue
+  : (item.base != null && item.base > 0
+    ? item.base
+    : (item.amount != null ? item.amount : (item.paid || 0)));
     if (monthSums[month] == null) { monthSums[month] = 0; monthOrder.push(month); }
     monthSums[month] += amt;
   });
@@ -4294,6 +4313,7 @@ function printDetailedReceipt(data) {
     chip('Student', data.studentName || '-') +
     chip('Class', data.className || '-') +
     (data.rollNo ? chip('Roll', data.rollNo) : '') +
+    (data.fatherName ? chip('Father', data.fatherName) : '') +
     chip('Session', data.session || '-') +
     chip('Mode', data.paymentMode || 'Cash');
 
