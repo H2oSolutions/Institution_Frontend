@@ -3090,7 +3090,28 @@ autoDues.forEach(function(i) {
   rows.push({ mi: +mi, due: monthMap[mi], future: false, carry: meta.carry || 0, credit: meta.credit || 0, base: meta.base || 0 });
 });
 Object.keys(futureMap).forEach(function(mi) {
-  rows.push({ mi: +mi, due: futureMap[mi], future: true, carry: 0, credit: 0, base: futureMap[mi] });
+  var carry = 0, credit = 0, base = 0;
+  var miNum = +mi;
+  if (type === 'reg') {
+    var key = sid + '-' + miNum;
+    if (regBulkMap[key]) {
+      regBulkMap[key].items.forEach(function(item) {
+        carry  += item.month.previousDue    || item.month.carryDue    || 0;
+        credit += item.month.previousCredit || item.month.carryCredit || 0;
+        base   += item.month.baseAmount != null ? item.month.baseAmount : (item.month.amount || 0);
+      });
+    }
+  } else {
+    Object.keys(bulkMap).forEach(function(k) {
+      var d = bulkMap[k];
+      if (+d.monthIndex === miNum && d.studentId === sid) {
+        carry  += d.carryDue    || 0;
+        credit += d.carryCredit || 0;
+        base   += d.baseAmount  || 0;
+      }
+    });
+  }
+  rows.push({ mi: miNum, due: futureMap[mi], future: true, carry: carry, credit: credit, base: base || futureMap[mi] });
 });
 
   rows.sort(function(a, b) { return sessionOrderOf(a.mi) - sessionOrderOf(b.mi); });
@@ -3113,7 +3134,7 @@ Object.keys(futureMap).forEach(function(mi) {
           ' onclick="event.stopPropagation()" style="width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex-shrink:0">';
 
       var subLine = '';
-      if (!r.future && (r.carry > 0 || r.credit > 0)) {
+      if (r.carry > 0 || r.credit > 0) {
         subLine = '<div style="padding:1px 12px 5px 40px;font-size:10px;border-bottom:1px solid #f1f5f9">' +
           (r.carry  > 0 ? '<span style="color:#c2410c;font-weight:700">+Rs.' + Number(r.carry).toLocaleString('en-IN')  + ' carry</span>' : '') +
           (r.carry  > 0 && r.credit > 0 ? ' &nbsp;·&nbsp; ' : '') +

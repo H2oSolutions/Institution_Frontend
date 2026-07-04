@@ -3,653 +3,558 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>iCard Management</title>
+<title>I-Card Management — Hello School</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;0,700;1,300;1,600&family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+:root{--bg:#070a14;--surface:#0f1623;--panel:#131d30;--rim:#1c2b42;--gold:#d4a843;--gold2:#f0c96a;--silver:#7a90b0;--text:#dce8f5;--muted:#48607a;--teal:#14b8a6;--danger:#ef4444;--success:#22c55e;--r:14px;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+.hdr{position:sticky;top:0;z-index:200;background:rgba(7,10,20,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--rim);padding:16px 40px;display:flex;align-items:center;gap:14px;}
+.hdr-back{background:rgba(255,255,255,.06);border:1px solid var(--rim);color:var(--silver);border-radius:20px;padding:7px 15px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
+.hdr-back:hover{border-color:var(--gold);color:var(--text);}
+.hdr-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:#000;box-shadow:0 4px 14px rgba(212,168,67,.35);}
+.hdr-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--text);}
+.hdr-badge{margin-left:auto;background:linear-gradient(135deg,rgba(212,168,67,.12),rgba(240,201,106,.06));border:1px solid rgba(212,168,67,.3);padding:5px 14px;border-radius:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;}
+.stepper-wrap{max-width:920px;margin:36px auto 0;padding:0 24px;position:relative;z-index:1;}
+.stepper{display:flex;align-items:center;background:var(--surface);border:1px solid var(--rim);border-radius:50px;padding:7px 14px;overflow-x:auto;scrollbar-width:none;}
+.stepper::-webkit-scrollbar{display:none;}
+.step{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:40px;cursor:pointer;transition:all .25s;white-space:nowrap;font-size:13px;color:var(--muted);font-weight:500;}
+.step.active{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;font-weight:700;}
+.step.done{color:var(--teal);}
+.step-num{width:20px;height:20px;border-radius:50%;background:var(--rim);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.step.active .step-num{background:rgba(0,0,0,.2);color:#000;}
+.step.done .step-num{background:var(--teal);color:#fff;}
+.step-div{width:18px;height:1px;background:var(--rim);flex-shrink:0;}
+.main{max-width:920px;margin:28px auto 100px;padding:0 24px;position:relative;z-index:1;}
+.card{background:var(--surface);border:1px solid var(--rim);border-radius:var(--r);padding:32px;margin-bottom:24px;animation:fadeUp .3s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.card-title{font-family:'Playfair Display',serif;font-size:22px;margin-bottom:5px;}
+.card-sub{font-size:13px;color:var(--silver);margin-bottom:26px;line-height:1.5;}
+label{display:block;font-size:12px;color:var(--silver);margin-bottom:5px;font-weight:500;letter-spacing:.3px;}
+input[type=text],input[type=number],select,textarea{width:100%;background:var(--panel);border:1.5px solid var(--rim);border-radius:10px;padding:11px 15px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;outline:none;}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);}
+select option{background:var(--panel);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.fg{margin-bottom:18px;}
+.fg.full{grid-column:1/-1;}
+.upload-box{border:2px dashed var(--rim);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
+.upload-box:hover{border-color:var(--gold);background:rgba(212,168,67,.04);}
+.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:24px;margin-bottom:6px;}
+.upload-text{font-size:12px;color:var(--silver);}
+.upload-text b{color:var(--gold);}
+.upload-preview{width:56px;height:56px;border-radius:7px;object-fit:cover;margin:0 auto 6px;display:none;}
+input[type=file]{display:none;}
+.fields-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.fchip{border:1.5px solid var(--rim);border-radius:10px;padding:12px 14px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px;font-size:13px;}
+.fchip:hover{border-color:var(--gold);}
+.fchip.on{border-color:var(--gold);background:rgba(212,168,67,.08);color:var(--gold);}
+.fchip .chk{width:17px;height:17px;border-radius:4px;border:1.5px solid var(--rim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;}
+.fchip.on .chk{background:var(--gold);border-color:var(--gold);color:#000;}
+.field-note{font-size:12px;color:var(--silver);}
+.field-note span{color:var(--gold);font-weight:700;}
+.info-bar{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:11px 15px;font-size:13px;color:#93c5fd;margin-bottom:20px;display:flex;gap:8px;}
+.section-label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:6px 0 14px;display:flex;align-items:center;gap:10px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--rim);}
 
-  body {
-    min-height: 100vh;
-    background: #06080f;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Segoe UI', sans-serif;
-    overflow: hidden;
-    color: #fff;
-  }
+/* ── Step 2: Students & Photos ── */
+.readiness{background:var(--panel);border:1.5px solid var(--rim);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:none;}
+.readiness.show{display:block;}
+.readiness-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:8px;}
+.readiness-stat{font-size:13px;font-weight:600;}
+.readiness-stat b{font-family:'IBM Plex Mono',monospace;}
+.readiness-bar{height:7px;background:var(--rim);border-radius:6px;overflow:hidden;}
+.readiness-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--teal),var(--success));transition:width .4s;}
+.select-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.mini-btn{padding:7px 14px;border-radius:8px;border:1.5px solid var(--rim);background:transparent;color:var(--silver);font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
+.mini-btn:hover{border-color:var(--gold);color:var(--gold);}
+.select-count{margin-left:auto;font-size:13px;font-weight:600;color:var(--gold);font-family:'IBM Plex Mono',monospace;}
+.student-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+.stu-tile{background:var(--panel);border:1.5px solid var(--rim);border-radius:12px;padding:13px;transition:.2s;position:relative;}
+.stu-tile.sel{border-color:var(--gold);background:rgba(212,168,67,.06);}
+.stu-tile-top{display:flex;align-items:center;gap:11px;cursor:pointer;}
+.stu-avatar{width:46px;height:46px;border-radius:10px;background:var(--rim);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;}
+.stu-avatar img{width:100%;height:100%;object-fit:cover;}
+.stu-avatar .ph-none{font-size:18px;opacity:.4;}
+.stu-avatar .ph-badge{position:absolute;bottom:-3px;right:-3px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;border:2px solid var(--panel);}
+.ph-badge.ok{background:var(--success);color:#fff;}
+.ph-badge.no{background:var(--danger);color:#fff;}
+.stu-meta{flex:1;min-width:0;}
+.stu-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stu-sub{font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+.stu-checkbox{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.stu-tile.sel .stu-checkbox{background:var(--gold);border-color:var(--gold);color:#000;}
+.stu-photo-actions{display:flex;gap:6px;margin-top:10px;}
+.photo-act{flex:1;padding:6px;border-radius:7px;border:1.5px solid var(--rim);background:transparent;color:var(--silver);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;display:flex;align-items:center;justify-content:center;gap:4px;position:relative;overflow:hidden;}
+.photo-act:hover{border-color:var(--gold);color:var(--gold);}
+.photo-act input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.photo-act.busy{opacity:.5;pointer-events:none;}
+.empty-note{text-align:center;color:var(--muted);font-size:13px;padding:40px 20px;}
 
-  .bg {
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(ellipse at 15% 40%, rgba(14,165,233,0.12) 0%, transparent 55%),
-      radial-gradient(ellipse at 85% 20%, rgba(59,130,246,0.10) 0%, transparent 55%),
-      radial-gradient(ellipse at 50% 90%, rgba(99,102,241,0.08) 0%, transparent 55%),
-      #06080f;
-    z-index: 0;
-  }
+.tpl-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-bottom:28px;}
+.tpl-scene{perspective:700px;cursor:pointer;position:relative;}
+.tpl-scene:hover .tpl-body{transform:rotateY(6deg) scale(1.03);}
+.tpl-scene.flipped .tpl-body{transform:rotateY(180deg);}
+.tpl-scene.picked::before{content:'';position:absolute;inset:-3px;border-radius:13px;z-index:-1;background:linear-gradient(135deg,var(--gold),var(--gold2),var(--gold));animation:ringPulse 2s ease-in-out infinite;}
+@keyframes ringPulse{0%,100%{opacity:1}50%{opacity:.55}}
+.tpl-body{position:relative;transform-style:preserve-3d;transition:transform .6s cubic-bezier(.4,0,.2,1);border-radius:12px;}
+.tpl-face,.tpl-backface{backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:12px;overflow:hidden;}
+.tpl-backface{position:absolute;inset:0;transform:rotateY(180deg);}
+.tpl-check{position:absolute;top:-5px;right:-5px;z-index:20;width:20px;height:20px;background:var(--gold);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:10px;color:#000;box-shadow:0 2px 8px rgba(212,168,67,.5);}
+.tpl-scene.picked .tpl-check{display:flex;}
+.tpl-flip-hint{position:absolute;top:6px;right:6px;z-index:10;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:2px 6px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:rgba(255,255,255,.5);opacity:0;transition:opacity .2s;pointer-events:none;}
+.tpl-scene:hover .tpl-flip-hint{opacity:1;}
+.tpl-label{text-align:center;margin-top:7px;}
+.tpl-label-name{font-size:11px;font-weight:600;color:var(--silver);transition:color .2s;}
+.tpl-label-desc{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);}
+.tpl-scene.picked .tpl-label-name{color:var(--gold);}
+.icard{width:100%;aspect-ratio:54/86;position:relative;overflow:hidden;font-family:'DM Sans',sans-serif;}
 
-  .grid-lines {
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px);
-    background-size: 50px 50px;
-    z-index: 0;
-  }
 
-  .orb {
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(60px);
-    opacity: 0.12;
-    animation: orbFloat ease-in-out infinite;
-    z-index: 0;
-    pointer-events: none;
-  }
 
-  @keyframes orbFloat {
-    0%,100% { transform: translateY(0) translateX(0); }
-    33% { transform: translateY(-30px) translateX(20px); }
-    66% { transform: translateY(20px) translateX(-15px); }
-  }
+/* ════ SCHOOL ID TEMPLATES — shared photo silhouette sizing ════ */
+.icard .ph img,.icard .lg img{width:100%;height:100%;object-fit:cover;}
+ 
+/* T01 Classic Navy — top band + logo */
+.t01{background:#fff;}
+.t01-i{height:100%;display:flex;flex-direction:column;}
+.t01 .hd{background:#13294b;padding:6%;display:flex;align-items:center;gap:5%;}
+.t01 .lg{width:16%;aspect-ratio:1;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:6px;font-weight:700;color:#13294b;flex-shrink:0;overflow:hidden;}
+.t01 .sn{font-family:'Playfair Display',serif;font-size:5.5px;font-weight:700;color:#fff;line-height:1.2;}
+.t01 .bd{flex:1;padding:6% 7%;display:flex;flex-direction:column;align-items:center;}
+.t01 .ph{width:37%;aspect-ratio:3/4;background:#eef1f6;border:1.5px solid #13294b;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:4%;}
+.t01 .nm{font-family:'Playfair Display',serif;font-size:8px;font-weight:700;color:#13294b;margin-bottom:4%;text-align:center;}
+.t01 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #e6eaf1;}
+.t01 .fk{color:#94a0b5;}.t01 .fv{color:#13294b;font-weight:600;}
+.t01 .ft{margin-top:auto;height:3px;background:#c8a24a;}
+ 
+/* T02 Maroon Crest — centered crest, traditional */
+.t02{background:#fbf9f6;}
+.t02-i{height:100%;padding:7%;display:flex;flex-direction:column;align-items:center;text-align:center;}
+.t02 .crest{width:19%;aspect-ratio:1;border-radius:50%;background:#7a1f2b;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:7px;color:#e9c46a;font-weight:700;margin-bottom:2.5%;overflow:hidden;}
+.t02 .sn{font-family:'Playfair Display',serif;font-size:5.5px;color:#7a1f2b;font-weight:700;letter-spacing:.4px;margin-bottom:1.5%;}
+.t02 .rule{width:42%;height:1.5px;background:#e9c46a;margin-bottom:4%;}
+.t02 .ph{width:35%;aspect-ratio:3/4;background:#f2ece6;border:2px solid #7a1f2b;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:3.5%;}
+.t02 .nm{font-family:'Playfair Display',serif;font-size:8px;color:#2a1416;font-weight:700;margin-bottom:3.5%;}
+.t02 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #ecdfd9;}
+.t02 .fk{color:#a98a86;}.t02 .fv{color:#2a1416;font-weight:600;}
+ 
+/* T03 Emerald Band — green header, no logo */
+.t03{background:#fff;}
+.t03-i{height:100%;display:flex;flex-direction:column;}
+.t03 .hd{background:#0f6f5c;padding:7% 7% 6%;}
+.t03 .sn{font-size:6px;font-weight:700;color:#fff;letter-spacing:.3px;line-height:1.2;}
+.t03 .tag{font-size:3.1px;color:#9fe0d2;letter-spacing:1.5px;text-transform:uppercase;margin-top:1.5%;}
+.t03 .bd{flex:1;padding:5% 7%;display:flex;flex-direction:column;align-items:center;}
+.t03 .ph{width:36%;aspect-ratio:3/4;background:#eef5f3;border:1.5px solid #0f6f5c;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin:4% 0;}
+.t03 .nm{font-size:8px;font-weight:700;color:#0e3d34;margin-bottom:4%;}
+.t03 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #e4efec;}
+.t03 .fk{color:#8aa9a2;}.t03 .fv{color:#0e3d34;font-weight:600;}
+.t03 .ft{margin-top:auto;height:3px;background:#0f6f5c;}
+ 
+/* T04 Minimal Slate — modern, no logo */
+.t04{background:#fff;}
+.t04-i{height:100%;padding:8% 8% 7% 9%;display:flex;flex-direction:column;position:relative;}
+.t04 .rail{position:absolute;left:0;top:0;bottom:0;width:2.6%;background:#334155;}
+.t04 .sn{font-size:5px;font-weight:700;color:#334155;letter-spacing:.5px;text-transform:uppercase;margin-bottom:1%;}
+.t04 .tag{font-size:3px;color:#94a3b8;letter-spacing:2px;text-transform:uppercase;margin-bottom:6%;}
+.t04 .ph{width:35%;aspect-ratio:3/4;background:#f1f5f9;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:5%;}
+.t04 .nm{font-size:8.5px;font-weight:700;color:#0f172a;margin-bottom:1%;}
+.t04 .role{font-size:3.3px;color:#64748b;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5%;}
+.t04 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.6px;padding:1.8% 0;border-bottom:1px solid #eef2f6;}
+.t04 .fk{color:#94a3b8;}.t04 .fv{color:#0f172a;font-weight:600;}
+ 
+/* T05 Royal Sidebar — left band + logo */
+.t05{background:#fff;display:flex;}
+.t05-band{width:27%;background:#1e3a8a;height:100%;display:flex;flex-direction:column;align-items:center;padding:7% 0;}
+.t05-band .lg{width:55%;aspect-ratio:1;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:7px;font-weight:700;color:#1e3a8a;margin-bottom:6%;overflow:hidden;}
+.t05-band .vsn{writing-mode:vertical-rl;transform:rotate(180deg);font-family:'Playfair Display',serif;font-size:4.3px;color:#cdd9f5;letter-spacing:1px;white-space:nowrap;overflow:hidden;max-height:60%;}
+.t05-i{flex:1;padding:7% 6%;display:flex;flex-direction:column;align-items:center;}
+.t05 .ph{width:44%;aspect-ratio:3/4;background:#eef2fb;border:1.5px solid #1e3a8a;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:4%;}
+.t05 .nm{font-size:7.5px;font-weight:700;color:#1e3a8a;text-align:center;margin-bottom:4%;}
+.t05 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.4px;padding:1.5% 0;border-bottom:1px solid #e7ecf7;}
+.t05 .fk{color:#9aa7c9;}.t05 .fv{color:#1e3a8a;font-weight:600;}
+ 
+/* T06 Friendly Teal — rounded header, circular photo */
+.t06{background:#fff;}
+.t06-i{height:100%;display:flex;flex-direction:column;align-items:center;}
+.t06 .hd{width:100%;background:#0ea5a4;border-radius:0 0 16% 16%;padding:6% 6% 9%;text-align:center;}
+.t06 .sn{font-size:5.5px;font-weight:700;color:#fff;letter-spacing:.3px;}
+.t06 .ph{width:35%;aspect-ratio:1;border-radius:50%;background:#e6f7f6;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.18);overflow:hidden;display:flex;align-items:center;justify-content:center;margin:-13% 0 3.5%;}
+.t06 .nm{font-size:8px;font-weight:700;color:#0c5453;margin-bottom:3.5%;}
+.t06 .fr{display:flex;justify-content:space-between;width:82%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #e4f1f0;}
+.t06 .fk{color:#83b3b1;}.t06 .fv{color:#0c5453;font-weight:600;}
+ 
+/* T07 Corporate Graphite — professional horizontal */
+.t07{background:#f8fafc;}
+.t07-i{height:100%;display:flex;flex-direction:column;}
+.t07 .hd{background:#1f2937;padding:5.5% 6%;display:flex;justify-content:space-between;align-items:center;}
+.t07 .sn{font-size:5px;font-weight:700;color:#fff;letter-spacing:.4px;}
+.t07 .idtag{font-size:3px;color:#9ca3af;letter-spacing:1.5px;font-family:'IBM Plex Mono',monospace;}
+.t07 .bd{flex:1;padding:6%;display:flex;gap:6%;}
+.t07 .ph{width:34%;aspect-ratio:3/4;background:#e5e7eb;border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.t07 .col{flex:1;display:flex;flex-direction:column;}
+.t07 .nm{font-size:7px;font-weight:700;color:#111827;margin-bottom:4%;}
+.t07 .fr{display:flex;flex-direction:column;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #e5e7eb;}
+.t07 .fk{color:#9ca3af;font-size:3px;text-transform:uppercase;letter-spacing:.5px;}
+.t07 .fv{color:#111827;font-weight:600;}
+ 
+/* T08 Azure Curve — curved header, circular photo */
+.t08{background:#fff;}
+.t08-i{height:100%;display:flex;flex-direction:column;align-items:center;}
+.t08 .hd{width:100%;height:30%;background:#3b82f6;position:relative;}
+.t08 .hd::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:42%;background:#fff;border-radius:50% 50% 0 0;}
+.t08 .sn{position:absolute;top:20%;left:0;right:0;text-align:center;font-size:5.5px;font-weight:700;color:#fff;z-index:2;}
+.t08 .ph{width:33%;aspect-ratio:1;border-radius:50%;background:#eaf2ff;border:2px solid #3b82f6;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-top:-14%;position:relative;z-index:3;}
+.t08 .nm{font-size:8px;font-weight:700;color:#1e3a8a;margin:3% 0;}
+.t08 .fr{display:flex;justify-content:space-between;width:80%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #e8f0fe;}
+.t08 .fk{color:#93b4f0;}.t08 .fv{color:#1e3a8a;font-weight:600;}
+ 
+/* T09 Crimson Split — bold color/white split */
+.t09{background:#fff;}
+.t09-i{height:100%;display:flex;flex-direction:column;align-items:center;}
+.t09 .top{width:100%;height:34%;background:#be123c;display:flex;align-items:flex-start;justify-content:center;padding-top:8%;}
+.t09 .sn{font-size:5.5px;font-weight:700;color:#fff;letter-spacing:.3px;text-align:center;}
+.t09 .ph{width:37%;aspect-ratio:3/4;background:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.22);border-radius:2px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-top:-16%;}
+.t09 .nm{font-size:8px;font-weight:700;color:#9f1239;margin:3.5% 0;}
+.t09 .fr{display:flex;justify-content:space-between;width:80%;font-size:3.6px;padding:1.6% 0;border-bottom:1px solid #f3e0e5;}
+.t09 .fk{color:#d39aab;}.t09 .fv{color:#9f1239;font-weight:600;}
+ 
+/* T10 Heritage Bordered — premium framed + monogram */
+.t10{background:#fffdf8;padding:4%;}
+.t10-frame{height:100%;border:1px solid #b8923f;padding:2.6%;}
+.t10-i{height:100%;border:.5px solid #d8c089;padding:6% 5%;display:flex;flex-direction:column;align-items:center;text-align:center;}
+.t10 .mono{width:17%;aspect-ratio:1;border-radius:50%;border:1px solid #b8923f;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:7px;color:#b8923f;font-weight:700;margin-bottom:2%;overflow:hidden;}
+.t10 .sn{font-family:'Playfair Display',serif;font-size:5px;color:#6b5524;font-weight:700;letter-spacing:.4px;margin-bottom:1%;}
+.t10 .rule{width:36%;height:1px;background:#b8923f;margin-bottom:3.5%;}
+.t10 .ph{width:33%;aspect-ratio:3/4;background:#faf6ec;border:1px solid #b8923f;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:3.5%;}
+.t10 .nm{font-family:'Playfair Display',serif;font-size:7.5px;color:#3a2e12;font-weight:700;margin-bottom:3.5%;}
+.t10 .fr{display:flex;justify-content:space-between;width:100%;font-size:3.5px;padding:1.4% 0;border-bottom:1px solid #ece0c6;}
+.t10 .fk{color:#b3a06f;}.t10 .fv{color:#3a2e12;font-weight:600;}
+ 
+/* ════ BACKS (shared layout, color-matched per template) ════ */
+.t01b,.t02b,.t03b,.t04b,.t05b,.t06b,.t07b,.t08b,.t09b{background:#fff;}
+.t01b-i,.t02b-i,.t03b-i,.t04b-i,.t05b-i,.t06b-i,.t07b-i,.t08b-i,.t09b-i{height:100%;display:flex;flex-direction:column;}
+.icard[class*="b"] .bhd{padding:5.5% 7%;}
+.icard[class*="b"] .bttl{font-size:5px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;}
+.icard[class*="b"] .bbd{flex:1;padding:6% 7%;display:flex;flex-direction:column;}
+.icard[class*="b"] .btx{font-size:3.6px;line-height:1.9;color:#5b6677;}
+.icard[class*="b"] .sig{margin-top:auto;padding-top:2%;font-size:3.2px;color:#9aa3b2;text-align:center;}
+.t01b .bhd{background:#13294b;}.t01b .sig{border-top:1px solid #13294b;}.t01b .ft{height:3px;background:#c8a24a;}
+.t02b .bhd{background:#7a1f2b;}.t02b .sig{border-top:1px solid #7a1f2b;}.t02b .ft{height:3px;background:#e9c46a;}
+.t03b .bhd{background:#0f6f5c;}.t03b .sig{border-top:1px solid #0f6f5c;}.t03b .ft{height:3px;background:#0f6f5c;}
+.t04b .bhd{background:#334155;}.t04b .sig{border-top:1px solid #334155;}.t04b .ft{height:3px;background:#334155;}
+.t05b .bhd{background:#1e3a8a;}.t05b .sig{border-top:1px solid #1e3a8a;}.t05b .ft{height:3px;background:#1e3a8a;}
+.t06b .bhd{background:#0ea5a4;}.t06b .sig{border-top:1px solid #0ea5a4;}.t06b .ft{height:3px;background:#0ea5a4;}
+.t07b .bhd{background:#1f2937;}.t07b .sig{border-top:1px solid #1f2937;}.t07b .ft{height:3px;background:#1f2937;}
+.t08b .bhd{background:#3b82f6;}.t08b .sig{border-top:1px solid #3b82f6;}.t08b .ft{height:3px;background:#3b82f6;}
+.t09b .bhd{background:#be123c;}.t09b .sig{border-top:1px solid #be123c;}.t09b .ft{height:3px;background:#be123c;}
+/* T10 back keeps the framed elegant look */
+.t10b{background:#fffdf8;padding:4%;}
+.t10b-i{height:100%;border:1px solid #b8923f;padding:7% 6%;display:flex;flex-direction:column;text-align:center;}
+.t10b .bttl{font-family:'Playfair Display',serif;font-size:5.5px;letter-spacing:1px;color:#6b5524;margin-bottom:3%;}
+.t10b .bbd{flex:1;display:flex;flex-direction:column;}
+.t10b .btx{font-family:'Cormorant Garamond',serif;font-size:3.8px;line-height:1.9;color:#7a6a3f;}
+.t10b .sig{margin-top:auto;border-top:1px solid #b8923f;padding-top:2%;font-size:3.2px;color:#b3a06f;}
 
-  .container {
-    position: relative;
-    z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 36px;
-    padding: 40px 20px;
-    max-width: 860px;
-    width: 100%;
-  }
 
-  /* 3D Student ID Card */
-  .scene {
-    perspective: 900px;
-    width: 300px;
-    height: 420px;
-  }
-
-  .id-card {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    transform-style: preserve-3d;
-    animation: idSpin 10s ease-in-out infinite;
-    filter: drop-shadow(0 40px 80px rgba(14,165,233,0.35));
-  }
-
-  @keyframes idSpin {
-    0%,100% { transform: rotateY(-18deg) rotateX(8deg); }
-    25%     { transform: rotateY(18deg) rotateX(-5deg); }
-    50%     { transform: rotateY(8deg) rotateX(12deg); }
-    75%     { transform: rotateY(-12deg) rotateX(-6deg); }
-  }
-
-  .id-face {
-    position: absolute;
-    inset: 0;
-    border-radius: 20px;
-    backface-visibility: hidden;
-    overflow: hidden;
-    background: linear-gradient(160deg, #0f1f3d 0%, #0a1628 60%, #0d1f3a 100%);
-    border: 1px solid rgba(56,189,248,0.25);
-  }
-
-  .id-face::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 50%);
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  .card-strip {
-    height: 14px;
-    background: linear-gradient(90deg, #0ea5e9, #3b82f6, #6366f1);
-    position: relative;
-    z-index: 2;
-  }
-
-  .card-inner {
-    padding: 18px 22px 22px;
-    position: relative;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    height: calc(100% - 14px);
-  }
-
-  .school-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-  }
-
-  .school-logo {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    font-weight: 800;
-    color: #fff;
-    flex-shrink: 0;
-  }
-
-  .school-name {
-    font-size: 11px;
-    font-weight: 700;
-    color: #e0f2fe;
-    letter-spacing: 0.5px;
-    line-height: 1.3;
-  }
-  .school-sub {
-    font-size: 9px;
-    color: rgba(255,255,255,0.4);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-
-  .card-divider {
-    width: 100%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(56,189,248,0.3), transparent);
-  }
-
-  .card-label {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    color: #38bdf8;
-    text-transform: uppercase;
-    text-align: center;
-  }
-
-  .photo-frame {
-    width: 80px;
-    height: 90px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, #1e3a5f, #1a3050);
-    border: 2px solid rgba(56,189,248,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .photo-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    opacity: 0.5;
-  }
-
-  .photo-head {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(56,189,248,0.4);
-  }
-
-  .photo-body {
-    width: 40px;
-    height: 22px;
-    border-radius: 20px 20px 0 0;
-    background: rgba(56,189,248,0.3);
-    margin-top: 2px;
-  }
-
-  .stu-name {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f0f9ff;
-    text-align: center;
-  }
-
-  .stu-class {
-    font-size: 11px;
-    color: #38bdf8;
-    font-weight: 600;
-    text-align: center;
-  }
-
-  .stu-fields {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    margin-top: 2px;
-  }
-
-  .stu-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 8px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.06);
-  }
-
-  .stu-key {
-    font-size: 9px;
-    color: rgba(255,255,255,0.35);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    font-weight: 600;
-  }
-
-  .stu-val {
-    font-size: 10px;
-    font-weight: 600;
-    color: rgba(255,255,255,0.8);
-    font-family: monospace;
-  }
-
-  .barcode {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 28px;
-    margin-top: 4px;
-  }
-
-  .bar { background: rgba(56,189,248,0.5); border-radius: 1px; }
-
-  .card-year {
-    font-size: 8px;
-    color: rgba(255,255,255,0.2);
-    letter-spacing: 1px;
-    text-align: center;
-  }
-
-  .card-glow {
-    position: absolute;
-    inset: -25px;
-    border-radius: 35px;
-    box-shadow: 0 0 80px rgba(14,165,233,0.2), 0 0 160px rgba(14,165,233,0.08);
-    animation: glowPulse 3s ease-in-out infinite;
-    pointer-events: none;
-  }
-
-  @keyframes glowPulse {
-    0%,100% { box-shadow: 0 0 80px rgba(14,165,233,0.2), 0 0 160px rgba(14,165,233,0.08); }
-    50%      { box-shadow: 0 0 100px rgba(59,130,246,0.35), 0 0 200px rgba(59,130,246,0.12); }
-  }
-
-  /* Text section */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(14,165,233,0.1);
-    border: 1px solid rgba(14,165,233,0.25);
-    border-radius: 100px;
-    padding: 6px 16px;
-    font-size: 11px;
-    color: #7dd3fc;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    font-weight: 600;
-    animation: fadeUp 0.7s ease both;
-  }
-
-  .badge-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: #0ea5e9;
-    animation: blink 1.5s ease-in-out infinite;
-  }
-
-  @keyframes blink {
-    0%,100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: 0.3; transform: scale(0.5); }
-  }
-
-  h1 {
-    font-size: clamp(1.9rem, 5.5vw, 3.2rem);
-    font-weight: 800;
-    line-height: 1.15;
-    text-align: center;
-    animation: fadeUp 0.7s ease 0.1s both;
-  }
-
-  .grad {
-    background: linear-gradient(90deg, #38bdf8, #60a5fa, #818cf8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .subtitle {
-    font-size: 15px;
-    color: rgba(255,255,255,0.45);
-    max-width: 460px;
-    line-height: 1.65;
-    text-align: center;
-    animation: fadeUp 0.7s ease 0.2s both;
-  }
-
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-    width: 100%;
-    max-width: 640px;
-    animation: fadeUp 0.7s ease 0.3s both;
-  }
-
-  .feat-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 14px;
-    padding: 16px;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    transition: all 0.3s ease;
-    cursor: default;
-  }
-
-  .feat-card:hover {
-    background: rgba(14,165,233,0.07);
-    border-color: rgba(14,165,233,0.25);
-    transform: translateY(-3px);
-  }
-
-  .feat-ico { font-size: 22px; flex-shrink: 0; line-height: 1; }
-  .feat-title { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.8); margin-bottom: 3px; }
-  .feat-desc  { font-size: 11px; color: rgba(255,255,255,0.35); line-height: 1.4; }
-
-  .progress-wrap {
-    width: 100%;
-    max-width: 420px;
-    animation: fadeUp 0.7s ease 0.4s both;
-  }
-
-  .progress-top {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: rgba(255,255,255,0.35);
-    margin-bottom: 8px;
-  }
-
-  .pbar { height: 5px; background: rgba(255,255,255,0.07); border-radius: 100px; overflow: hidden; }
-  .pfill {
-    height: 100%;
-    border-radius: 100px;
-    background: linear-gradient(90deg, #0ea5e9, #6366f1);
-    width: 0;
-    animation: pload 1.8s ease 1s forwards;
-  }
-
-  @keyframes pload { to { width: 62%; } }
-
-  .notify-row {
-    display: flex;
-    gap: 10px;
-    animation: fadeUp 0.7s ease 0.5s both;
-  }
-
-  .ni {
-    flex: 1;
-    max-width: 250px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 10px;
-    padding: 11px 15px;
-    color: #fff;
-    font-size: 13px;
-    outline: none;
-    transition: all 0.3s;
-  }
-
-  .ni::placeholder { color: rgba(255,255,255,0.2); }
-  .ni:focus { border-color: rgba(14,165,233,0.5); background: rgba(14,165,233,0.06); }
-
-  .nb {
-    background: linear-gradient(135deg, #0ea5e9, #3b82f6);
-    border: none;
-    border-radius: 10px;
-    padding: 11px 20px;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s;
-  }
-
-  .nb:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(14,165,233,0.35); }
-  .nb:active { transform: translateY(0); }
-
-  .stats {
-    display: flex;
-    gap: 28px;
-    animation: fadeUp 0.7s ease 0.6s both;
-  }
-
-  .stat { text-align: center; }
-  .sn { font-size: 20px; font-weight: 800; color: #38bdf8; display: block; }
-  .sl { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1px; }
-  .sdiv { width: 1px; background: rgba(255,255,255,0.07); }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(18px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .toast {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: rgba(14,165,233,0.92);
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 100px;
-    font-size: 13px;
-    font-weight: 600;
-    z-index: 100;
-    opacity: 0;
-    pointer-events: none;
-    transition: all 0.35s ease;
-  }
-
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
+/* Preview panel */
+.preview-panel{background:var(--panel);border:1px solid var(--rim);border-radius:16px;padding:28px;margin-bottom:24px;display:none;animation:fadeUp .35s ease;}
+.preview-panel.show{display:block;}
+.preview-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
+.preview-title{font-family:'Playfair Display',serif;font-size:20px;}
+.preview-badge{background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.25);padding:5px 14px;border-radius:20px;font-size:12px;color:var(--gold);font-family:'IBM Plex Mono',monospace;}
+.preview-cards{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;}
+.preview-item{text-align:center;}
+.preview-item-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+.preview-card-big{width:190px;}
+.preview-card-big .icard{border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
+/* Options */
+.opt-row{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1.5px solid var(--rim);border-radius:12px;padding:15px 18px;margin-bottom:12px;transition:border-color .2s;}
+.opt-row:has(.toggle:checked){border-color:var(--gold);}
+.opt-info h4{font-size:14px;font-weight:600;margin-bottom:2px;}
+.opt-info p{font-size:12px;color:var(--silver);}
+.toggle{width:42px;height:23px;appearance:none;background:var(--rim);border-radius:12px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+.toggle::after{content:'';position:absolute;width:17px;height:17px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;}
+.toggle:checked{background:var(--gold);}
+.toggle:checked::after{transform:translateX(19px);}
+.count-pill{background:var(--panel);border:1.5px solid var(--gold);border-radius:12px;padding:16px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;}
+.count-pill .cp-num{font-family:'Playfair Display',serif;font-size:28px;color:var(--gold);}
+.count-pill .cp-lbl{font-size:13px;color:var(--silver);}
+.strap-opts{background:var(--panel);border-radius:10px;padding:14px 18px;margin-bottom:12px;border:1.5px solid var(--rim);display:none;}
+.strap-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.strap-chip{padding:5px 12px;border-radius:7px;border:1.5px solid var(--rim);font-size:12px;cursor:pointer;transition:all .2s;font-family:'IBM Plex Mono',monospace;color:var(--silver);}
+.strap-chip.on{border-color:var(--gold);color:var(--gold);background:rgba(212,168,67,.08);}
+.pos-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.pos-btn{padding:9px;border-radius:8px;border:1.5px solid var(--rim);font-size:12px;cursor:pointer;transition:all .2s;text-align:center;color:var(--silver);background:transparent;}
+.pos-btn.on{border-color:var(--teal);color:var(--teal);background:rgba(20,184,166,.08);}
+/* Cost */
+.cost-card{background:linear-gradient(135deg,rgba(212,168,67,.1),rgba(240,201,106,.04));border:1.5px solid rgba(212,168,67,.3);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:24px;}
+.cost-amt{font-family:'Playfair Display',serif;font-size:50px;color:var(--gold);line-height:1;}
+.cost-sub2{font-size:12px;color:var(--silver);margin-top:5px;}
+.cost-rows{display:flex;flex-direction:column;gap:8px;margin-top:18px;text-align:left;}
+.cost-row{display:flex;justify-content:space-between;font-size:13px;padding:8px 12px;background:rgba(255,255,255,.03);border-radius:8px;}
+.cost-row.tot{border-top:1px solid var(--rim);padding-top:10px;margin-top:2px;}
+.cost-row.tot .ck{color:var(--gold);font-weight:700;}.cost-row.tot .cv{color:var(--gold);font-size:15px;font-weight:700;}
+.ck{color:var(--silver);}.cv{color:var(--text);font-weight:600;}
+/* Buttons */
+.btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:22px;}
+.btn{padding:11px 26px;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-out{background:transparent;border:1.5px solid var(--rim);color:var(--silver);}
+.btn-out:hover{border-color:var(--text);color:var(--text);}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;}
+.btn-gold:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(212,168,67,.3);}
+.btn-green{background:linear-gradient(135deg,var(--success),#16a34a);color:#fff;}
+.btn-green:hover{transform:translateY(-1px);}
+/* Camera modal */
+.cam-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:998;align-items:center;justify-content:center;padding:18px;}
+.cam-overlay.show{display:flex;}
+.cam-box{background:var(--surface);border:1px solid var(--rim);border-radius:18px;padding:24px;max-width:440px;width:100%;text-align:center;}
+.cam-title{font-family:'Playfair Display',serif;font-size:19px;margin-bottom:4px;}
+.cam-sub{font-size:12px;color:var(--silver);margin-bottom:16px;}
+.cam-stage{position:relative;width:280px;height:280px;margin:0 auto 16px;border-radius:14px;overflow:hidden;background:#000;border:1.5px solid var(--rim);}
+.cam-stage video,.cam-stage canvas{width:100%;height:100%;object-fit:cover;}
+.cam-guide{position:absolute;inset:14%;border:2px dashed rgba(212,168,67,.5);border-radius:50%;pointer-events:none;}
+/* Overlay */
+.success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;}
+.success-overlay.show{display:flex;}
+.success-box{background:var(--surface);border:1px solid var(--rim);border-radius:20px;padding:48px;text-align:center;max-width:400px;width:90%;animation:popIn .4s cubic-bezier(.34,1.56,.64,1);}
+@keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.s-icon{font-size:54px;margin-bottom:14px;}.s-title{font-family:'Playfair Display',serif;font-size:26px;margin-bottom:8px;}
+.s-sub{font-size:14px;color:var(--silver);line-height:1.6;margin-bottom:20px;}
+.s-oid{font-family:'IBM Plex Mono',monospace;background:var(--panel);padding:9px 18px;border-radius:8px;font-size:13px;color:var(--gold);margin-bottom:20px;display:inline-block;}
+.toast{position:fixed;bottom:32px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel);border:1px solid var(--rim);border-radius:10px;padding:11px 20px;font-size:14px;z-index:1000;transition:transform .3s,opacity .3s;opacity:0;white-space:nowrap;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+.toast.error{border-color:var(--danger);color:#fca5a5;}.toast.success{border-color:var(--success);color:#86efac;}
+@media(max-width:600px){.grid2{grid-template-columns:1fr;}.tpl-grid{grid-template-columns:repeat(3,1fr);}.fields-grid{grid-template-columns:repeat(2,1fr);}.hdr{padding:14px 18px;}.main{padding:0 14px;}.student-grid{grid-template-columns:1fr 1fr;}}
 </style>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
+<div class="hdr">
+  <button class="hdr-back" onclick="window.location.href='dashboard.html'">← Back</button>
+  <div class="hdr-mark">H</div>
+  <div><div class="hdr-title">I-Card Management</div></div>
+  <div class="hdr-badge">✦ Premium Feature</div>
+</div>
 
-<div class="bg"></div>
-<div class="grid-lines"></div>
-<div class="orb" style="width:400px;height:400px;background:#0ea5e9;top:-100px;left:-100px;animation-duration:12s;"></div>
-<div class="orb" style="width:300px;height:300px;background:#6366f1;bottom:-80px;right:-80px;animation-duration:15s;animation-delay:4s;"></div>
-<div class="orb" style="width:200px;height:200px;background:#3b82f6;top:50%;right:10%;animation-duration:10s;animation-delay:2s;"></div>
+<div class="stepper-wrap">
+  <div class="stepper">
+    <div class="step active" id="s1"><div class="step-num">1</div> Institution Info</div>
+    <div class="step-div"></div>
+    <div class="step" id="s2"><div class="step-num">2</div> Students &amp; Photos</div>
+    <div class="step-div"></div>
+    <div class="step" id="s3"><div class="step-num">3</div> Template &amp; Fields</div>
+    <div class="step-div"></div>
+    <div class="step" id="s4"><div class="step-num">4</div> Card Options</div>
+    <div class="step-div"></div>
+    <div class="step" id="s5"><div class="step-num">5</div> Preview &amp; Cost</div>
+  </div>
+</div>
 
-<div class="container">
+<div class="main">
 
-  <!-- 3D Student ID Card -->
-  <div style="position:relative;">
-    <div class="card-glow"></div>
-    <div class="scene">
-      <div class="id-card">
-        <div class="id-face">
-          <div class="card-strip"></div>
-          <div class="card-inner">
+  <!-- STEP 1 — INSTITUTION INFO -->
+  <div class="card" id="step1">
+    <div class="card-title">Institution Information</div>
+    <div class="card-sub">This data is printed on every I-Card. We pre-fill it from your school profile — edit if anything is out of date.</div>
+    <div class="grid2">
+      <div class="fg full"><label>Institution Name *</label><input type="text" id="instName" placeholder="e.g. St. Mary's Public School" oninput="syncName()"/></div>
+      <div class="fg"><label>Contact Number</label><input type="text" id="instPhone" placeholder="+91 98765 43210"/></div>
+      <div class="fg"><label>City</label><input type="text" id="instCity" placeholder="e.g. Moradabad, UP"/></div>
+      <div class="fg">
+        <label>School Logo</label>
+        <div class="upload-box" id="logoBox">
+          <input type="file" id="logoInput" accept="image/*" onchange="uploadAsset(this,'logo')">
+          <img class="upload-preview" id="logoPrev">
+          <div id="logoIcon"><div class="upload-icon">🏫</div><div class="upload-text">Click to upload logo<br><b>PNG recommended</b></div></div>
+        </div>
+      </div>
+      <div class="fg">
+        <label>Principal's Signature</label>
+        <div class="upload-box" id="sigBox">
+          <input type="file" id="sigInput" accept="image/*" onchange="uploadAsset(this,'signature')">
+          <img class="upload-preview" id="sigPrev">
+          <div id="sigIcon"><div class="upload-icon">✍️</div><div class="upload-text">Upload signature image<br><b>White background preferred</b></div></div>
+        </div>
+      </div>
+      <div class="fg full"><label>Address (printed on back)</label><textarea id="instAddr" rows="2" placeholder="Full address of your institution..." style="resize:none"></textarea></div>
+    </div>
+    <div class="btn-row"><button class="btn btn-gold" onclick="goStep(2)">Continue → Students &amp; Photos</button></div>
+  </div>
 
-            <div class="school-header">
-              <div class="school-logo">S</div>
-              <div>
-                <div class="school-name">Springdale Public School</div>
-                <div class="school-sub">Est. 2003 · Affiliated</div>
-              </div>
-            </div>
+  <!-- STEP 2 — STUDENTS & PHOTOS -->
+  <div class="card" id="step2" style="display:none">
+    <div class="card-title">Select Students &amp; Photos</div>
+    <div class="card-sub">Pick a class, choose the students you want cards for, and make sure each has a photo. Names, roll numbers and details are pulled automatically from your records — nothing re-typed.</div>
+    <div class="info-bar">ℹ️ Photos are stored securely on Cloudflare R2. Upload a file per student, capture from the camera, or bulk-drop photos named by student name (e.g. <b>aryan kumar.jpg</b>) to auto-match the whole class. If a name matches two students, you'll be asked to pick the right one.</div>
 
-            <div class="card-divider"></div>
-            <div class="card-label">Student Identity Card</div>
-
-            <div class="photo-frame">
-              <div class="photo-placeholder">
-                <div class="photo-head"></div>
-                <div class="photo-body"></div>
-              </div>
-            </div>
-
-            <div class="stu-name">Rahul Sharma</div>
-            <div class="stu-class">Class X — Section A</div>
-
-            <div class="stu-fields">
-              <div class="stu-row">
-                <span class="stu-key">Roll No.</span>
-                <span class="stu-val">SPS-2024-1042</span>
-              </div>
-              <div class="stu-row">
-                <span class="stu-key">DOB</span>
-                <span class="stu-val">12 / 08 / 2010</span>
-              </div>
-              <div class="stu-row">
-                <span class="stu-key">Valid Till</span>
-                <span class="stu-val">Mar 2025</span>
-              </div>
-            </div>
-
-            <div class="barcode" id="barcode"></div>
-            <div class="card-year">2024 — 2025</div>
-
-          </div>
+    <div class="grid2">
+      <div class="fg"><label>Select Class</label><select id="classSelect" onchange="onClassChange()"><option value="">Loading classes…</option></select></div>
+      <div class="fg">
+        <label>Bulk Upload (files named by student name)</label>
+        <div class="upload-box" id="bulkBox" style="padding:14px">
+          <input type="file" id="bulkInput" accept="image/*" multiple onchange="bulkPhotoMatch(this.files)">
+          <div class="upload-text">📂 Drop or click — <b>e.g. aryan kumar.jpg</b></div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Text -->
-  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
-    <div class="badge"><div class="badge-dot"></div>Feature In Development</div>
-    <h1>Student iCard Management<br><span class="grad">Coming Soon</span></h1>
-    <p class="subtitle">
-      We're building a complete student ID card management system — generate,
-      print and manage identity cards for every student.
-    </p>
-  </div>
+    <div class="readiness" id="readiness">
+      <div class="readiness-top">
+        <div class="readiness-stat">Photos ready: <b id="readyCount">0 / 0</b></div>
+        <div class="readiness-stat" id="readyMissing" style="color:var(--silver)"></div>
+      </div>
+      <div class="readiness-bar"><div class="readiness-fill" id="readyFill" style="width:0%"></div></div>
+    </div>
 
-  <!-- Feature cards -->
-  <div class="features">
-    <div class="feat-card">
-      <div class="feat-ico">🖼️</div>
-      <div>
-        <div class="feat-title">Auto Card Generation</div>
-        <div class="feat-desc">Instantly generate ID cards from student data</div>
-      </div>
+    <div class="select-bar" id="selectBar" style="display:none">
+      <button class="mini-btn" onclick="selectAllStudents(true)">Select all</button>
+      <button class="mini-btn" onclick="selectAllStudents(false)">Clear</button>
+      <div class="select-count"><span id="selCount">0</span> selected</div>
     </div>
-    <div class="feat-card">
-      <div class="feat-ico">🖨️</div>
-      <div>
-        <div class="feat-title">Bulk Print Ready</div>
-        <div class="feat-desc">Print hundreds of cards in one click</div>
-      </div>
+
+    <div class="student-grid" id="studentGrid">
+      <div class="empty-note">Choose a class above to load its students.</div>
     </div>
-    <div class="feat-card">
-      <div class="feat-ico">📷</div>
-      <div>
-        <div class="feat-title">Photo Management</div>
-        <div class="feat-desc">Upload and manage student photos easily</div>
-      </div>
-    </div>
-    <div class="feat-card">
-      <div class="feat-ico">🎨</div>
-      <div>
-        <div class="feat-title">Custom Templates</div>
-        <div class="feat-desc">Design cards to match your institution brand</div>
-      </div>
-    </div>
-    <div class="feat-card">
-      <div class="feat-ico">🔍</div>
-      <div>
-        <div class="feat-title">QR / Barcode</div>
-        <div class="feat-desc">Unique scannable code on every card</div>
-      </div>
-    </div>
-    <div class="feat-card">
-      <div class="feat-ico">📥</div>
-      <div>
-        <div class="feat-title">PDF / Image Export</div>
-        <div class="feat-desc">Download cards in multiple formats</div>
-      </div>
+
+    <div class="btn-row">
+      <button class="btn btn-out" onclick="goStep(1)">← Back</button>
+      <button class="btn btn-gold" onclick="goStep(3)">Continue → Template &amp; Fields</button>
     </div>
   </div>
 
-  <!-- Progress -->
-  <div class="progress-wrap">
-    <div class="progress-top">
-      <span>Development Progress</span>
-      <span>62%</span>
+  <!-- STEP 3 — TEMPLATE & FIELDS -->
+  <div class="card" id="step3" style="display:none">
+    <div class="card-title">Template &amp; Card Fields</div>
+    <div class="card-sub">Pick which details show on the card, then choose a design. Previews update live as you toggle fields. <strong>Click a card to flip</strong> and see its back, click again to select.</div>
+
+    <div class="section-label">Fields on the card · up to 6</div>
+    <div class="fields-grid" id="fieldsGrid"></div>
+    <div class="field-note" style="margin-bottom:24px">Selected: <span id="fieldCount">0</span> / 6 fields</div>
+
+    <div class="section-label">Choose a template · 10 designs</div>
+    <div class="preview-panel" id="tplPreview">
+      <div class="preview-hdr">
+        <div><div class="preview-title" id="tplPTitle">—</div><div style="font-size:13px;color:var(--silver)">Front &amp; Back · Full size preview</div></div>
+        <div class="preview-badge" id="tplPBadge">✦ —</div>
+      </div>
+      <div class="preview-cards" id="tplPCards"></div>
     </div>
-    <div class="pbar"><div class="pfill"></div></div>
+    <div class="tpl-grid" id="tplGrid"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-out" onclick="goStep(2)">← Back</button>
+      <button class="btn btn-gold" onclick="goStep(4)">Continue → Card Options</button>
+    </div>
   </div>
 
-  <!-- Notify -->
-  <div class="notify-row">
-    <input class="ni" type="email" id="eml" placeholder="Your email for launch update">
-    <button class="nb" onclick="doNotify()">Notify Me</button>
+  <!-- STEP 4 — CARD OPTIONS -->
+  <div class="card" id="step4" style="display:none">
+    <div class="card-title">Physical Card Options</div>
+    <div class="card-sub">Configure print quality, strap, and finishing. These affect the final cost. Card count comes straight from the students you selected.</div>
+
+    <div class="count-pill">
+      <div><div class="cp-lbl">Cards to print</div></div>
+      <div class="cp-num" id="optCount">0</div>
+    </div>
+
+    <div class="fg"><label>Card Quality</label>
+      <select id="cardQuality" onchange="updateCost()">
+        <option value="normal">Normal Card Print — ₹15/card</option>
+        <option value="premium">Quality Amazon Staple Card — ₹25/card</option>
+        <option value="private">Premium Private Ltd. Quality — ₹40/card</option>
+      </select>
+    </div>
+
+    <div class="opt-row"><div class="opt-info"><h4>Strap / Lanyard Required?</h4><p>Include neck strap with each card</p></div><input type="checkbox" class="toggle" id="strapToggle" onchange="toggleStrap()"></div>
+    <div class="strap-opts" id="strapOpts">
+      <label>Select Strap Style</label>
+      <div class="strap-chips">
+        <div class="strap-chip on" data-val="S01" onclick="pickStrap(this,'S01')">S01 — Classic Black</div>
+        <div class="strap-chip" data-val="S02" onclick="pickStrap(this,'S02')">S02 — Navy Blue</div>
+        <div class="strap-chip" data-val="S03" onclick="pickStrap(this,'S03')">S03 — Maroon</div>
+        <div class="strap-chip" data-val="S03B" onclick="pickStrap(this,'S03B')">S03B — Black+Gold</div>
+        <div class="strap-chip" data-val="S04" onclick="pickStrap(this,'S04')">S04 — Custom Print</div>
+      </div>
+      <div class="opt-row" style="margin-top:12px;margin-bottom:0"><div class="opt-info"><h4>Print on Strap?</h4><p>Print institution name on strap</p></div><input type="checkbox" class="toggle" id="strapPrintToggle" onchange="toggleStrapPrint()"></div>
+      <div id="strapPrintOpts" style="display:none;margin-top:10px">
+        <div class="fg"><label>Text to print on strap</label><input type="text" id="strapText" placeholder="e.g. Hello School — Moradabad"/></div>
+        <label style="margin-bottom:6px;display:block">Print Position</label>
+        <div class="pos-grid">
+          <button class="pos-btn on" data-pos="center" onclick="pickPos(this,'center')">Default (Center)</button>
+          <button class="pos-btn" data-pos="front" onclick="pickPos(this,'front')">Front Bottom</button>
+          <button class="pos-btn" data-pos="bottom" onclick="pickPos(this,'bottom')">Stand Bottom</button>
+          <button class="pos-btn" data-pos="repeat" onclick="pickPos(this,'repeat')">Repeat Pattern</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="opt-row"><div class="opt-info"><h4>Lamination</h4><p>Matte lamination for durability (+₹3/card)</p></div><input type="checkbox" class="toggle" id="laminationToggle" onchange="updateCost()"></div>
+    <div class="opt-row"><div class="opt-info"><h4>Hole Punch</h4><p>Pre-punched hole at top for strap</p></div><input type="checkbox" class="toggle" id="holeToggle"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-out" onclick="goStep(3)">← Back</button>
+      <button class="btn btn-gold" onclick="goStep(5)">Continue → Preview &amp; Cost</button>
+    </div>
   </div>
 
-  <!-- Stats -->
-  <div class="stats">
-    <div class="stat"><span class="sn">5K+</span><span class="sl">Students</span></div>
-    <div class="sdiv"></div>
-    <div class="stat"><span class="sn">Q2</span><span class="sl">Launch Target</span></div>
-    <div class="sdiv"></div>
-    <div class="stat"><span class="sn">Auto</span><span class="sl">Generation</span></div>
+  <!-- STEP 5 — PREVIEW & COST -->
+  <div class="card" id="step5" style="display:none">
+    <div class="card-title">Preview &amp; Final Cost</div>
+    <div class="card-sub">Review your I-Card design and order details before confirming.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-bottom:28px" id="finalPreview"></div>
+    <div class="cost-card">
+      <div style="font-size:13px;color:var(--silver);margin-bottom:8px">Total Order Cost</div>
+      <div class="cost-amt" id="finalAmt">₹0</div>
+      <div class="cost-sub2" id="finalSub">calculating...</div>
+      <div class="cost-rows" id="costRows"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-out" onclick="goStep(4)">← Edit Options</button>
+      <button class="btn btn-green" onclick="initiatePayment()" id="payBtn">💳 Pay &amp; Place Order</button>
+    </div>
   </div>
 
 </div>
 
-<div class="toast" id="toast">✓ You'll be notified when iCard goes live!</div>
+<!-- Camera capture modal -->
+<div class="cam-overlay" id="camOverlay">
+  <div class="cam-box">
+    <div class="cam-title" id="camTitle">Capture Photo</div>
+    <div class="cam-sub" id="camSub">Center the face inside the circle and capture.</div>
+    <div class="cam-stage">
+      <video id="camVideo" autoplay playsinline></video>
+      <canvas id="camCanvas" style="display:none"></canvas>
+      <div class="cam-guide"></div>
+    </div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn btn-out" onclick="closeCamera()">Cancel</button>
+      <button class="btn btn-gold" id="camShoot" onclick="captureCamera()">📸 Capture &amp; Save</button>
+    </div>
+  </div>
+</div>
 
-<script>
-  const bc = document.getElementById('barcode');
-  [18,12,20,10,24,14,18,8,22,16,20,12,18,24,10,16,20,14,18,22,12,16,8,20,18,14,24,10,16,20].forEach(h => {
-    const b = document.createElement('div');
-    b.className = 'bar';
-    b.style.cssText = `width:${Math.random()>0.5?2:1}px;height:${h}px;`;
-    bc.appendChild(b);
-  });
+<!-- Success overlay -->
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <div class="s-icon">🎉</div>
+    <div class="s-title">Order Placed!</div>
+    <div class="s-sub">Your I-Card order has been received. Our team will process and deliver within 5–7 business days.</div>
+    <div class="s-oid" id="sOrdId">#ORD-000000</div>
+    <button class="btn btn-gold" onclick="document.getElementById('successOverlay').classList.remove('show')">Done</button>
+  </div>
+</div>
 
-  function doNotify() {
-    const e = document.getElementById('eml');
-    const t = document.getElementById('toast');
-    if (!e.value || !e.value.includes('@')) {
-      e.style.borderColor = 'rgba(239,68,68,0.6)';
-      setTimeout(() => e.style.borderColor = '', 1500);
-      return;
-    }
-    e.value = '';
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 3000);
-  }
+<div class="toast" id="toast"></div>
 
-  document.getElementById('eml').addEventListener('keydown', ev => {
-    if (ev.key === 'Enter') doNotify();
-  });
-</script>
+<svg style="display:none"><symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3.5" fill="currentColor" opacity=".7"/><path d="M3 21c0-5 4-8.5 9-8.5s9 3.5 9 8.5" fill="currentColor" opacity=".5"/></symbol></svg>
+
+<!-- Same load order as fee-management.html: shared config + api helpers, then this page's logic -->
+<script src="js/config-v2.js"></script>
+<script src="js/api.js"></script>
+<script src="js/icard-management.js"></script>
 </body>
 </html>
