@@ -3066,10 +3066,16 @@ function calcLiveCheckout(sid, type, isManualEdit) {
   var lateFee = Math.max(0, parseInt(document.getElementById(pfx + '-latefee-' + sid).value) || 0);
   if (isManualEdit) amtInput.dataset.touched = 'true';
 
-  // Auto dues (prev + current), grouped by month
   var autoDues = gatherAutoDues(sid, type);
-  var monthMap = {};
-  autoDues.forEach(function(i) { monthMap[i.monthIndex] = (monthMap[i.monthIndex] || 0) + i.due; });
+var monthMap = {};
+var monthMeta = {};
+autoDues.forEach(function(i) {
+  monthMap[i.monthIndex] = (monthMap[i.monthIndex] || 0) + i.due;
+  if (!monthMeta[i.monthIndex]) monthMeta[i.monthIndex] = { carry: 0, credit: 0, base: 0 };
+  monthMeta[i.monthIndex].carry  += i.previousDue    || 0;
+  monthMeta[i.monthIndex].credit += i.previousCredit || 0;
+  monthMeta[i.monthIndex].base   += i.base           || 0;
+});
 
   // Ticked future months
   var futureMap = {};
@@ -3079,8 +3085,14 @@ function calcLiveCheckout(sid, type, isManualEdit) {
 
   // Combined, oldest-first display rows
   var rows = [];
-  Object.keys(monthMap).forEach(function(mi)  { rows.push({ mi: +mi, due: monthMap[mi],  future: false }); });
-  Object.keys(futureMap).forEach(function(mi) { rows.push({ mi: +mi, due: futureMap[mi], future: true  }); });
+  Object.keys(monthMap).forEach(function(mi) {
+  var meta = monthMeta[+mi] || {};
+  rows.push({ mi: +mi, due: monthMap[mi], future: false, carry: meta.carry || 0, credit: meta.credit || 0, base: meta.base || 0 });
+});
+Object.keys(futureMap).forEach(function(mi) {
+  rows.push({ mi: +mi, due: futureMap[mi], future: true, carry: 0, credit: 0, base: futureMap[mi] });
+});
+
   rows.sort(function(a, b) { return sessionOrderOf(a.mi) - sessionOrderOf(b.mi); });
 
   // Total counts only CHECKED rows (future are always checked; auto can be unticked)
@@ -3092,23 +3104,37 @@ function calcLiveCheckout(sid, type, isManualEdit) {
   var listEl = document.getElementById(pfx + '-items-' + sid);
   if (listEl) {
     listEl.innerHTML = rows.length
-      ? rows.map(function(r) {
-          var excluded = !r.future && isAutoExcluded(sid, type, r.mi);
-          var cb = r.future
-            ? '<span style="width:15px;display:inline-block"></span>'
-            : '<input type="checkbox" ' + (excluded ? '' : 'checked') +
-              ' onchange="toggleAutoDue(\'' + sid + '\',\'' + type + '\',' + r.mi + ',this.checked)"' +
-              ' onclick="event.stopPropagation()" style="width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex-shrink:0">';
-          return '<div style="display:flex;align-items:center;gap:9px;padding:6px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;' + (excluded ? 'opacity:.45' : '') + '">' +
-            cb +
-            '<span style="flex:1;font-weight:700;color:var(--text2)">' + SHORT_MONTHS[r.mi] +
-              (r.future ? ' <span style="font-size:9px;font-weight:800;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:0 5px;margin-left:3px">upcoming</span>' : '') +
-              (excluded ? ' <span style="font-size:9px;font-weight:800;color:var(--text3)">(skipped)</span>' : '') +
-            '</span>' +
-            '<span style="font-family:\'JetBrains Mono\',monospace;font-weight:800' + (excluded ? ';text-decoration:line-through' : '') + '">Rs.' + Number(r.due).toLocaleString('en-IN') + '</span>' +
-          '</div>';
-        }).join('')
-      : '<div style="padding:10px 12px;font-size:12px;color:var(--text3);text-align:center">No dues right now.</div>';
+  ? rows.map(function(r) {
+      var excluded = !r.future && isAutoExcluded(sid, type, r.mi);
+      var cb = r.future
+        ? '<span style="width:15px;display:inline-block"></span>'
+        : '<input type="checkbox" ' + (excluded ? '' : 'checked') +
+          ' onchange="toggleAutoDue(\'' + sid + '\',\'' + type + '\',' + r.mi + ',this.checked)"' +
+          ' onclick="event.stopPropagation()" style="width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex-shrink:0">';
+
+      var subLine = '';
+      if (!r.future && (r.carry > 0 || r.credit > 0)) {
+        subLine = '<div style="padding:1px 12px 5px 40px;font-size:10px;border-bottom:1px solid #f1f5f9">' +
+          (r.carry  > 0 ? '<span style="color:#c2410c;font-weight:700">+Rs.' + Number(r.carry).toLocaleString('en-IN')  + ' carry</span>' : '') +
+          (r.carry  > 0 && r.credit > 0 ? ' &nbsp;·&nbsp; ' : '') +
+          (r.credit > 0 ? '<span style="color:#059669;font-weight:700">−Rs.' + Number(r.credit).toLocaleString('en-IN') + ' advance</span>' : '') +
+          (r.base > 0 && (r.carry > 0 || r.credit > 0) ? '<span style="color:var(--text3);margin-left:6px">base Rs.' + Number(r.base).toLocaleString('en-IN') + '</span>' : '') +
+        '</div>';
+      }
+
+      return '<div>' +
+        '<div style="display:flex;align-items:center;gap:9px;padding:6px 12px;' + (subLine ? '' : 'border-bottom:1px solid #f1f5f9;') + 'font-size:12px;' + (excluded ? 'opacity:.45' : '') + '">' +
+          cb +
+          '<span style="flex:1;font-weight:700;color:var(--text2)">' + SHORT_MONTHS[r.mi] +
+            (r.future ? ' <span style="font-size:9px;font-weight:800;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:0 5px;margin-left:3px">upcoming</span>' : '') +
+            (excluded ? ' <span style="font-size:9px;font-weight:800;color:var(--text3)">(skipped)</span>' : '') +
+          '</span>' +
+          '<span style="font-family:\'JetBrains Mono\',monospace;font-weight:800' + (excluded ? ';text-decoration:line-through' : '') + '">Rs.' + Number(r.due).toLocaleString('en-IN') + '</span>' +
+        '</div>' +
+        subLine +
+      '</div>';
+    }).join('')
+  : '<div style="padding:10px 12px;font-size:12px;color:var(--text3);text-align:center">No dues right now.</div>';
   }
 
   var autoChecked = Object.keys(monthMap).filter(function(mi) { return !isAutoExcluded(sid, type, +mi); }).length;
