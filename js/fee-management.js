@@ -4451,14 +4451,22 @@ function printDetailedReceipt(data) {
     '@media print{body{padding:0;background:#fff}.rcpt{border:none;border-radius:0;max-width:100%}.pabtn{display:none!important}}'
   ].join('');
 
-  // ─── HTML ───────────────────────────────────────────────────
+ // ─── HTML ───────────────────────────────────────────────────
+  // Dynamically check if it's a transport receipt by checking the title AND the items inside
+  var isTransport = (data.receiptType && data.receiptType.toLowerCase().includes('transport')) || 
+                    (data.items && data.items.some(function(item) { 
+                        return (item.feeHead || item.label || '').toLowerCase().includes('transport'); 
+                    }));
+
+  var receiptLabel = isTransport ? 'Transport Receipt' : 'Fee Receipt';
+
   var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' +
     '<title>' + sh(data.receiptType || 'Fee Receipt') + '</title>' +
     '<style>' + css + '</style></head><body>' +
     '<div class="rcpt">' +
       '<div class="head">' +
         '<div><div class="sch-name">' + sh(SCHOOL_NAME) + '</div>' + headerExtra +
-          '<div class="rcpt-label">Fee Receipt</div></div>' +
+          '<div class="rcpt-label">' + receiptLabel + '</div></div>' +
         '<div class="hd-r"><b>' + receiptNo + '</b><br>' + dateStr + '<br>' + timeStr + '</div>' +
       '</div>' +
       '<div class="parts">' + partics + '</div>' +
