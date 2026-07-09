@@ -6572,6 +6572,16 @@ function foRenderTrendChart(trend) {
 
 var duesData = [];
 
+
+// NEW: Helper to format the selected range for printing/PDF
+function getDuesDateRangeLabel() {
+  var fromVal = document.getElementById('dues-from').value;
+  var toVal = document.getElementById('dues-to').value;
+  var fM = fromVal ? MONTHS[parseInt(fromVal.split('-')[1], 10) - 1] : 'Start';
+  var tM = toVal   ? MONTHS[parseInt(toVal.split('-')[1], 10) - 1] : 'End';
+  return fM + ' to ' + tM;
+}
+
 function initDuesTab() {
   var fsSession = document.getElementById('fs-session');
   if (fsSession) document.getElementById('dues-session').innerHTML = fsSession.innerHTML;
@@ -6580,12 +6590,42 @@ function initDuesTab() {
     return '<option value="' + c._id + '">' + escH(c.className) + '</option>';
   }).join('');
   document.getElementById('dues-class').innerHTML = clsHtml;
+
+  // NEW: Auto-set month pickers (default to session start up to current month)
+  var today = new Date();
+  var currentY = today.getFullYear();
+  var currentM = String(today.getMonth() + 1).padStart(2, '0');
+  var startM = String(startMonth + 1).padStart(2, '0');
+  var startY = today.getMonth() < startMonth ? currentY - 1 : currentY;
+
+  if (!document.getElementById('dues-from').value) {
+      document.getElementById('dues-from').value = startY + '-' + startM;
+  }
+  if (!document.getElementById('dues-to').value) {
+      document.getElementById('dues-to').value = currentY + '-' + currentM;
+  }
 }
 
 function loadDuesReport() {
   var session = document.getElementById('dues-session').value;
   var classId = document.getElementById('dues-class').value;
   if (!session) return;
+
+  var fromVal = document.getElementById('dues-from').value;
+  var toVal   = document.getElementById('dues-to').value;
+
+  // FIX 1: Safely default to the actual start and end of the academic session
+  var fromMonthIdx = fromVal ? parseInt(fromVal.split('-')[1], 10) - 1 : startMonth; 
+  var toMonthIdx   = toVal   ? parseInt(toVal.split('-')[1], 10) - 1 : (startMonth + 11) % 12; 
+
+  var fromOrder = sessionOrderOf(fromMonthIdx);
+  var toOrder   = sessionOrderOf(toMonthIdx);
+
+  // FIX 2: Prevent users from searching backward in time
+  if (fromOrder > toOrder) {
+      toast('"From" month cannot be after "To" month', 'error');
+      return;
+  }
 
   var btn = document.getElementById('dues-get-btn');
   setLoading(btn, true);
@@ -6596,18 +6636,15 @@ function loadDuesReport() {
 
   apiGet(url, true)
     .then(function(res) {
-      // Calculate current month's position in the session (e.g., June)
-      var currentMonth = new Date().getMonth();
-      var currentOrder = sessionOrderOf(currentMonth);
-
       duesData = (res.data || []).map(function(s) {
         var regDue = 0;
         var trnDue = 0;
 
-        // Calculate Regular Dues UP TO the current month
+        // Calculate Regular Dues within selected date range
         (s.entries || []).forEach(function(e) {
           (e.months || []).forEach(function(m) {
-            if (sessionOrderOf(m.monthIndex) <= currentOrder) {
+            var mOrder = sessionOrderOf(m.monthIndex);
+            if (mOrder >= fromOrder && mOrder <= toOrder) {
               var base = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
               var eff = m.effectiveDue != null ? m.effectiveDue : base;
               var lf = m.lateFee || 0;
@@ -6618,10 +6655,11 @@ function loadDuesReport() {
           });
         });
 
-        // Calculate Transport Dues UP TO the current month
+        // Calculate Transport Dues within selected date range
         if (s.transport && s.transport.months) {
           s.transport.months.forEach(function(m) {
-            if (sessionOrderOf(m.monthIndex) <= currentOrder) {
+            var mOrder = sessionOrderOf(m.monthIndex);
+            if (mOrder >= fromOrder && mOrder <= toOrder) {
               var base = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
               var eff = m.effectiveDue != null ? m.effectiveDue : base;
               var lf = m.lateFee || 0;
@@ -6828,6 +6866,8 @@ function printDuesPDF() {
   var totalReg = duesData.reduce(function(s, d) { return s + d.calculatedRegDue; }, 0);
   var totalTrn = duesData.reduce(function(s, d) { return s + d.calculatedTrnDue; }, 0);
   var total = duesData.reduce(function(s, d) { return s + d.calculatedTotalDue; }, 0);
+  
+  var rangeLabel = getDuesDateRangeLabel(); // Use the custom range label
 
   var rows = duesData.map(function(s, i) {
     return '<tr>' +
@@ -6857,10 +6897,10 @@ function printDuesPDF() {
 
   var html = '<!DOCTYPE html><html><head><title>Dues Report</title><style>' + css + '</style></head><body>' +
     '<h2>Hello School — Dues & Defaulters Report</h2>' +
-    '<div class="info">Session: <b>' + escH(session) + '</b> &middot; Class: <b>' + escH(clsFilter === 'All Classes' ? 'All' : clsFilter) + '</b> &middot; Up to: <b>' + MONTHS[new Date().getMonth()] + '</b> &middot; Total Defaulters: <b>' + duesData.length + '</b> &middot; Generated: ' + dateStr + '</div>' +
+    '<div class="info">Session: <b>' + escH(session) + '</b> &middot; Class: <b>' + escH(clsFilter === 'All Classes' ? 'All' : clsFilter) + '</b> &middot; Range: <b>' + rangeLabel + '</b> &middot; Total Defaulters: <b>' + duesData.length + '</b> &middot; Generated: ' + dateStr + '</div>' +
     '<table><thead><tr><th>#</th><th>Student Name</th><th>Class</th><th>Father\'s Name</th><th>Contact No.</th><th style="text-align:right">Regular Fee</th><th style="text-align:right">Transport Fee</th><th style="text-align:right">Total Due</th></tr></thead>' +
     '<tbody>' + rows + 
-    '<tr class="tot-row"><td colspan="5">Grand Total Outstanding (up to ' + MONTHS[new Date().getMonth()] + ')</td>' +
+    '<tr class="tot-row"><td colspan="5">Grand Total Outstanding (' + rangeLabel + ')</td>' +
     '<td style="text-align:right;font-size:14px;font-family:monospace;color:#4f46e5">Rs.' + totalReg.toLocaleString('en-IN') + '</td>' +
     '<td style="text-align:right;font-size:14px;font-family:monospace;color:#ea580c">Rs.' + totalTrn.toLocaleString('en-IN') + '</td>' +
     '<td style="text-align:right;font-size:15px;font-family:monospace">Rs.' + total.toLocaleString('en-IN') + '</td></tr>' +
@@ -6878,6 +6918,7 @@ async function exportDuesExcel() {
   var clsSelect = document.getElementById('dues-class');
   var clsFilter = clsSelect.options[clsSelect.selectedIndex].text;
   var session = document.getElementById('dues-session').value;
+  var rangeLabel = getDuesDateRangeLabel();
 
   var workbook = new ExcelJS.Workbook();
   workbook.creator = 'Hello School';
@@ -6907,7 +6948,7 @@ async function exportDuesExcel() {
 
   // Sub Header
   ws.mergeCells('A2:I2');
-  ws.getCell('A2').value = 'Session: ' + session + ' | Class: ' + (clsFilter === 'All Classes' ? 'All' : clsFilter) + ' | Up to: ' + MONTHS[new Date().getMonth()] + ' | Generated: ' + new Date().toLocaleDateString('en-IN');
+  ws.getCell('A2').value = 'Session: ' + session + ' | Class: ' + (clsFilter === 'All Classes' ? 'All' : clsFilter) + ' | Range: ' + rangeLabel + ' | Generated: ' + new Date().toLocaleDateString('en-IN');
   ws.getCell('A2').font = mkFont({ size: 10, color: { argb: 'FF475569' } });
   ws.getCell('A2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
   ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };

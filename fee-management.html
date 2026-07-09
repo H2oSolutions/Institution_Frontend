@@ -890,6 +890,15 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
           </select>
         </div>
         
+        <div class="rpt-filter-group">
+          <label>From Month</label>
+          <input type="month" id="dues-from" class="fm-input" onchange="loadDuesReport()">
+        </div>
+        <div class="rpt-filter-group">
+          <label>To Month</label>
+          <input type="month" id="dues-to" class="fm-input" onchange="loadDuesReport()">
+        </div>
+        
         <div class="search-wrap fm-form-group" style="flex:2; margin-bottom: 0;">
           <label class="fm-label">Search Defaulters</label>
           <span class="search-icon">&#128269;</span>
