@@ -1211,12 +1211,17 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <div id="rpt-recv-strip" class="rpt-recv-strip" style="display:none"></div>
  
     <!-- Action Bar -->
-    <div class="rpt-action-bar">
-      <div class="rpt-total-strip">
-        Showing <span id="rpt-visible-count">0</span> records &nbsp;&middot;&nbsp; Total: <span id="rpt-visible-total">Rs.0</span>
-      </div>
-      <button class="rpt-print-btn" onclick="printCollectionReport()">&#128424; Print / PDF Report</button>
-    </div>
+    <!-- Action Bar -->
+<div class="rpt-action-bar">
+  <div class="rpt-total-strip">
+    Showing <span id="rpt-visible-count">0</span> records &nbsp;&middot;&nbsp; Total: <span id="rpt-visible-total">Rs.0</span>
+  </div>
+
+  <div style="display:flex;gap:10px;">
+    <button class="btn-secondary" onclick="exportCollectionExcel()">&#128196; Export Excel</button>
+    <button class="rpt-print-btn" onclick="printCollectionReport()">&#128424; Print / PDF Report</button>
+  </div>
+</div>
  
     <!-- ── Regular Fee Table ── -->
     <div id="rpt-regular-section" style="display:none;margin-bottom:22px">

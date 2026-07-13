@@ -6252,7 +6252,21 @@ function rptReprintReceipt(paymentId) {
   });
 }
 
-// ── Print Full Collection Report PDF ───────────────────────────
+
+// ── Helper to group rows exactly like the screen UI ──
+function groupReportRows(rows) {
+  var groups = [];
+  var bulkSeen = {};
+  rows.forEach(function(r) {
+    if (r.bulkGroupId) {
+      if (bulkSeen[r.bulkGroupId] !== undefined) { groups[bulkSeen[r.bulkGroupId]].push(r); } 
+      else { bulkSeen[r.bulkGroupId] = groups.length; groups.push([r]); }
+    } else { groups.push([r]); }
+  });
+  return groups;
+}
+
+// ── Print Full Collection Report PDF (FIXED GROUPING) ──
 function printCollectionReport() {
   var from = document.getElementById('rpt-from').value;
   var to   = document.getElementById('rpt-to').value;
@@ -6266,7 +6280,7 @@ function printCollectionReport() {
 
   var dateLabel = from === to ? from : from + ' to ' + to;
 
-  // ── KPI row HTML
+  // KPI & Received By Summaries
   var kpiHtml =
     '<div class="kpi"><div class="kl">Total Collected</div><div class="kv">Rs.' + Number(rptSummary.totalCollected || 0).toLocaleString('en-IN') + '</div></div>' +
     '<div class="kpi"><div class="kl">Cash</div><div class="kv">Rs.' + Number(rptSummary.totalCash || 0).toLocaleString('en-IN') + '</div></div>' +
@@ -6275,7 +6289,6 @@ function printCollectionReport() {
     '<div class="kpi"><div class="kl">Transport</div><div class="kv">Rs.' + Number(rptSummary.totalTransport || 0).toLocaleString('en-IN') + '</div></div>' +
     '<div class="kpi"><div class="kl">Students Paid</div><div class="kv">' + (rptSummary.uniqueStudents || 0) + '</div></div>';
 
-  // ── Received By summary HTML
   var recvList = rptSummary.receivedBySummary || [];
   var recvHtml = recvList.length
     ? '<div class="stitle">Cash Collected By</div>' +
@@ -6287,24 +6300,44 @@ function printCollectionReport() {
       '</tbody></table>'
     : '';
 
-  // ── Regular table HTML
+  // ── Regular table HTML (Now grouped using bulkGroupId!)
   var regHtml = '';
   if (rptFilteredReg.length) {
-    var regRows = rptFilteredReg.map(function(r, i) {
-      var dotColor = RPT_DOT_COLORS[r.feeHeadColor] || '#6366f1';
+    var regGroups = groupReportRows(rptFilteredReg);
+    var regRows = regGroups.map(function(grp, i) {
+      var first = grp[0];
+      var uniqueMonths = [];
+      grp.forEach(function(r) { if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName); });
+      var isBulk = uniqueMonths.length > 1;
+      
+      var seenFHs = {};
+      var uniqueFHList = [];
+      grp.forEach(function(r) {
+          if (!seenFHs[r.feeHeadName]) {
+              seenFHs[r.feeHeadName] = true;
+              uniqueFHList.push({ name: r.feeHeadName, color: r.feeHeadColor });
+          }
+      });
+      var fhHtml = uniqueFHList.map(function(fh) {
+          var dotColor = RPT_DOT_COLORS[fh.color] || '#6366f1';
+          return '<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + ';display:inline-block;flex-shrink:0"></span>' + sh(fh.name) + '</span>';
+      }).join('<br>');
+
+      var monthHtml = uniqueMonths.join(', ');
+      var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+
       return '<tr>' +
         '<td>' + (i + 1) + '</td>' +
-        '<td>' + sh(r.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.paidDate) + '</span></td>' +
-        '<td><b>' + sh(r.studentName) + '</b>' + (r.rollNo && r.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(r.rollNo) + '</span>' : '') + '</td>' +
-        '<td>' + sh(r.className) + '</td>' +
-        '<td>' + sh(r.fatherName) + '</td>' +
-        '<td>' + sh(r.phone !== '-' ? r.phone : '—') + '</td>' +
-        '<td><span style="display:inline-flex;align-items:center;gap:3px"><span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + ';display:inline-block;flex-shrink:0"></span>' + sh(r.feeHeadName) + '</span>' +
-          (r.bulkGroupId ? ' <span style="background:#f5f3ff;color:#7c3aed;border-radius:3px;padding:1px 4px;font-size:8px;font-weight:800">BULK</span>' : '') + '</td>' +
-        '<td>' + sh(r.monthName) + '</td>' +
-        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
-        '<td>' + (r.paymentSource === 'cash' ? 'Cash' : 'Online') + '</td>' +
-        '<td><b>' + sh(r.receivedBy) + '</b></td>' +
+        '<td>' + sh(first.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(first.paidDate) + '</span></td>' +
+        '<td><b>' + sh(first.studentName) + '</b>' + (first.rollNo && first.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(first.rollNo) + '</span>' : '') + '</td>' +
+        '<td>' + sh(first.className) + '</td>' +
+        '<td>' + sh(first.fatherName) + '</td>' +
+        '<td>' + sh(first.phone !== '-' ? first.phone : '—') + '</td>' +
+        '<td>' + fhHtml + (isBulk ? '<br><span style="background:#f5f3ff;color:#7c3aed;border-radius:3px;padding:1px 4px;font-size:8px;font-weight:800;display:inline-block;margin-top:2px">BULK (' + uniqueMonths.length + ' months)</span>' : '') + '</td>' +
+        '<td>' + sh(monthHtml) + '</td>' +
+        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(totalAmt).toLocaleString('en-IN') + '</td>' +
+        '<td>' + (first.paymentSource === 'cash' ? 'Cash' : (first.paymentSource === 'manual_online' ? 'Desk Online' : 'Online')) + '</td>' +
+        '<td><b>' + sh(first.receivedBy) + '</b></td>' +
       '</tr>';
     }).join('');
 
@@ -6315,24 +6348,33 @@ function printCollectionReport() {
       '</tbody></table>';
   }
 
-  // ── Transport table HTML
+  // ── Transport table HTML (Now grouped using bulkGroupId!)
   var trnHtml = '';
   if (rptFilteredTrn.length) {
-    var trnRows = rptFilteredTrn.map(function(r, i) {
+    var trnGroups = groupReportRows(rptFilteredTrn);
+    var trnRows = trnGroups.map(function(grp, i) {
+      var first = grp[0];
+      var uniqueMonths = [];
+      grp.forEach(function(r) { if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName); });
+      var isBulk = uniqueMonths.length > 1;
+      var monthHtml = uniqueMonths.join(', ');
+      var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+
       return '<tr>' +
         '<td>' + (i + 1) + '</td>' +
-        '<td>' + sh(r.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.paidDate) + '</span></td>' +
-        '<td><b>' + sh(r.studentName) + '</b>' + (r.rollNo && r.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(r.rollNo) + '</span>' : '') + '</td>' +
-        '<td>' + sh(r.className) + '</td>' +
-        '<td>' + sh(r.fatherName) + '</td>' +
-        '<td>' + sh(r.phone !== '-' ? r.phone : '—') + '</td>' +
-        '<td>' + sh(r.routeName) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(r.routeFrom) + ' \u2192 ' + sh(r.routeTo) + '</span></td>' +
-        '<td style="font-weight:800;color:#4f46e5">' + sh(r.busNumber) + '</td>' +
-        '<td>' + sh(r.driverName) + '</td>' +
-        '<td>' + sh(r.monthName) + '</td>' +
-        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(r.paidAmount).toLocaleString('en-IN') + '</td>' +
-        '<td>' + (r.paymentSource === 'cash' ? 'Cash' : 'Online') + '</td>' +
-        '<td><b>' + sh(r.receivedBy) + '</b></td>' +
+        '<td>' + sh(first.paidTime) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(first.paidDate) + '</span></td>' +
+        '<td><b>' + sh(first.studentName) + '</b>' + (first.rollNo && first.rollNo !== '-' ? '<br><span style="font-size:9px;color:#94a3b8">Roll ' + sh(first.rollNo) + '</span>' : '') + '</td>' +
+        '<td>' + sh(first.className) + '</td>' +
+        '<td>' + sh(first.fatherName) + '</td>' +
+        '<td>' + sh(first.phone !== '-' ? first.phone : '—') + '</td>' +
+        '<td>' + sh(first.routeName) + '<br><span style="font-size:9px;color:#94a3b8">' + sh(first.routeFrom) + ' \u2192 ' + sh(first.routeTo) + '</span>' + 
+        (isBulk ? '<br><span style="background:#fff7ed;color:#ea580c;border-radius:3px;padding:1px 4px;font-size:8px;font-weight:800;display:inline-block;margin-top:2px">BULK (' + uniqueMonths.length + ' months)</span>' : '') + '</td>' +
+        '<td style="font-weight:800;color:#4f46e5">' + sh(first.busNumber !== '-' ? first.busNumber : '—') + '</td>' +
+        '<td>' + sh(first.driverName !== '-' ? first.driverName : '—') + '</td>' +
+        '<td>' + sh(monthHtml) + '</td>' +
+        '<td style="font-family:monospace;font-weight:700">Rs.' + Number(totalAmt).toLocaleString('en-IN') + '</td>' +
+        '<td>' + (first.paymentSource === 'cash' ? 'Cash' : (first.paymentSource === 'manual_online' ? 'Desk Online' : 'Online')) + '</td>' +
+        '<td><b>' + sh(first.receivedBy) + '</b></td>' +
       '</tr>';
     }).join('');
 
@@ -6393,6 +6435,181 @@ function printCollectionReport() {
   var w = window.open('', '_blank', 'width=1150,height=900');
   if (!w) { toast('Please allow popups to print', 'error'); return; }
   w.document.open(); w.document.write(html); w.document.close();
+}
+
+// ── NEW: Export Collection Report to Excel (Also Grouped Properly!) ──
+async function exportCollectionExcel() {
+  var allVisible = rptFilteredReg.concat(rptFilteredTrn);
+  if (!allVisible.length) { toast('No data to export', 'error'); return; }
+
+  var from = document.getElementById('rpt-from').value;
+  var to   = document.getElementById('rpt-to').value;
+  var dateLabel = from === to ? from : from + ' to ' + to;
+
+  var workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Hello School';
+
+  function mkFont(opts) { return Object.assign({ name: 'Arial' }, opts); }
+  function mkFill(argb) { return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } }; }
+
+  // Function to create a styled sheet
+  function addReportSheet(sheetName, isTransport) {
+    var ws = workbook.addWorksheet(sheetName);
+    var filteredData = isTransport ? rptFilteredTrn : rptFilteredReg;
+    
+    if (!filteredData.length) return ws;
+
+    var columns = [
+      { width: 6 },  // #
+      { width: 18 }, // Time
+      { width: 25 }, // Student Name
+      { width: 12 }, // Roll No
+      { width: 15 }, // Class
+      { width: 25 }, // Father's Name
+      { width: 15 }, // Contact
+      { width: 30 }, // Fee Head / Route
+      { width: 22 }, // Month
+      { width: 15 }, // Amount
+      { width: 15 }, // Mode
+      { width: 20 }, // Received By
+      { width: 25 }  // Remark
+    ];
+    
+    // Inject Bus and Driver columns if it's transport
+    if (isTransport) {
+        columns.splice(8, 0, { width: 16 }); // Bus No
+        columns.splice(9, 0, { width: 22 }); // Driver
+    }
+    ws.columns = columns;
+
+    // Header Blocks
+    ws.mergeCells('A1:' + (isTransport ? 'O1' : 'M1'));
+    var c1 = ws.getCell('A1');
+    c1.value = 'Fee Collection Report — ' + sheetName;
+    c1.font = mkFont({ bold: true, size: 14, color: { argb: 'FFFFFFFF' } });
+    c1.fill = mkFill(isTransport ? 'FFEA580C' : 'FF4F46E5');
+    c1.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 30;
+
+    ws.mergeCells('A2:' + (isTransport ? 'O2' : 'M2'));
+    var c2 = ws.getCell('A2');
+    c2.value = 'Date Range: ' + dateLabel + ' | Session: ' + currentSession + ' | Generated: ' + new Date().toLocaleString('en-IN');
+    c2.font = mkFont({ size: 10, color: { argb: 'FF475569' } });
+    c2.fill = mkFill('FFF8FAFC');
+    c2.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 20;
+
+    var headers = isTransport 
+        ? ['#', 'Date & Time', 'Student Name', 'Roll No', 'Class', 'Father\'s Name', 'Contact', 'Route', 'Bus No.', 'Driver', 'Months', 'Amount (Rs.)', 'Mode', 'Received By', 'Remark']
+        : ['#', 'Date & Time', 'Student Name', 'Roll No', 'Class', 'Father\'s Name', 'Contact', 'Fee Head', 'Months', 'Amount (Rs.)', 'Mode', 'Received By', 'Remark'];
+    
+    ws.getRow(3).values = headers;
+    ws.getRow(3).height = 22;
+    headers.forEach(function(h, i) {
+      var c = ws.getCell(3, i + 1);
+      c.font = mkFont({ bold: true, size: 10, color: { argb: 'FFFFFFFF' } });
+      c.fill = mkFill(isTransport ? 'FFF97316' : 'FF7C3AED');
+      c.alignment = { vertical: 'middle' };
+    });
+
+    var groups = groupReportRows(filteredData);
+    var totalCollected = 0;
+
+    // Build the grouped rows
+    groups.forEach(function(grp, i) {
+      var first = grp[0];
+      var uniqueMonths = [];
+      grp.forEach(function(r) { if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName); });
+      var monthHtml = uniqueMonths.join(', ');
+      
+      var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+      totalCollected += totalAmt;
+
+      var feeHeadText;
+      if (isTransport) {
+          feeHeadText = first.routeName + (uniqueMonths.length > 1 ? ' (BULK)' : '');
+      } else {
+          var seenFHs = {};
+          var uniqueFHList = [];
+          grp.forEach(function(r) {
+              if (!seenFHs[r.feeHeadName]) {
+                  seenFHs[r.feeHeadName] = true;
+                  uniqueFHList.push(r.feeHeadName);
+              }
+          });
+          feeHeadText = uniqueFHList.join(', ') + (uniqueMonths.length > 1 ? ' (BULK)' : '');
+      }
+
+      var modeText = first.paymentSource === 'cash' ? 'Cash' : (first.paymentSource === 'manual_online' ? 'Desk Online' : 'App Online');
+
+      var rowData = isTransport 
+          ? [
+              i + 1,
+              first.paidDate + ' ' + first.paidTime,
+              first.studentName,
+              first.rollNo !== '-' ? first.rollNo : '',
+              first.className,
+              first.fatherName,
+              first.phone !== '-' ? first.phone : '',
+              feeHeadText,
+              first.busNumber !== '-' ? first.busNumber : '',
+              first.driverName !== '-' ? first.driverName : '',
+              monthHtml,
+              totalAmt,
+              modeText,
+              first.receivedBy,
+              first.remark || ''
+          ]
+          : [
+              i + 1,
+              first.paidDate + ' ' + first.paidTime,
+              first.studentName,
+              first.rollNo !== '-' ? first.rollNo : '',
+              first.className,
+              first.fatherName,
+              first.phone !== '-' ? first.phone : '',
+              feeHeadText,
+              monthHtml,
+              totalAmt,
+              modeText,
+              first.receivedBy,
+              first.remark || ''
+          ];
+
+      var row = ws.addRow(rowData);
+      var amtColIdx = isTransport ? 12 : 10;
+      row.getCell(amtColIdx).font = mkFont({ bold: true });
+    });
+
+    // Final Total Row
+    var totRowData = isTransport ? Array(15).fill('') : Array(13).fill('');
+    totRowData[isTransport ? 10 : 8] = 'TOTAL';
+    totRowData[isTransport ? 11 : 9] = totalCollected;
+    var totRow = ws.addRow(totRowData);
+    totRow.height = 24;
+    var finalAmtColIdx = isTransport ? 12 : 10;
+    
+    totRow.getCell(finalAmtColIdx - 1).font = mkFont({ bold: true, size: 11 });
+    totRow.getCell(finalAmtColIdx - 1).alignment = { horizontal: 'right', vertical: 'middle' };
+    totRow.getCell(finalAmtColIdx).font = mkFont({ bold: true, size: 12, color: { argb: isTransport ? 'FFEA580C' : 'FF4F46E5' } });
+    
+    return ws;
+  }
+
+  // Create sheets
+  if (rptFilteredReg.length) addReportSheet('Regular Fees', false);
+  if (rptFilteredTrn.length) addReportSheet('Transport Fees', true);
+
+  // Trigger Download
+  var buffer = await workbook.xlsx.writeBuffer();
+  var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'Fee_Collection_Report_' + from + '_to_' + to + '.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Excel file downloaded');
 }
 
 // ═══════════════════════════════════════════════════════════════
