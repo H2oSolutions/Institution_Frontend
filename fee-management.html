@@ -630,16 +630,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
 /* Fix Dues Report Table Overflow */
 .rpt-table {
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
+    min-width: 1150px;
 }
 .rpt-table th, .rpt-table td {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* Allow more space for names */
-.rpt-table th:nth-child(2), .rpt-table td:nth-child(2) { width: 180px; }
 
 
 
@@ -935,6 +932,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
               <th>Class</th>
               <th>Father's Name</th>
               <th>Contact No.</th>
+              <th>Route</th>
               <th style="text-align:right">Regular Fee</th>
               <th style="text-align:right">Transport Fee</th>
               <th style="text-align:right">Total Due</th>

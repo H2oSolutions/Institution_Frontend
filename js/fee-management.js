@@ -6960,6 +6960,12 @@ function renderDuesTable() {
       '<td><span style="background:#fff7ed;color:#c2410c;border-radius:5px;padding:2px 7px;font-size:11px;font-weight:800">' + escH(clsName) + '</span></td>' +
       '<td style="font-size:12px;font-weight:600">' + escH(s.fatherName || '-') + '</td>' +
       '<td style="font-size:12px;font-weight:700">' + escH(phoneText) + waBtn + '</td>' +
+      '<td style="font-size:12px;font-weight:800;color:#c2410c">' +
+        (s.transport
+          ? escH(s.transport.routeName || '-') +
+            (s.transport.from ? '<div style="font-size:10px;color:var(--text3);font-weight:600">' + escH(s.transport.from) + ' \u2192 ' + escH(s.transport.to || '') + '</div>' : '')
+          : '<span style="color:var(--text3)">No Transport</span>') +
+      '</td>' +
       '<td style="font-family:\'JetBrains Mono\',monospace;font-weight:800;font-size:13px;text-align:right;color:#6366f1">' +
         'Rs.' + s.calculatedRegDue.toLocaleString('en-IN') +
       '</td>' +
@@ -7087,12 +7093,17 @@ function printDuesPDF() {
   var rangeLabel = getDuesDateRangeLabel(); // Use the custom range label
 
   var rows = duesData.map(function(s, i) {
+    var routeText = s.transport ? escH(s.transport.routeName || '-') : '—';
+    var routePath = s.transport && s.transport.from
+      ? escH(s.transport.from) + ' \u2192 ' + escH(s.transport.to || '')
+      : '';
     return '<tr>' +
       '<td>' + (i + 1) + '</td>' +
       '<td><b>' + escH(s.name) + '</b>' + (s.rollNo ? '<br><span style="font-size:9px;color:#64748b">Roll ' + escH(s.rollNo) + '</span>' : '') + '</td>' +
       '<td>' + escH(s.class && s.class.className ? s.class.className : '-') + '</td>' +
       '<td>' + escH(s.fatherName || '-') + '</td>' +
       '<td>' + escH(s.phone || '-') + '</td>' +
+      '<td style="color:#c2410c;font-weight:800;font-size:11px">' + routeText + (routePath ? '<br><span style="font-size:9px;color:#64748b">' + routePath + '</span>' : '') + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-weight:800;color:#4f46e5;font-size:12px">Rs.' + s.calculatedRegDue.toLocaleString('en-IN') + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-weight:800;color:#ea580c;font-size:12px">Rs.' + s.calculatedTrnDue.toLocaleString('en-IN') + '</td>' +
       '<td style="text-align:right;font-family:monospace;font-weight:900;color:#dc2626;font-size:13px">Rs.' + s.calculatedTotalDue.toLocaleString('en-IN') + '</td>' +
@@ -7115,9 +7126,9 @@ function printDuesPDF() {
   var html = '<!DOCTYPE html><html><head><title>Dues Report</title><style>' + css + '</style></head><body>' +
     '<h2>Hello School — Dues & Defaulters Report</h2>' +
     '<div class="info">Session: <b>' + escH(session) + '</b> &middot; Class: <b>' + escH(clsFilter === 'All Classes' ? 'All' : clsFilter) + '</b> &middot; Range: <b>' + rangeLabel + '</b> &middot; Total Defaulters: <b>' + duesData.length + '</b> &middot; Generated: ' + dateStr + '</div>' +
-    '<table><thead><tr><th>#</th><th>Student Name</th><th>Class</th><th>Father\'s Name</th><th>Contact No.</th><th style="text-align:right">Regular Fee</th><th style="text-align:right">Transport Fee</th><th style="text-align:right">Total Due</th></tr></thead>' +
+    '<table><thead><tr><th>#</th><th>Student Name</th><th>Class</th><th>Father\'s Name</th><th>Contact No.</th><th>Route</th><th style="text-align:right">Regular Fee</th><th style="text-align:right">Transport Fee</th><th style="text-align:right">Total Due</th></tr></thead>' +
     '<tbody>' + rows + 
-    '<tr class="tot-row"><td colspan="5">Grand Total Outstanding (' + rangeLabel + ')</td>' +
+    '<tr class="tot-row"><td colspan="6">Grand Total Outstanding (' + rangeLabel + ')</td>' +
     '<td style="text-align:right;font-size:14px;font-family:monospace;color:#4f46e5">Rs.' + totalReg.toLocaleString('en-IN') + '</td>' +
     '<td style="text-align:right;font-size:14px;font-family:monospace;color:#ea580c">Rs.' + totalTrn.toLocaleString('en-IN') + '</td>' +
     '<td style="text-align:right;font-size:15px;font-family:monospace">Rs.' + total.toLocaleString('en-IN') + '</td></tr>' +
@@ -7148,6 +7159,7 @@ async function exportDuesExcel() {
     { width: 15 }, // Class
     { width: 28 }, // Father
     { width: 16 }, // Contact
+    { width: 22 }, // Route
     { width: 16 }, // Reg Due
     { width: 16 }, // Trn Due
     { width: 18 }  // Total Due
@@ -7172,7 +7184,7 @@ async function exportDuesExcel() {
   ws.getRow(2).height = 20;
 
   // Columns
-  var headers = ['#', 'Student Name', 'Roll No', 'Class', "Father's Name", 'Contact No.', 'Regular Fee', 'Transport Fee', 'Total Due (Rs.)'];
+  var headers = ['#', 'Student Name', 'Roll No', 'Class', "Father's Name", 'Contact No.', 'Route', 'Regular Fee', 'Transport Fee', 'Total Due (Rs.)'];
   ws.getRow(3).values = headers;
   ws.getRow(3).height = 22;
   headers.forEach(function(h, i) {
@@ -7188,6 +7200,9 @@ async function exportDuesExcel() {
     totalReg += s.calculatedRegDue;
     totalTrn += s.calculatedTrnDue;
     total += s.calculatedTotalDue;
+    var routeLabel = s.transport
+      ? (s.transport.routeName || '-') + (s.transport.from ? ' (' + s.transport.from + ' \u2192 ' + (s.transport.to || '') + ')' : '')
+      : 'No Transport';
     var row = ws.addRow([
       i + 1,
       s.name,
@@ -7195,6 +7210,7 @@ async function exportDuesExcel() {
       s.class && s.class.className ? s.class.className : '-',
       s.fatherName || '-',
       s.phone || '-',
+      routeLabel,
       s.calculatedRegDue,
       s.calculatedTrnDue,
       s.calculatedTotalDue
@@ -7205,15 +7221,15 @@ async function exportDuesExcel() {
   });
 
   // Footer Total
-  var totalRow = ws.addRow(['', '', '', '', '', 'GRAND TOTAL', totalReg, totalTrn, total]);
+  var totalRow = ws.addRow(['', '', '', '', '', '', 'GRAND TOTAL', totalReg, totalTrn, total]);
   totalRow.height = 24;
-  totalRow.getCell(6).font = mkFont({ bold: true, size: 11 });
-  totalRow.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
-  totalRow.getCell(7).font = mkFont({ bold: true, size: 12, color: { argb: 'FF4F46E5' } });
-  totalRow.getCell(8).font = mkFont({ bold: true, size: 12, color: { argb: 'FFEA580C' } });
-  totalRow.getCell(9).font = mkFont({ bold: true, size: 12, color: { argb: 'FFB91C1C' } });
+  totalRow.getCell(7).font = mkFont({ bold: true, size: 11 });
+  totalRow.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+  totalRow.getCell(8).font = mkFont({ bold: true, size: 12, color: { argb: 'FF4F46E5' } });
+  totalRow.getCell(9).font = mkFont({ bold: true, size: 12, color: { argb: 'FFEA580C' } });
+  totalRow.getCell(10).font = mkFont({ bold: true, size: 12, color: { argb: 'FFB91C1C' } });
   
-  ['7','8','9'].forEach(col => {
+  ['8','9','10'].forEach(col => {
      totalRow.getCell(Number(col)).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
   });
 
