@@ -386,9 +386,11 @@ function openBulkResolver(conflicts) {
   _bulkConflicts = conflicts;
   var rows = conflicts.map(function (c, i) {
     var opts = c.candidates.map(function (s) {
-      return '<option value="' + String(s._id) + '">' + escapeHtml(s.name) +
-             (s.photo || S.photos[String(s._id)] ? ' (has photo)' : '') + '</option>';
-    }).join('');
+  var roll = s.rollNo ? 'Roll ' + s.rollNo : 'No Roll';
+  var father = s.fatherName ? 'S/O ' + s.fatherName : '';
+  return '<option value="' + String(s._id) + '">' + escapeHtml(s.name) + ' — ' + escapeHtml(roll) + ' ' + escapeHtml(father) + 
+         (s.photo || S.photos[String(s._id)] ? ' (has photo)' : '') + '</option>';
+}).join('');
     var label = c.candidates.length > 1
       ? 'Multiple students named like this — pick one:'
       : 'No exact name match — choose the right student:';
@@ -728,59 +730,32 @@ function buildOrderPayload() {
 function initiatePayment() {
   var btn = document.getElementById('payBtn');
   if (selectedCount() === 0) { showToast('No students selected', 'error'); return; }
-  if (selectedCount() < 10) { showToast('Minimum 10 cards per order', 'error'); return; }
+  
 
-  // soft warning if some selected students still have no photo
+  // Soft warning for missing photos
   var missing = Object.values(S.selected).filter(function (s) { return !(S.photos[String(s._id)] || s.photo); });
-  if (missing.length && !confirm(missing.length + ' selected student(s) have no photo. Place the order anyway? Those cards will print without a photo.')) return;
+  if (missing.length && !confirm(missing.length + ' selected student(s) have no photo. Place the order anyway?')) return;
 
-  btn.disabled = true; btn.textContent = 'Creating order...';
+  btn.disabled = true; 
+  btn.textContent = 'Submitting Test Order...';
+  
   var payload = buildOrderPayload();
 
-  apiPost(API_ICARD_CREATE_PAY, payload, true)
+  // Hit the direct order endpoint instead of the Razorpay one
+  apiPost(API_BASE_URL + '/icard/order', payload, true)
     .then(function (data) {
-      if (!data || !data.success) throw new Error((data && data.message) || 'Failed to create order');
-      var d = data.data;
-      var options = {
-        key: d.key,
-        amount: d.amount,
-        currency: 'INR',
-        name: 'HelloSchool',
-        description: 'I-Card Order — ' + d.orderId,
-        order_id: d.razorpayOrderId,
-        prefill: { name: d.institutionName },
-        theme: { color: '#d4a843' },
-        handler: function (response) {
-          btn.textContent = 'Verifying payment...';
-          apiPost(API_ICARD_VERIFY_PAY, {
-            razorpayOrderId:   response.razorpay_order_id,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature,
-            iCardOrderId:      d.iCardOrderId,
-          }, true)
-            .then(function (v) {
-              if (v && v.success) {
-                document.getElementById('sOrdId').textContent = '#' + d.orderId;
-                document.getElementById('successOverlay').classList.add('show');
-              } else {
-                showToast((v && v.message) || 'Payment verification failed', 'error');
-              }
-            })
-            .catch(function () { showToast('Verification error. Contact support with order: ' + d.orderId, 'error'); })
-            .finally(function () { btn.disabled = false; btn.textContent = '💳 Pay & Place Order'; });
-        },
-        modal: {
-          ondismiss: function () {
-            showToast('Payment cancelled', 'error');
-            btn.disabled = false; btn.textContent = '💳 Pay & Place Order';
-          }
-        }
-      };
-      new Razorpay(options).open();
+      if (!data || !data.success) throw new Error((data && data.message) || 'Failed to place order');
+      
+      // Show success screen instantly
+      document.getElementById('sOrdId').textContent = '#' + data.data.orderId;
+      document.getElementById('successOverlay').classList.add('show');
     })
     .catch(function (e) {
       showToast(e.message || 'Something went wrong. Please try again.', 'error');
-      btn.disabled = false; btn.textContent = '💳 Pay & Place Order';
+    })
+    .finally(function () { 
+      btn.disabled = false; 
+      btn.textContent = '💳 Place Order (Test Mode)'; 
     });
 }
 
@@ -810,3 +785,12 @@ function escapeAttr(s) {
 
 // boot
 goStep(1);
+
+function finishOrder() {
+  // Hide the popup
+  var overlay = document.getElementById('successOverlay');
+  if (overlay) overlay.classList.remove('show');
+  
+  // Reload the page to clear the wizard and start fresh
+  window.location.reload(); 
+}
