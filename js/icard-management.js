@@ -186,13 +186,22 @@ function studentTile(s) {
   var id = String(s._id);
   var sel = !!S.selected[id];
   var photo = S.photos[id] || s.photo || null;
+  
+  // If there's a photo, make the avatar clickable to view it large
   var avatar = photo
-    ? '<img src="' + escapeAttr(photo) + '" alt="">'
+    ? '<img src="' + escapeAttr(photo) + '" alt="" onclick="viewPhoto(\'' + escapeAttr(photo) + '\', \'' + escapeHtml(s.name) + '\'); event.stopPropagation();" style="cursor:zoom-in;">'
     : '<span class="ph-none">👤</span>';
+    
   var badge = photo
     ? '<span class="ph-badge ok">✓</span>'
     : '<span class="ph-badge no">!</span>';
+    
   var roll = s.rollNo ? 'Roll ' + escapeHtml(s.rollNo) : 'No roll no.';
+
+  // Add the Trash button ONLY if a photo exists
+  var trashBtn = photo 
+    ? '<button class="photo-act" onclick="clearPhoto(\'' + id + '\')" style="flex:0.4; border-color:var(--danger); color:var(--danger);">🗑️</button>' 
+    : '';
 
   return '<div class="stu-tile ' + (sel ? 'sel' : '') + '" id="stu-' + id + '">' +
       '<div class="stu-tile-top" onclick="toggleStudent(\'' + id + '\')">' +
@@ -208,6 +217,7 @@ function studentTile(s) {
           '<input type="file" accept="image/*" onchange="onPhotoFile(\'' + id + '\', this)">' +
         '</label>' +
         '<button class="photo-act" onclick="openCamera(\'' + id + '\')">📸 Camera</button>' +
+        trashBtn +
       '</div>' +
     '</div>';
 }
@@ -809,4 +819,46 @@ function finishOrder() {
   
   // Reload the page to clear the wizard and start fresh
   window.location.reload(); 
+}
+
+
+// Function to delete the photo from the UI and state
+function clearPhoto(studentId) {
+  if(!confirm("Are you sure you want to completely remove this student's photo?")) return;
+  
+  // Show a loading toast so the user knows it's working
+  showToast('Deleting photo...', '');
+
+  // Call your backend to delete the photo permanently
+  apiPost(API_BASE_URL + '/icard/photo/delete', { studentId: studentId }, true)
+    .then(function (r) {
+      if (!r || !r.success) throw new Error((r && r.message) || 'Failed to delete photo');
+      
+      // If the backend successfully deleted it, clear it from our frontend memory
+      delete S.photos[studentId];
+      var s = S.students.find(function (x) { return String(x._id) === studentId; });
+      if (s) s.photo = null;
+      
+      showToast('Photo permanently deleted', 'success');
+      renderStudents(); // Refresh the grid to show the red missing icon
+    })
+    .catch(function (e) {
+      showToast(e.message || 'Error deleting photo', 'error');
+    });
+}
+
+// Function to pop up the large photo viewer
+function viewPhoto(url, name) {
+  var html = 
+    '<div class="cam-overlay show" id="photoViewer" style="z-index:1005;" onclick="this.remove()">' +
+      '<div class="cam-box" style="padding:15px; max-width:500px;" onclick="event.stopPropagation()">' +
+        '<div class="cam-title" style="margin-bottom:15px;">' + escapeHtml(name) + '</div>' +
+        '<img src="' + escapeAttr(url) + '" style="width:100%; border-radius:10px; max-height:60vh; object-fit:contain; background:#000;">' +
+        '<button class="btn btn-out" style="margin-top:15px; width:100%;" onclick="document.getElementById(\'photoViewer\').remove()">Close Preview</button>' +
+      '</div>' +
+    '</div>';
+    
+  var wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstChild);
 }
