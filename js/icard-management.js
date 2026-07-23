@@ -478,19 +478,35 @@ function uploadAsset(input, kind) {
 //  CAMERA CAPTURE
 // ════════════════════════════════════════════════════════════════════
 var _camStream = null, _camStudentId = null;
+var _camFacing = 'environment'; // Default to back camera
 
 function openCamera(studentId) {
   _camStudentId = studentId;
   var s = S.students.find(function (x) { return String(x._id) === studentId; });
   document.getElementById('camTitle').textContent = 'Capture — ' + ((s && s.name) || 'Student');
   document.getElementById('camOverlay').classList.add('show');
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 720, height: 720 }, audio: false })
+
+  // If a camera is already running (like when they click flip), stop it first
+  if (_camStream) { 
+    _camStream.getTracks().forEach(function(t) { t.stop(); }); 
+  }
+
+  // Use our _camFacing variable
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _camFacing }, width: 720, height: 720 }, audio: false })
     .then(function (stream) {
       _camStream = stream;
       var v = document.getElementById('camVideo');
       v.srcObject = stream; v.play();
     })
     .catch(function () { showToast('Could not access camera. Allow permission or upload a file.', 'error'); closeCamera(); });
+}
+
+// Function to flip the camera
+function flipCamera() {
+  _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
+  if (_camStudentId) {
+    openCamera(_camStudentId); // Instantly restart the camera with the new lens
+  }
 }
 
 function captureCamera() {
