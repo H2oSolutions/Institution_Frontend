@@ -563,72 +563,140 @@ function togField(k) {
 }
 
 // ── Card design renderers (unchanged from the design demo) ──
-function gf(max) {
-  var keys = S.fields.length ? S.fields.slice(0, max) : ['name', 'class', 'dob', 'rollno'];
-  return keys.map(function (k) { return [FL[k] || k, SAMPLE[k] || '—']; });
+// ── Card design renderers (Upgraded for Real Data) ──
+
+// Helper to pull the right real data from a student object based on the selected field
+function getStudentFieldValue(s, key) {
+  if (key === 'name') return escapeHtml(s.name || '-');
+  if (key === 'class') {
+    var c = S.classes.find(function(x) { return String(x._id) === String(S.selectedClassId); });
+    return c ? escapeHtml(c.className) : '-';
+  }
+  if (key === 'rollno') return escapeHtml(s.rollNo || '-');
+  if (key === 'dob') {
+    if (!s.dateOfBirth) return '-';
+    var d = new Date(s.dateOfBirth);
+    return isNaN(d) ? '-' : d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+  if (key === 'father') return escapeHtml(s.fatherName || '-');
+  if (key === 'mother') return escapeHtml(s.motherName || '-');
+  if (key === 'phone') return escapeHtml(s.mobileNo || '-');
+  if (key === 'address') {
+    var adr = s.simpleAddress || (s.address && s.address.fullAddress) || '-';
+    return escapeHtml(adr);
+  }
+  if (key === 'bloodgroup') return escapeHtml(s.bloodGroup || '-');
+  if (key === 'admno') return escapeHtml(s.admissionNo || '-');
+  if (key === 'transport') return escapeHtml(s.transportRoute || '-');
+  if (key === 'session') return escapeHtml(s.academicYear || '-');
+  return '-';
 }
+
+// Generate field rows (uses real student if provided, else dummy sample)
+function gf(max, student = null) {
+  var keys = S.fields.length ? S.fields.slice(0, max) : ['name', 'class', 'dob', 'rollno'];
+  return keys.map(function (k) { 
+    var val = student ? getStudentFieldValue(student, k) : (SAMPLE[k] || '—');
+    return [FL[k] || k, val]; 
+  });
+}
+
 function rows(cls, fkc, fvc, pairs) {
   return pairs.map(function (p) {
     return '<div class="' + cls + '"><span class="' + fkc + '">' + p[0] + '</span><span class="' + fvc + '">' + p[1] + '</span></div>';
-  }).join('');
-}
-function bt() {
-  return 'If found, please return to:<br><b>' + S.name + '</b><br>Contact: +91 98765 43210<br><br>This card is institutional property.<br>Report any loss immediately.';
+  });
 }
 
-// Real uploaded logo if present, else the school's initial.
+// Beautifully centered backside text
+function bt() {
+  var phone = document.getElementById('instPhone').value || '+91 98765 43210';
+  var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
+  
+  return '<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; text-align:center; padding: 4% 2%;">' +
+           '<div style="font-size:3px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:1px;">If found, please return to:</div>' +
+           '<div style="font-size:4.5px; font-weight:700; color:#0f172a; margin-bottom:1px; line-height:1.2;">' + escapeHtml(S.name) + '</div>' +
+           '<div style="font-size:3px; color:#334155; line-height:1.3; margin-bottom:2px; max-width:90%;">' + escapeHtml(addr) + '</div>' +
+           '<div style="font-size:3.2px; font-weight:600; color:#0f172a; margin-bottom:4px;">📞 ' + escapeHtml(phone) + '</div>' +
+           '<div style="width:15%; height:1px; background:#cbd5e1; margin-bottom:4px;"></div>' +
+           '<div style="font-size:2.8px; color:#94a3b8; line-height:1.4;">This card is institutional property.<br>Report any loss immediately.</div>' +
+         '</div>';
+}
+
 function logoMark() {
   if (S.logoUrl) return '<img src="' + escapeAttr(S.logoUrl) + '" alt="">';
   var ch = (S.name && S.name.trim()[0]) ? S.name.trim()[0].toUpperCase() : 'S';
   return ch;
 }
- 
-function front(id) {
-  var sc = S.name, nm = 'Aryan Kumar', p = gf(4);
-  if (id === 'T01') return '<div class="t01-i"><div class="hd"><div class="lg">' + logoMark() + '</div><div class="sn">' + sc + '</div></div><div class="bd"><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div><div class="ft"></div></div>';
-  if (id === 'T02') return '<div class="t02-i"><div class="crest">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T03') return '<div class="t03-i"><div class="hd"><div class="sn">' + sc + '</div><div class="tag">Student Identity Card</div></div><div class="bd"><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div><div class="ft"></div></div>';
-  if (id === 'T04') return '<div class="t04-i"><div class="rail"></div><div class="sn">' + sc + '</div><div class="tag">Identity Card</div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div><div class="role">Student</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T05') return '<div class="t05-band"><div class="lg">' + logoMark() + '</div><div class="vsn">' + sc + '</div></div><div class="t05-i"><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T06') return '<div class="t06-i"><div class="hd"><div class="sn">' + sc + '</div></div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T07') return '<div class="t07-i"><div class="hd"><div class="sn">' + sc + '</div><div class="idtag">ID</div></div><div class="bd"><div class="ph">' + PSvg + '</div><div class="col"><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div></div></div>';
-  if (id === 'T08') return '<div class="t08-i"><div class="hd"><div class="sn">' + sc + '</div></div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T09') return '<div class="t09-i"><div class="top"><div class="sn">' + sc + '</div></div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div>';
-  if (id === 'T10') return '<div class="t10-frame"><div class="t10-i"><div class="mono">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + PSvg + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p) + '</div></div>';
+
+function front(id, stu = null) {
+  var sc = S.name;
+  var nm = stu ? escapeHtml(stu.name) : 'Aryan Kumar';
+  
+  // ✅ FIX 1: Changed from 4 to 6 so it shows all selected fields!
+  var p = gf(6, stu); 
+  
+  var photoUrl = stu ? (S.photos[stu._id] || stu.photo) : null;
+  var photoHtml = photoUrl 
+    ? '<img src="' + escapeAttr(photoUrl) + '" alt="" style="width:100%; height:100%; object-fit:cover;">' 
+    : PSvg;
+
+  if (id === 'T01') return '<div class="t01-i"><div class="hd"><div class="lg">' + logoMark() + '</div><div class="sn">' + sc + '</div></div><div class="bd"><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div><div class="ft"></div></div>';
+  if (id === 'T02') return '<div class="t02-i"><div class="crest">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T03') return '<div class="t03-i"><div class="hd"><div class="sn">' + sc + '</div><div class="tag">Student Identity Card</div></div><div class="bd"><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div><div class="ft"></div></div>';
+  if (id === 'T04') return '<div class="t04-i"><div class="rail"></div><div class="sn">' + sc + '</div><div class="tag">Identity Card</div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div><div class="role">Student</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T05') return '<div class="t05-band"><div class="lg">' + logoMark() + '</div><div class="vsn">' + sc + '</div></div><div class="t05-i"><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T06') return '<div class="t06-i"><div class="hd"><div class="sn">' + sc + '</div></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T07') return '<div class="t07-i"><div class="hd"><div class="sn">' + sc + '</div><div class="idtag">ID</div></div><div class="bd"><div class="ph">' + photoHtml + '</div><div class="col"><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div></div></div>';
+  if (id === 'T08') return '<div class="t08-i"><div class="hd"><div class="sn">' + sc + '</div></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T09') return '<div class="t09-i"><div class="top"><div class="sn">' + sc + '</div></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
+  if (id === 'T10') return '<div class="t10-frame"><div class="t10-i"><div class="mono">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div></div>';
   return '';
 }
  
-function back(id) {
+// ✅ FIX 2: Added Flexbox centering for the backside text
+function back(id, stu = null) {
   var b = bt();
-  // T10 keeps its framed elegant back (no header bar / footer bar)
-  if (id === 'T10') return '<div class="t10b-i"><div class="bttl">Information</div><div class="bbd"><div class="btx">' + b + '</div><div class="sig">Authorised Signatory</div></div></div>';
+  var sig = S.signatureUrl 
+    ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="max-height:10px; max-width:80%; display:block; margin: 0 auto 1px;"><div style="font-size:2.2px;">Authorised Signatory</div>' 
+    : 'Authorised Signatory';
+
+  if (id === 'T10') return '<div class="t10b-i"><div class="bttl">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div></div>';
+  
   var lc = id.toLowerCase();
-  return '<div class="' + lc + 'b-i"><div class="bhd"><div class="bttl">Information</div></div><div class="bbd"><div class="btx">' + b + '</div><div class="sig">Authorised Signatory</div></div><div class="ft"></div></div>';
+  return '<div class="' + lc + 'b-i"><div class="bhd"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div><div class="ft"></div></div>';
 }
 
+// ✅ FIX 3: Inject real selected student into Step 3 previews!
 function renderGrid() {
   var grid = document.getElementById('tplGrid');
   if (!grid) return;
   grid.innerHTML = '';
+  
+  // Grab the first selected student to show in the preview grid!
+  var selectedArr = Object.values(S.selected);
+  var sampleStudent = selectedArr.length > 0 ? selectedArr[0] : null;
+
   TPLS.forEach(function (t) {
     var sc = document.createElement('div');
     sc.className = 'tpl-scene' + (S.tpl === t.id ? ' picked' : '');
     sc.id = 'tsc-' + t.id;
     sc.innerHTML = '<div class="tpl-flip-hint">flip ⟳</div><div class="tpl-check">✓</div>' +
       '<div class="tpl-body" id="tb-' + t.id + '">' +
-        '<div class="tpl-face"><div class="icard ' + t.id.toLowerCase() + '">' + front(t.id) + '</div></div>' +
-        '<div class="tpl-backface"><div class="icard ' + t.id.toLowerCase() + 'b">' + back(t.id) + '</div></div>' +
+        '<div class="tpl-face"><div class="icard ' + t.id.toLowerCase() + '">' + front(t.id, sampleStudent) + '</div></div>' +
+        '<div class="tpl-backface"><div class="icard ' + t.id.toLowerCase() + 'b">' + back(t.id, sampleStudent) + '</div></div>' +
       '</div>' +
       '<div class="tpl-label"><div class="tpl-label-name">' + t.name + '</div><div class="tpl-label-desc">' + t.desc + '</div></div>';
     sc.addEventListener('click', function () { clickTpl(t.id, t.name); });
     grid.appendChild(sc);
   });
-  // keep the big preview in sync if one is already open
+  
   if (document.getElementById('tplPreview').classList.contains('show')) {
     var cur = TPLS.find(function (t) { return t.id === S.tpl; });
     if (cur) updateTplPreview(cur.id, cur.name);
   }
 }
+
+
 
 function clickTpl(id, name) {
   var sc = document.getElementById('tsc-' + id);
@@ -647,9 +715,14 @@ function clickTpl(id, name) {
 function updateTplPreview(id, name) {
   document.getElementById('tplPTitle').textContent = name;
   document.getElementById('tplPBadge').textContent = '✦ ' + id + ' Selected';
+  
+  // Grab the first selected student to show in the big preview!
+  var selectedArr = Object.values(S.selected);
+  var sampleStudent = selectedArr.length > 0 ? selectedArr[0] : null;
+
   document.getElementById('tplPCards').innerHTML =
-    '<div class="preview-item"><div class="preview-item-label">Front Side</div><div class="preview-card-big"><div class="icard ' + id.toLowerCase() + '">' + front(id) + '</div></div></div>' +
-    '<div class="preview-item"><div class="preview-item-label">Back Side</div><div class="preview-card-big"><div class="icard ' + id.toLowerCase() + 'b">' + back(id) + '</div></div></div>';
+    '<div class="preview-item"><div class="preview-item-label">Front Side</div><div class="preview-card-big"><div class="icard ' + id.toLowerCase() + '">' + front(id, sampleStudent) + '</div></div></div>' +
+    '<div class="preview-item"><div class="preview-item-label">Back Side</div><div class="preview-card-big"><div class="icard ' + id.toLowerCase() + 'b">' + back(id, sampleStudent) + '</div></div></div>';
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -674,11 +747,54 @@ function pickPos(el, v) {
 // ════════════════════════════════════════════════════════════════════
 //  STEP 5 — PREVIEW + COST
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  STEP 5 — REAL DATA PREVIEW SLIDER & COST
+// ════════════════════════════════════════════════════════════════════
+
 function renderFinal() {
+  var selectedArr = Object.values(S.selected);
+  if (selectedArr.length === 0) return;
+
+  // Initialize preview index
+  if (S.previewIndex === undefined) S.previewIndex = 0;
+  
+  // Wrap around logic
+  if (S.previewIndex >= selectedArr.length) S.previewIndex = 0;
+  if (S.previewIndex < 0) S.previewIndex = selectedArr.length - 1;
+
+  var student = selectedArr[S.previewIndex];
   var id = S.tpl;
-  document.getElementById('finalPreview').innerHTML =
-    '<div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;text-align:center">Front Side</div><div style="max-width:200px;margin:0 auto"><div class="icard ' + id.toLowerCase() + '" style="border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)">' + front(id) + '</div></div></div>' +
-    '<div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;text-align:center">Back Side</div><div style="max-width:200px;margin:0 auto"><div class="icard ' + id.toLowerCase() + 'b" style="border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)">' + back(id) + '</div></div></div>';
+
+  var html = `
+    <div style="text-align:center; margin-bottom: 18px; display:flex; align-items:center; justify-content:center; gap:16px;">
+      <button class="btn btn-out" style="padding: 6px 14px;" onclick="S.previewIndex--; renderFinal();">❮</button>
+      <div>
+        <div style="font-size:12px; color:var(--silver); font-weight:600; font-family:'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">
+          Preview ${S.previewIndex + 1} of ${selectedArr.length}
+        </div>
+        <div style="font-family:'Playfair Display',serif; font-size:18px; color:var(--gold);">
+          ${escapeHtml(student.name)}
+        </div>
+      </div>
+      <button class="btn btn-out" style="padding: 6px 14px;" onclick="S.previewIndex++; renderFinal();">❯</button>
+    </div>
+
+    <div style="display:flex; justify-content:center; gap:32px; flex-wrap:wrap;">
+       <div>
+         <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;text-align:center">Front Side</div>
+         <div style="width:190px; margin:0 auto"><div class="icard ${id.toLowerCase()}" style="border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)">${front(id, student)}</div></div>
+       </div>
+       <div>
+         <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;text-align:center">Back Side</div>
+         <div style="width:190px; margin:0 auto"><div class="icard ${id.toLowerCase()}b" style="border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)">${back(id, student)}</div></div>
+       </div>
+    </div>
+  `;
+  
+  document.getElementById('finalPreview').innerHTML = html;
+  
+  // Update grid template inside the HTML directly for the final view
+  document.getElementById('finalPreview').style.display = 'block';
 }
 
 function pricing() {
