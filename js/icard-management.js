@@ -82,6 +82,8 @@ var TPLS = [
   {id:'T08',name:'Azure Curve',       desc:'Curved header'},
   {id:'T09',name:'Crimson Split',     desc:'Bold split'},
   {id:'T10',name:'Heritage Bordered', desc:'Premium framed'},
+  {id:'T11',name:'Horizontal Wave',   desc:'Landscape · side photo'},
+  {id:'T12',name:'Gold & Pink Elegant', desc:'Portrait · curved accents'}, 
 ];
 // Sample data used only to render the design previews (real data fills at print time).
 var SAMPLE = {name:'Aryan Kumar',class:'X — A',rollno:'2024101',dob:'15/08/2010',father:'Raj Kumar',mother:'Priya Kumar',phone:'98765-43210',address:'Moradabad, UP',bloodgroup:'O+',admno:'HS-4521',transport:'Route 3',session:'2025-26'};
@@ -650,6 +652,75 @@ function front(id, stu = null) {
   if (id === 'T08') return '<div class="t08-i"><div class="hd"><div class="sn">' + sc + '</div></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
   if (id === 'T09') return '<div class="t09-i"><div class="top"><div class="sn">' + sc + '</div></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div>';
   if (id === 'T10') return '<div class="t10-frame"><div class="t10-i"><div class="mono">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div></div>';
+  
+ if (id === 'T11') {
+    var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
+    var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';
+    
+    // Custom loop to generate the Black Label -> Red Colon -> Blue Value
+    var customFields = p.map(function(pair) {
+      return '<div class="t11-fr"><div class="t11-fk">' + pair[0] + '</div><div class="t11-fc">:</div><div class="t11-fv">' + pair[1] + '</div></div>';
+    }).join('');
+
+    return '<div class="t11-i">' +
+             '<div class="t11-hd"></div>' +
+             '<div class="t11-w1"></div>' +
+             '<div class="t11-w2"></div>' +
+             '<div class="t11-logo">' + logoMark() + '</div>' +
+             '<div class="t11-sn">' + sc + '</div>' +
+             '<div class="t11-sess">SESSION:- ' + escapeHtml(sess) + '</div>' +
+             '<div class="t11-ph">' + photoHtml + '</div>' +
+             '<div class="t11-sig">' + sig + 'Principal\'s Sign.</div>' +
+             '<div class="t11-fields">' + customFields + '</div>' +
+             '<div class="t11-fbw"></div>' +
+           '</div>';
+  }
+
+  if (id === 'T12') {
+    var sc = escapeHtml(S.name);
+    var nm = stu ? escapeHtml(stu.name) : 'SUMAN SINGH';
+    var cls = stu ? getStudentFieldValue(stu, 'class') : 'IX';
+    var regNo = stu ? (stu.admissionNo || stu.rollNo || '12345') : '12345';
+    var phone = document.getElementById('instPhone').value || '12345 12345';
+    var email = 'schoolid@mail.com';
+    
+    // Exact mapping: Icon -> Label -> Hyphen (-) -> Value
+    var pSliced = p.slice(0, 4);
+    var customFields = pSliced.map(function(pair) {
+      return '<div class="t12-fr"><div class="t12-f-ic"></div><div class="t12-fk">' + pair[0] + '</div><div class="t12-fc">-</div><div class="t12-fv">' + pair[1] + '</div></div>';
+    }).join('');
+
+    return '<div class="t12-i">' +
+             '<div class="t12-bg-curve"></div>' +
+             '<div class="t12-blob-tl"></div>' +
+             '<div class="t12-diag-tr"></div>' +
+             '<div class="t12-logo-wrap">' + logoMark() + '</div>' +
+             '<div class="t12-ph-wrap">' +
+   '<div class="t12-ph-ring"></div>' +
+   '<div class="t12-ph-circle">' + photoHtml + '</div>' +
+   '<svg class="t12-arc-svg" viewBox="0 0 100 100">' +
+     '<path id="t12arc" d="M 78,12 A 46,46 0 0 1 78,88" fill="none" stroke="#c81d5e" stroke-width="14" stroke-linecap="round"/>' +
+     '<text font-size="7" fill="#fff" font-weight="700" font-family="Arial, sans-serif">' +
+       '<textPath href="#t12arc" startOffset="50%" text-anchor="middle">Reg. No. ' + escapeHtml(regNo) + '</textPath>' +
+     '</text>' +
+   '</svg>' +
+ '</div>' +
+             '<div class="t12-name-sec">' +
+               '<div class="t12-name">' + nm + '</div>' +
+               '<div class="t12-cls">CLASS - ' + escapeHtml(cls) + '</div>' +
+             '</div>' +
+             '<div class="t12-fields">' + customFields + '</div>' +
+             '<div class="t12-bot-ph"><span>📞</span> ' + escapeHtml(phone) + '</div>' +
+             '<div class="t12-bot-line"></div>' +
+             '<div class="t12-school">' + sc + '</div>' +
+             '<div class="t12-bot-contact">' +
+               '<div class="t12-bc-row"><span class="t12-bc-ic">☎</span> ' + escapeHtml(phone) + '</div>' +
+               '<div class="t12-bc-row"><span class="t12-bc-ic">✉</span> ' + escapeHtml(email) + '</div>' +
+             '</div>' +
+             '<div class="t12-bot-diag"></div>' +
+           '</div>';
+  }
+  
   return '';
 }
  
@@ -662,6 +733,59 @@ function back(id, stu = null) {
 
   if (id === 'T10') return '<div class="t10b-i"><div class="bttl">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div></div>';
   
+  if (id === 'T11') {
+    // 👇 FIXED: Changed the fallback to generic placeholders!
+    var phone = document.getElementById('instPhone').value || '+91 98765 43210';
+    var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
+    var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
+    
+    var sc = escapeHtml(S.name); 
+    
+    return '<div class="t11b-i">' +
+             '<div class="t11-bg-img"></div>' +
+             '<div class="t11-hd"></div>' +
+             '<div class="t11-w1"></div>' +
+             '<div class="t11-w2"></div>' +
+             '<div class="t11-logo">' + logoMark() + '</div>' +
+             '<div class="t11-sn">' + sc + '</div>' +
+             '<div class="t11-info">' +
+               '<div class="t11-line"><div class="t11-icon">📍</div>' + escapeHtml(addr) + '</div>' +
+               '<div class="t11-line"><div class="t11-icon">📞</div>' + escapeHtml(phone) + '</div>' +
+             '</div>' +
+             '<div class="t11-bbw1"></div>' +
+             '<div class="t11-bbw2"></div>' +
+             '<div class="t11-sig-b">' + sig2 + 'Principal\'s Sign.</div>' +
+           '</div>';
+  }
+
+  if (id === 'T12') {
+    var sc = escapeHtml(S.name);
+    var city = document.getElementById('instCity').value || 'Here City, State';
+    
+    return '<div class="t12b-i">' +
+             '<div class="t12-bg-curve"></div>' +
+             '<div class="t12b-blob-tl"></div>' +
+             '<div class="t12b-blob-br"></div>' +
+             '<div class="t12b-diag-tr"></div>' +
+             '<div class="t12b-diag-bl"></div>' +
+             '<div class="t12b-logo-wrap">' + logoMark() + '</div>' +
+             '<div class="t12b-sn-wrap">' +
+   '<div class="t12b-sn">' + sc + '</div>' +
+   (city ? '<div class="t12b-sub">' + escapeHtml(city) + '</div>' : '') +
+ '</div>' +
+             '<div class="t12b-sep"></div>' +
+             '<div class="t12b-inst-wrap">' +
+               '<div class="t12b-inst-title">INSTRUCTIONS</div>' +
+               '<div class="t12b-inst-list">' +
+  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">This ID card is the property of ' + sc + '.</div></div>' +
+  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It must be carried daily by the student.</div></div>' +
+  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It should be shown on demand.</div></div>' +
+  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">In case of loss, inform the school immediately.</div></div>' +
+'</div>' +
+             '</div>' +
+           '</div>';
+  }
+
   var lc = id.toLowerCase();
   return '<div class="' + lc + 'b-i"><div class="bhd"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div><div class="ft"></div></div>';
 }
