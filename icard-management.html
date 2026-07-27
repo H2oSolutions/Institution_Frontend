@@ -446,6 +446,42 @@ input[type=file]{display:none;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 .toast.error{border-color:var(--danger);color:#fca5a5;}.toast.success{border-color:var(--success);color:#86efac;}
 @media(max-width:600px){.grid2{grid-template-columns:1fr;}.tpl-grid{grid-template-columns:repeat(3,1fr);}.fields-grid{grid-template-columns:repeat(2,1fr);}.hdr{padding:14px 18px;}.main{padding:0 14px;}.student-grid{grid-template-columns:1fr 1fr;}}
+/* ════ PDF & PRINT LAYOUT STYLES ════ */
+#printArea { display: none; }
+
+@media print {
+  @page { size: A4; margin: 15mm; }
+  body { background: #fff; }
+  
+  /* Hide the entire web app UI during print */
+  .hdr, .stepper-wrap, .main, .toast, .cam-overlay, .success-overlay { display: none !important; }
+  
+  /* Show only the print area */
+  #printArea { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: #fff; z-index: 9999; }
+  
+  /* Grid to fit cards neatly on A4 paper */
+  .print-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15mm 10mm; width: 100%; align-items: start; }
+  .print-student-row { display: flex; gap: 5mm; break-inside: avoid; justify-content: center; }
+  
+  /* Force exact real-world physical ID card sizes (CR80) */
+  .print-student-row .icard { 
+    width: 54mm !important; 
+    height: 86mm !important; 
+    border-radius: 3mm; 
+    box-shadow: none !important; 
+    border: 0.5px dashed #ccc; /* Tiny cut-line guide */
+  }
+  
+  /* Auto-flip dimensions for Landscape templates like T11 */
+  .print-student-row .icard.t11, .print-student-row .icard.t11b { 
+    width: 86mm !important; 
+    height: 54mm !important; 
+  }
+  
+  /* Force the browser to print background colors and SVGs */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+
 </style>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
@@ -631,6 +667,7 @@ input[type=file]{display:none;}
     </div>
     <div class="btn-row">
       <button class="btn btn-out" onclick="goStep(4)">← Edit Options</button>
+      <button class="btn btn-out" onclick="printCards()" style="border-color: var(--teal); color: var(--teal);">📄 Print / Save PDF</button>
       <button class="btn btn-green" onclick="initiatePayment()" id="payBtn">💳 Pay &amp; Place Order</button>
     </div>
   </div>
@@ -672,6 +709,9 @@ input[type=file]{display:none;}
 <div class="toast" id="toast"></div>
 
 <svg style="display:none"><symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3.5" fill="currentColor" opacity=".7"/><path d="M3 21c0-5 4-8.5 9-8.5s9 3.5 9 8.5" fill="currentColor" opacity=".5"/></symbol></svg>
+
+<!-- Hidden container strictly used for PDF printing -->
+<div id="printArea"></div>
 
 <!-- Same load order as fee-management.html: shared config + api helpers, then this page's logic -->
 <script src="js/config-v2.js"></script>

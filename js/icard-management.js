@@ -36,6 +36,7 @@ var API_ICARD_PHOTO_UPLOAD = API_BASE_URL + '/icard/photo/upload';   // multipar
 var API_ICARD_ASSET_UPLOAD = API_BASE_URL + '/icard/asset/upload';   // multipart: file + kind
 var API_ICARD_CREATE_PAY   = API_BASE_URL + '/icard/create-payment';
 var API_ICARD_VERIFY_PAY   = API_BASE_URL + '/icard/verify-payment';
+var API_ICARD_DRAFT        = API_BASE_URL + '/icard/draft';         
 
 // ── State ──────────────────────────────────────────────────────────
 var S = {
@@ -1049,14 +1050,79 @@ function escapeAttr(s) {
   } catch (e) {}
 })();
 
-// boot
-goStep(1);
+
+
+// ════════════════════════════════════════════════════════════════════
+//  CLOUD DRAFT SYNC & BOOT
+// ════════════════════════════════════════════════════════════════════
+var lastSavedDraftStr = "";
+
+function syncDraftToCloud() {
+  if (S.classes.length === 0 && Object.keys(S.selected).length === 0 && !S.logoUrl && !S.signatureUrl) return;
+
+  var draftPayload = {
+    state: S,
+    inputs: {
+      instName: document.getElementById('instName').value,
+      instPhone: document.getElementById('instPhone').value,
+      instCity: document.getElementById('instCity').value,
+      instAddr: document.getElementById('instAddr').value
+    }
+  };
+
+  var currentStr = JSON.stringify(draftPayload);
+  if (currentStr === lastSavedDraftStr) return;
+
+  apiPost(API_ICARD_DRAFT, { draftState: draftPayload }, true)
+    .then(function(r) { if (r && r.success) lastSavedDraftStr = currentStr; });
+}
+
+// Auto-save silently every 15 seconds
+setInterval(syncDraftToCloud, 15000);
+
+// BOOT LOGIC (Check for cloud draft)
+apiGet(API_ICARD_DRAFT, true).then(function(r) {
+  if (r && r.success && r.data) {
+    if (confirm('You have an unsaved I-Card order draft from a previous session.\n\nWould you like to resume it?')) {
+      S = r.data.state;
+      lastSavedDraftStr = JSON.stringify(r.data);
+
+      // Restore Step 1 text inputs
+      if (r.data.inputs) {
+        if(r.data.inputs.instName) document.getElementById('instName').value = r.data.inputs.instName;
+        if(r.data.inputs.instPhone) document.getElementById('instPhone').value = r.data.inputs.instPhone;
+        if(r.data.inputs.instCity) document.getElementById('instCity').value = r.data.inputs.instCity;
+        if(r.data.inputs.instAddr) document.getElementById('instAddr').value = r.data.inputs.instAddr;
+      }
+
+      // Restore Step 1 image previews
+      if (S.logoUrl) { document.getElementById('logoPrev').src = S.logoUrl; document.getElementById('logoPrev').style.display='block'; document.getElementById('logoIcon').style.display='none'; }
+      if (S.signatureUrl) { document.getElementById('sigPrev').src = S.signatureUrl; document.getElementById('sigPrev').style.display='block'; document.getElementById('sigIcon').style.display='none'; }
+
+      goStep(S.step);
+      if (S.step >= 2) { loadClasses(); renderStudents(); }
+      if (S.step >= 3) { renderFields(); renderGrid(); }
+
+      showToast('Draft restored from cloud ☁️', 'success');
+    } else {
+      apiPost(API_ICARD_DRAFT, { draftState: null }, true);
+      goStep(1);
+    }
+  } else {
+    goStep(1);
+  }
+}).catch(function() {
+  goStep(1);
+});
 
 function finishOrder() {
+  // Clear the draft from the cloud because the order is complete!
+  apiPost(API_ICARD_DRAFT, { draftState: null }, true); 
+
   // Hide the popup
   var overlay = document.getElementById('successOverlay');
   if (overlay) overlay.classList.remove('show');
-  
+
   // Reload the page to clear the wizard and start fresh
   window.location.reload(); 
 }
@@ -1101,4 +1167,49 @@ function viewPhoto(url, name) {
   var wrap = document.createElement('div');
   wrap.innerHTML = html;
   document.body.appendChild(wrap.firstChild);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  PRINT / PDF GENERATION
+// ════════════════════════════════════════════════════════════════════
+function printCards() {
+  var selectedArr = Object.values(S.selected);
+  if (selectedArr.length === 0) {
+    showToast('No students selected to print.', 'error');
+    return;
+  }
+
+  var id = S.tpl; // Current selected template
+  
+  // Build the print layout
+  var printHtml = '<div style="text-align:center; font-family:\'DM Sans\',sans-serif; margin-bottom:10mm;">' +
+                  '<h2 style="margin:0; font-size:24px; color:#111;">' + escapeHtml(S.name) + ' — ID Cards</h2>' +
+                  '<p style="margin:5px 0 0; color:#555; font-size:14px;">Total Cards: ' + selectedArr.length + ' | Template: ' + id + '</p>' +
+                  '</div>';
+                  
+  printHtml += '<div class="print-grid">';
+  
+  // Loop through every selected student and generate their front and back
+  selectedArr.forEach(function(student) {
+    var f = front(id, student);
+    var b = back(id, student);
+    
+    printHtml += 
+      '<div class="print-student-row">' +
+        '<div class="icard ' + id.toLowerCase() + '">' + f + '</div>' +
+        '<div class="icard ' + id.toLowerCase() + 'b">' + b + '</div>' +
+      '</div>';
+  });
+  
+  printHtml += '</div>';
+  
+  // Inject into the hidden print area
+  document.getElementById('printArea').innerHTML = printHtml;
+  
+  showToast('Preparing PDF...', 'success');
+  
+  // Slight delay to ensure all photos and SVGs render in the hidden div before printing
+  setTimeout(function() {
+    window.print();
+  }, 500);
 }
