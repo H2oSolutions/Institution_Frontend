@@ -49,6 +49,7 @@ var S = {
   name:        'Hello School',
   logoUrl:     null,
   signatureUrl:null,
+  schoolBgUrl: null,
   classes:     [],
   selectedClassId: '',
   studentsByClass: {},   // classId -> [students]
@@ -465,9 +466,13 @@ function applyBulkResolver() {
 function uploadAsset(input, kind) {
   var file = input.files && input.files[0];
   if (!file) return;
-  var prevId = kind === 'logo' ? 'logoPrev' : 'sigPrev';
-  var iconId = kind === 'logo' ? 'logoIcon' : 'sigIcon';
-  compressImage(file, 400, 0.9)
+  var prevId = kind === 'logo' ? 'logoPrev' : kind === 'signature' ? 'sigPrev' : 'schoolBgPrev';
+  var iconId = kind === 'logo' ? 'logoIcon' : kind === 'signature' ? 'sigIcon' : 'schoolBgIcon';
+  
+  // Keep school background images slightly higher resolution for print
+  var size = kind === 'schoolBg' ? 800 : 400; 
+
+  compressImage(file, size, 0.85)
     .then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, kind + '.jpg');
@@ -477,11 +482,18 @@ function uploadAsset(input, kind) {
     .then(function (r) {
       if (!r || !r.success) throw new Error((r && r.message) || 'Upload failed');
       var url = r.data.url;
-      if (kind === 'logo') S.logoUrl = url; else S.signatureUrl = url;
+      if (kind === 'logo') S.logoUrl = url; 
+      else if (kind === 'signature') S.signatureUrl = url;
+      else if (kind === 'schoolBg') S.schoolBgUrl = url;
+      
       var img = document.getElementById(prevId);
       img.src = url; img.style.display = 'block';
       document.getElementById(iconId).style.display = 'none';
-      showToast((kind === 'logo' ? 'Logo' : 'Signature') + ' uploaded', 'success');
+      
+      var toastMsg = kind === 'logo' ? 'Logo' : kind === 'signature' ? 'Signature' : 'School Photo';
+      showToast(toastMsg + ' uploaded', 'success');
+      
+      if (S.step >= 3) renderGrid(); // Update preview instantly!
     })
     .catch(function (e) { showToast(e.message || 'Upload failed', 'error'); })
     .finally(function () { input.value = ''; });
@@ -725,25 +737,30 @@ function front(id, stu = null) {
   return '';
 }
  
-// ✅ FIX 2: Added Flexbox centering for the backside text
 function back(id, stu = null) {
   var b = bt();
   var sig = S.signatureUrl 
     ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="max-height:10px; max-width:80%; display:block; margin: 0 auto 1px;"><div style="font-size:2.2px;">Authorised Signatory</div>' 
     : 'Authorised Signatory';
 
-  if (id === 'T10') return '<div class="t10b-i"><div class="bttl">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div></div>';
+  // 🪄 The Elegant Watermark 
+  var wm = S.schoolBgUrl 
+    ? '<div style="position:absolute; inset:0; background:url(\'' + escapeAttr(S.schoolBgUrl) + '\') center/cover; opacity:0.12; mix-blend-mode:multiply; pointer-events:none; z-index:0;"></div>' 
+    : '';
+
+  if (id === 'T10') return '<div class="t10b-i">' + wm + '<div class="bttl" style="position:relative; z-index:2;">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div></div>';
   
   if (id === 'T11') {
-    // 👇 FIXED: Changed the fallback to generic placeholders!
     var phone = document.getElementById('instPhone').value || '+91 98765 43210';
     var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
     var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
-    
     var sc = escapeHtml(S.name); 
     
+    // T11 specifically uses the bg image at 25% opacity as its core design
+    var bgImg = S.schoolBgUrl ? escapeAttr(S.schoolBgUrl) : 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=800&auto=format&fit=crop';
+    
     return '<div class="t11b-i">' +
-             '<div class="t11-bg-img"></div>' +
+             '<div class="t11-bg-img" style="background: url(\'' + bgImg + '\') center/cover;"></div>' +
              '<div class="t11-hd"></div>' +
              '<div class="t11-w1"></div>' +
              '<div class="t11-w2"></div>' +
@@ -765,30 +782,31 @@ function back(id, stu = null) {
     
     return '<div class="t12b-i">' +
              '<div class="t12-bg-curve"></div>' +
+             wm + 
              '<div class="t12b-blob-tl"></div>' +
              '<div class="t12b-blob-br"></div>' +
              '<div class="t12b-diag-tr"></div>' +
              '<div class="t12b-diag-bl"></div>' +
              '<div class="t12b-logo-wrap">' + logoMark() + '</div>' +
              '<div class="t12b-sn-wrap">' +
-   '<div class="t12b-sn">' + sc + '</div>' +
-   (city ? '<div class="t12b-sub">' + escapeHtml(city) + '</div>' : '') +
- '</div>' +
+               '<div class="t12b-sn">' + sc + '</div>' +
+               (city ? '<div class="t12b-sub">' + escapeHtml(city) + '</div>' : '') +
+             '</div>' +
              '<div class="t12b-sep"></div>' +
-             '<div class="t12b-inst-wrap">' +
+             '<div class="t12b-inst-wrap" style="position:relative; z-index:2;">' +
                '<div class="t12b-inst-title">INSTRUCTIONS</div>' +
                '<div class="t12b-inst-list">' +
-  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">This ID card is the property of ' + sc + '.</div></div>' +
-  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It must be carried daily by the student.</div></div>' +
-  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It should be shown on demand.</div></div>' +
-  '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">In case of loss, inform the school immediately.</div></div>' +
-'</div>' +
+                 '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">This ID card is the property of ' + sc + '.</div></div>' +
+                 '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It must be carried daily by the student.</div></div>' +
+                 '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">It should be shown on demand.</div></div>' +
+                 '<div class="t12b-inst-row"><div class="t12b-inst-dot"></div><div class="t12b-inst-text">In case of loss, inform the school immediately.</div></div>' +
+               '</div>' +
              '</div>' +
            '</div>';
   }
 
   var lc = id.toLowerCase();
-  return '<div class="' + lc + 'b-i"><div class="bhd"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div><div class="ft"></div></div>';
+  return '<div class="' + lc + 'b-i">' + wm + '<div class="bhd" style="position:relative; z-index:2;"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div><div class="ft" style="position:relative; z-index:2;"></div></div>';
 }
 
 // ✅ FIX 3: Inject real selected student into Step 3 previews!
@@ -974,6 +992,7 @@ function buildOrderPayload() {
     institutionAddr:  document.getElementById('instAddr').value || null,
     logoUrl:          S.logoUrl,
     signatureUrl:     S.signatureUrl,
+    schoolBgUrl:      S.schoolBgUrl,
     classId:          S.selectedClassId,
     selectedFields:   S.fields,
     templateId:       S.tpl,
@@ -1098,9 +1117,11 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       // Restore Step 1 image previews
       if (S.logoUrl) { document.getElementById('logoPrev').src = S.logoUrl; document.getElementById('logoPrev').style.display='block'; document.getElementById('logoIcon').style.display='none'; }
       if (S.signatureUrl) { document.getElementById('sigPrev').src = S.signatureUrl; document.getElementById('sigPrev').style.display='block'; document.getElementById('sigIcon').style.display='none'; }
+      if (S.schoolBgUrl) { document.getElementById('schoolBgPrev').src = S.schoolBgUrl; document.getElementById('schoolBgPrev').style.display='block'; document.getElementById('schoolBgIcon').style.display='none'; } 
 
       goStep(S.step);
       if (S.step >= 2) { loadClasses(); renderStudents(); }
+
       if (S.step >= 3) { renderFields(); renderGrid(); }
 
       showToast('Draft restored from cloud ☁️', 'success');

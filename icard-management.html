@@ -36,6 +36,7 @@ input[type=text],input[type=number],select,textarea{width:100%;background:var(--
 input:focus,select:focus,textarea:focus{border-color:var(--gold);}
 select option{background:var(--panel);}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px;}
 .fg{margin-bottom:18px;}
 .fg.full{grid-column:1/-1;}
 .upload-box{border:2px dashed var(--rim);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
@@ -517,6 +518,9 @@ input[type=file]{display:none;}
       <div class="fg full"><label>Institution Name *</label><input type="text" id="instName" placeholder="e.g. St. Mary's Public School" oninput="syncName()"/></div>
       <div class="fg"><label>Contact Number</label><input type="text" id="instPhone" placeholder="+91 98765 43210"/></div>
       <div class="fg"><label>City</label><input type="text" id="instCity" placeholder="e.g. Moradabad, UP"/></div>
+    </div>
+    
+    <div class="grid3">
       <div class="fg">
         <label>School Logo</label>
         <div class="upload-box" id="logoBox">
@@ -533,6 +537,17 @@ input[type=file]{display:none;}
           <div id="sigIcon"><div class="upload-icon">✍️</div><div class="upload-text">Upload signature image<br><b>White background preferred</b></div></div>
         </div>
       </div>
+      <div class="fg">
+        <label>School Building Photo</label>
+        <div class="upload-box" id="schoolBgBox">
+          <input type="file" id="schoolBgInput" accept="image/*" onchange="uploadAsset(this,'schoolBg')">
+          <img class="upload-preview" id="schoolBgPrev" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+          <div id="schoolBgIcon"><div class="upload-icon">🏢</div><div class="upload-text">Upload school photo<br><b>Appears as elegant card watermark</b></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2">
       <div class="fg full"><label>Address (printed on back)</label><textarea id="instAddr" rows="2" placeholder="Full address of your institution..." style="resize:none"></textarea></div>
     </div>
     <div class="btn-row"><button class="btn btn-gold" onclick="goStep(2)">Continue → Students &amp; Photos</button></div>
