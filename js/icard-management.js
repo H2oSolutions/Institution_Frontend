@@ -1,35 +1,4 @@
 'use strict';
-/* ════════════════════════════════════════════════════════════════════
-   I-CARD MANAGEMENT — front-end logic
-   Splits out of icard-management.html. Relies on config-v2.js + api.js
-   being loaded first (same pattern as fee-management.js), which provide:
-     • API_BASE_URL, API_ENDPOINTS  (config-v2.js)
-     • apiGet(url, true) / apiPost(url, body, true)  (api.js — auto-attach token)
-   ────────────────────────────────────────────────────────────────────
-   BACKEND ENDPOINTS THIS FILE EXPECTS  (to build next):
-
-   1. Students / classes  → REUSE existing endpoints
-        GET  API_ENDPOINTS.CLASSES                              → { data:[{_id,className,...}] }
-        GET  API_ENDPOINTS.STUDENTS + '?classId=&limit=9999'    → { data:[student...], pagination }
-        (student objects already carry: name, fatherName, motherName, rollNo,
-         classId{className}, mobileNo, dateOfBirth, bloodGroup, photo)
-
-   2. Photo upload → Cloudflare R2 (server-proxied multipart; mirrors the
-      site's existing Cloudinary pattern — no R2 bucket CORS needed)
-        POST API_ICARD_PHOTO_UPLOAD   multipart: file=<jpeg>, studentId
-             → { data:{ studentId, photoUrl } }  // backend stores in R2 + sets Student.photo
-
-   3. Asset upload (logo / signature) — same multipart flow, institution-scoped
-        POST API_ICARD_ASSET_UPLOAD   multipart: file=<jpeg>, kind=logo|signature
-             → { data:{ kind, url } }
-
-   4. Order + payment (this money is H2O's own revenue → plain Razorpay
-      checkout, NO Route transfer / no 0.25% split)
-        POST API_ICARD_CREATE_PAY  { ...orderPayload }
-             → { data:{ razorpayOrderId, amount, key, iCardOrderId, orderId, institutionName } }
-        POST API_ICARD_VERIFY_PAY  { razorpayOrderId, razorpayPaymentId, razorpaySignature, iCardOrderId }
-             → { success }
-   ════════════════════════════════════════════════════════════════════ */
 
 // ── Endpoints (built off API_BASE_URL, same convention as fee-management.js) ──
 var API_ICARD_PHOTO_UPLOAD = API_BASE_URL + '/icard/photo/upload';   // multipart: file + studentId
@@ -50,6 +19,10 @@ var S = {
   logoUrl:     null,
   signatureUrl:null,
   schoolBgUrl: null,
+  bgOpacity:   12,    
+  bgZoom:      200,  
+  bgPosX:      50,     
+  bgPosY:      50,
   classes:     [],
   selectedClassId: '',
   studentsByClass: {},   // classId -> [students]
@@ -87,7 +60,6 @@ var TPLS = [
   {id:'T11',name:'Horizontal Wave',   desc:'Landscape · side photo'},
   {id:'T12',name:'Gold & Pink Elegant', desc:'Portrait · curved accents'}, 
 ];
-// Sample data used only to render the design previews (real data fills at print time).
 var SAMPLE = {name:'Aryan Kumar',class:'X — A',rollno:'2024101',dob:'15/08/2010',father:'Raj Kumar',mother:'Priya Kumar',phone:'98765-43210',address:'Moradabad, UP',bloodgroup:'O+',admno:'HS-4521',transport:'Route 3',session:'2025-26'};
 var FL = {name:'Name',class:'Class',rollno:'Roll No',dob:'DOB',father:'Father',mother:'Mother',phone:'Phone',address:'Address',bloodgroup:'Blood',admno:'Adm No',transport:'Route',session:'Session'};
 var PSvg = '<svg style="width:55%;opacity:.6" viewBox="0 0 24 24"><use href="#person"/></svg>';
@@ -96,7 +68,6 @@ var PSvg = '<svg style="width:55%;opacity:.6" viewBox="0 0 24 24"><use href="#pe
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════════════
 function goStep(n) {
-  // Guard: can't go past student selection with nothing selected
   if (n >= 3 && Object.keys(S.selected).length === 0) {
     showToast('Select at least one student first', 'error');
     return;
@@ -158,11 +129,9 @@ function onClassChange() {
   if (S.studentsByClass[cid]) { S.students = S.studentsByClass[cid]; renderStudents(); return; }
 
   grid.innerHTML = '<div class="empty-note">⏳ Loading students…</div>';
-  // Reuse the existing students endpoint (same query shape fee-management.js uses)
   apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(cid) + '&limit=9999&isActive=true', true)
     .then(function (r) {
       var list = r.data || [];
-      // mirror any existing photo into S.photos so the readiness count is correct
       list.forEach(function (s) { if (s.photo) S.photos[String(s._id)] = s.photo; });
       S.studentsByClass[cid] = list;
       S.students = list;
@@ -191,7 +160,6 @@ function studentTile(s) {
   var sel = !!S.selected[id];
   var photo = S.photos[id] || s.photo || null;
   
-  // If there's a photo, make the avatar clickable to view it large
   var avatar = photo
     ? '<img src="' + escapeAttr(photo) + '" alt="" onclick="viewPhoto(\'' + escapeAttr(photo) + '\', \'' + escapeHtml(s.name) + '\'); event.stopPropagation();" style="cursor:zoom-in;">'
     : '<span class="ph-none">👤</span>';
@@ -202,7 +170,6 @@ function studentTile(s) {
     
   var roll = s.rollNo ? 'Roll ' + escapeHtml(s.rollNo) : 'No roll no.';
 
-  // Add the Trash button ONLY if a photo exists
   var trashBtn = photo 
     ? '<button class="photo-act" onclick="clearPhoto(\'' + id + '\')" style="flex:0.4; border-color:var(--danger); color:var(--danger);">🗑️</button>' 
     : '';
@@ -251,7 +218,6 @@ function selectedCount() { return Object.keys(S.selected).length; }
 
 function updateSelectionUi() {
   document.getElementById('selCount').textContent = selectedCount();
-  // Readiness = how many SELECTED students have a photo
   var sel = Object.values(S.selected);
   var ready = document.getElementById('readiness');
   if (!sel.length) { ready.classList.remove('show'); return; }
@@ -272,8 +238,9 @@ function updateSelectionUi() {
   }
 }
 
-// ── Photo: client compress + square-crop (solves R2 having no transforms) ──
-function compressImage(file, size, quality) {
+// ── Photo Compression ──
+// 🚨 BUG FIX INCLUDED HERE: Supports preserving aspect ratio for backgrounds!
+function compressImage(file, size, quality, preserveAspect) {
   size = size || 600; quality = quality || 0.82;
   return new Promise(function (resolve, reject) {
     var reader = new FileReader();
@@ -281,11 +248,25 @@ function compressImage(file, size, quality) {
     reader.onload = function (e) { img.src = e.target.result; };
     reader.onerror = function () { reject(new Error('Could not read file')); };
     img.onload = function () {
-      var side = Math.min(img.width, img.height);
-      var sx = (img.width - side) / 2, sy = (img.height - side) / 2;
       var canvas = document.createElement('canvas');
-      canvas.width = size; canvas.height = size;
-      canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      var ctx = canvas.getContext('2d');
+
+      if (preserveAspect) {
+        // Keep original proportions (for building photos)
+        var ratio = Math.min(size / img.width, size / img.height);
+        var targetW = img.width * ratio;
+        var targetH = img.height * ratio;
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+      } else {
+        // Square Crop (for student photos and logos)
+        var side = Math.min(img.width, img.height);
+        var sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        canvas.width = size; canvas.height = size;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+      }
+
       canvas.toBlob(function (b) { b ? resolve(b) : reject(new Error('Compression failed')); }, 'image/jpeg', quality);
     };
     img.onerror = function () { reject(new Error('Invalid image')); };
@@ -293,7 +274,6 @@ function compressImage(file, size, quality) {
   });
 }
 
-// ── Core photo upload: compressed blob → our API (multipart) → R2 → Student.photo ──
 function uploadStudentPhoto(studentId, blob) {
   var fd = new FormData();
   fd.append('file', blob, studentId + '.jpg');
@@ -319,7 +299,6 @@ function applyPhoto(studentId, url) {
   S.photos[studentId] = url;
   var s = S.students.find(function (x) { return String(x._id) === studentId; });
   if (s) s.photo = url;
-  // refresh just this tile's avatar
   var tile = document.getElementById('stu-' + studentId);
   if (tile) {
     var av = tile.querySelector('.stu-avatar');
@@ -333,12 +312,6 @@ function setPhotoBusy(studentId, on) {
   if (up) up.classList.toggle('busy', on);
 }
 
-// ── Bulk: files named by roll number → auto-match within current class ──
-// ── Bulk: files named by STUDENT NAME → auto-match within current class ──
-//    (roll numbers aren't stored, so we match on name)
-//    e.g.  "aryan kumar.jpg" → student named "Aryan Kumar"
-//    If a filename matches 2+ students (duplicate names) or 0 students,
-//    it goes to a conflict resolver instead of silently guessing.
 function normName(s) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
@@ -348,29 +321,26 @@ function bulkPhotoMatch(files) {
   var arr = Array.prototype.slice.call(files || []);
   if (!arr.length) return;
 
-  // Build name → [students] map (array, because names can repeat)
   var byName = {};
   S.students.forEach(function (s) {
     var k = normName(s.name);
     (byName[k] = byName[k] || []).push(s);
   });
 
-  var autoJobs = [];      // { file, student } — unique matches, upload directly
-  var conflicts = [];     // { file, candidates[] } — ambiguous or no match
+  var autoJobs = [];      
+  var conflicts = [];     
 
   arr.forEach(function (file) {
-    var base = file.name.replace(/\.[^.]+$/, '');   // strip extension
+    var base = file.name.replace(/\.[^.]+$/, '');   
     var key = normName(base);
     var matches = byName[key] || [];
     if (matches.length === 1) {
       autoJobs.push({ file: file, student: matches[0] });
     } else {
-      // 0 matches OR 2+ matches → let the user decide
       conflicts.push({ file: file, candidates: matches.length ? matches : S.students });
     }
   });
 
-  // Upload the clean unique matches right away
   if (autoJobs.length) {
     showToast('Uploading ' + autoJobs.length + ' matched photo' + (autoJobs.length > 1 ? 's' : '') + '…', 'success');
     var jobs = autoJobs.map(function (j) {
@@ -378,14 +348,13 @@ function bulkPhotoMatch(files) {
       return compressImage(j.file)
         .then(function (blob) { return uploadStudentPhoto(id, blob); })
         .then(function (url) { applyPhoto(id, url); })
-        .catch(function () {/* swallow; surfaced below */});
+        .catch(function () {});
     });
     Promise.all(jobs).then(function () {
       showToast(autoJobs.length + ' photo(s) matched by name', 'success');
     });
   }
 
-  // Anything ambiguous → open the resolver
   if (conflicts.length) {
     openBulkResolver(conflicts);
   } else if (!autoJobs.length) {
@@ -394,7 +363,6 @@ function bulkPhotoMatch(files) {
   document.getElementById('bulkInput').value = '';
 }
 
-// ── Conflict resolver: one row per unresolved file, pick the right student ──
 var _bulkConflicts = [];
 function openBulkResolver(conflicts) {
   _bulkConflicts = conflicts;
@@ -451,7 +419,7 @@ function applyBulkResolver() {
       compressImage(c.file)
         .then(function (blob) { return uploadStudentPhoto(sid, blob); })
         .then(function (url) { applyPhoto(sid, url); })
-        .catch(function () {/* surfaced below */})
+        .catch(function () {})
     );
   });
   if (!jobs.length) { closeBulkResolver(); showToast('Nothing selected', 'error'); return; }
@@ -462,17 +430,18 @@ function applyBulkResolver() {
   });
 }
 
-// ── Logo / signature → our API (multipart) → R2; URL goes onto the order ──
+// ── Upload Asset ──
 function uploadAsset(input, kind) {
   var file = input.files && input.files[0];
   if (!file) return;
   var prevId = kind === 'logo' ? 'logoPrev' : kind === 'signature' ? 'sigPrev' : 'schoolBgPrev';
   var iconId = kind === 'logo' ? 'logoIcon' : kind === 'signature' ? 'sigIcon' : 'schoolBgIcon';
+  var delId  = kind === 'logo' ? 'logoDel' : kind === 'signature' ? 'sigDel' : 'schoolBgDel';
   
-  // Keep school background images slightly higher resolution for print
   var size = kind === 'schoolBg' ? 800 : 400; 
+  var isBackground = (kind === 'schoolBg'); // 🚨 BUG FIX: Use preserveAspect for background!
 
-  compressImage(file, size, 0.85)
+  compressImage(file, size, 0.85, isBackground)
     .then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, kind + '.jpg');
@@ -486,24 +455,85 @@ function uploadAsset(input, kind) {
       else if (kind === 'signature') S.signatureUrl = url;
       else if (kind === 'schoolBg') S.schoolBgUrl = url;
       
-      var img = document.getElementById(prevId);
-      img.src = url; img.style.display = 'block';
+      document.getElementById(prevId).src = url; 
+      document.getElementById(prevId).style.display = 'block';
       document.getElementById(iconId).style.display = 'none';
+      document.getElementById(delId).style.display = 'flex'; // Show Delete Button
+
+      if (kind === 'schoolBg') document.getElementById('bgControls').style.display = 'flex'; // Show Toolbar in Step 3
       
-      var toastMsg = kind === 'logo' ? 'Logo' : kind === 'signature' ? 'Signature' : 'School Photo';
-      showToast(toastMsg + ' uploaded', 'success');
+      var tsg = kind === 'logo' ? 'Logo' : kind === 'signature' ? 'Signature' : 'School Photo';
+      showToast(tsg + ' uploaded', 'success');
       
-      if (S.step >= 3) renderGrid(); // Update preview instantly!
+      syncDraftToCloud();
+      if (S.step >= 3) renderGrid(); 
+      if (S.step === 5) renderFinal();
     })
     .catch(function (e) { showToast(e.message || 'Upload failed', 'error'); })
     .finally(function () { input.value = ''; });
+}
+
+// ── Handle Delete Buttons ──
+function removeAsset(kind) {
+  var prevId = kind === 'logo' ? 'logoPrev' : kind === 'signature' ? 'sigPrev' : 'schoolBgPrev';
+  var iconId = kind === 'logo' ? 'logoIcon' : kind === 'signature' ? 'sigIcon' : 'schoolBgIcon';
+  var delId  = kind === 'logo' ? 'logoDel' : kind === 'signature' ? 'sigDel' : 'schoolBgDel';
+  var inputId = kind === 'logo' ? 'logoInput' : kind === 'signature' ? 'sigInput' : 'schoolBgInput';
+
+  if (kind === 'logo') S.logoUrl = null;
+  else if (kind === 'signature') S.signatureUrl = null;
+  else if (kind === 'schoolBg') {
+      S.schoolBgUrl = null;
+      document.getElementById('bgControls').style.display = 'none';
+  }
+
+  document.getElementById(prevId).src = '';
+  document.getElementById(prevId).style.display = 'none';
+  document.getElementById(iconId).style.display = 'block';
+  document.getElementById(delId).style.display = 'none';
+  document.getElementById(inputId).value = ''; 
+
+  syncDraftToCloud();
+  if (S.step >= 3) renderGrid();
+  if (S.step === 5) renderFinal();
+}
+
+// ── Watermark Adjustments (Slider + Typing Two-Way Sync) ──
+function updateBgSettings(key, val) {
+  var numId, sliderId;
+  
+  if (key === 'opacity') {
+      S.bgOpacity = parseInt(val) || 0;
+      numId = 'opNum'; sliderId = 'opSlider';
+  } else if (key === 'zoom') {
+      S.bgZoom = parseInt(val) || 100;
+      numId = 'zoomNum'; sliderId = 'zoomSlider';
+  } else if (key === 'posY') {
+      S.bgPosY = parseInt(val) || 0;
+      numId = 'posYNum'; sliderId = 'posYSlider';
+  } else if (key === 'posX') {
+      S.bgPosX = parseInt(val) || 0;
+      numId = 'posXNum'; sliderId = 'posXSlider';
+  }
+  
+  // Two-way data binding: Sync both the slider and the number input
+  var numEl = document.getElementById(numId);
+  var sliderEl = document.getElementById(sliderId);
+  if (numEl && numEl.value !== val) numEl.value = val;
+  if (sliderEl && sliderEl.value !== val) sliderEl.value = val;
+
+  // 🚨 WE DELETED syncDraftToCloud() HERE TO STOP THE 429 DDoS ATTACK!
+  // The 15-second background interval will save the changes naturally.
+
+  if (S.step >= 3) renderGrid();
+  if (S.step === 5) renderFinal();
 }
 
 // ════════════════════════════════════════════════════════════════════
 //  CAMERA CAPTURE
 // ════════════════════════════════════════════════════════════════════
 var _camStream = null, _camStudentId = null;
-var _camFacing = 'environment'; // Default to back camera
+var _camFacing = 'environment'; 
 
 function openCamera(studentId) {
   _camStudentId = studentId;
@@ -511,12 +541,10 @@ function openCamera(studentId) {
   document.getElementById('camTitle').textContent = 'Capture — ' + ((s && s.name) || 'Student');
   document.getElementById('camOverlay').classList.add('show');
 
-  // If a camera is already running (like when they click flip), stop it first
   if (_camStream) { 
     _camStream.getTracks().forEach(function(t) { t.stop(); }); 
   }
 
-  // Use our _camFacing variable
   navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: _camFacing }, width: 720, height: 720 }, audio: false })
     .then(function (stream) {
       _camStream = stream;
@@ -526,11 +554,10 @@ function openCamera(studentId) {
     .catch(function () { showToast('Could not access camera. Allow permission or upload a file.', 'error'); closeCamera(); });
 }
 
-// Function to flip the camera
 function flipCamera() {
   _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
   if (_camStudentId) {
-    openCamera(_camStudentId); // Instantly restart the camera with the new lens
+    openCamera(_camStudentId); 
   }
 }
 
@@ -574,13 +601,9 @@ function togField(k) {
   if (S.fields.includes(k)) { S.fields = S.fields.filter(function (x) { return x !== k; }); }
   else { if (S.fields.length >= 6) { showToast('Max 6 fields', 'error'); return; } S.fields.push(k); }
   renderFields();
-  renderGrid(); // live update previews when fields change
+  renderGrid(); 
 }
 
-// ── Card design renderers (unchanged from the design demo) ──
-// ── Card design renderers (Upgraded for Real Data) ──
-
-// Helper to pull the right real data from a student object based on the selected field
 function getStudentFieldValue(s, key) {
   if (key === 'name') return escapeHtml(s.name || '-');
   if (key === 'class') {
@@ -607,7 +630,6 @@ function getStudentFieldValue(s, key) {
   return '-';
 }
 
-// Generate field rows (uses real student if provided, else dummy sample)
 function gf(max, student = null) {
   var keys = S.fields.length ? S.fields.slice(0, max) : ['name', 'class', 'dob', 'rollno'];
   return keys.map(function (k) { 
@@ -622,7 +644,6 @@ function rows(cls, fkc, fvc, pairs) {
   });
 }
 
-// Beautifully centered backside text
 function bt() {
   var phone = document.getElementById('instPhone').value || '+91 98765 43210';
   var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
@@ -646,8 +667,6 @@ function logoMark() {
 function front(id, stu = null) {
   var sc = S.name;
   var nm = stu ? escapeHtml(stu.name) : 'Aryan Kumar';
-  
-  // ✅ FIX 1: Changed from 4 to 6 so it shows all selected fields!
   var p = gf(6, stu); 
   
   var photoUrl = stu ? (S.photos[stu._id] || stu.photo) : null;
@@ -670,7 +689,6 @@ function front(id, stu = null) {
     var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
     var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';
     
-    // Custom loop to generate the Black Label -> Red Colon -> Blue Value
     var customFields = p.map(function(pair) {
       return '<div class="t11-fr"><div class="t11-fk">' + pair[0] + '</div><div class="t11-fc">:</div><div class="t11-fv">' + pair[1] + '</div></div>';
     }).join('');
@@ -697,7 +715,6 @@ function front(id, stu = null) {
     var phone = document.getElementById('instPhone').value || '12345 12345';
     var email = 'schoolid@mail.com';
     
-    // Exact mapping: Icon -> Label -> Hyphen (-) -> Value
     var pSliced = p.slice(0, 4);
     var customFields = pSliced.map(function(pair) {
       return '<div class="t12-fr"><div class="t12-f-ic"></div><div class="t12-fk">' + pair[0] + '</div><div class="t12-fc">-</div><div class="t12-fv">' + pair[1] + '</div></div>';
@@ -743,12 +760,17 @@ function back(id, stu = null) {
     ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="max-height:10px; max-width:80%; display:block; margin: 0 auto 1px;"><div style="font-size:2.2px;">Authorised Signatory</div>' 
     : 'Authorised Signatory';
 
-  // 🪄 The Elegant Watermark 
+  // Opacity, Zoom, and Position mapping
+  var op = (S.bgOpacity !== undefined ? S.bgOpacity : 12) / 100;
+  var zoom = (S.bgZoom !== undefined ? S.bgZoom : 200) + '%';
+  var posX = S.bgPosX !== undefined ? S.bgPosX : 50;
+  var posY = S.bgPosY !== undefined ? S.bgPosY : 50;
+
   var wm = S.schoolBgUrl 
-    ? '<div style="position:absolute; inset:0; background:url(\'' + escapeAttr(S.schoolBgUrl) + '\') center/cover; opacity:0.12; mix-blend-mode:multiply; pointer-events:none; z-index:0;"></div>' 
+    ? '<div style="position:absolute; inset:0; background:url(\'' + escapeAttr(S.schoolBgUrl) + '\') ' + posX + '% ' + posY + '% / ' + zoom + ' auto no-repeat; opacity:' + op + '; mix-blend-mode:multiply; pointer-events:none; z-index:0;"></div>' 
     : '';
 
-  if (id === 'T10') return '<div class="t10b-i">' + wm + '<div class="bttl" style="position:relative; z-index:2;">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div></div>';
+  if (id === 'T10') return wm + '<div class="t10b-i"><div class="bttl" style="position:relative; z-index:2;">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2;">' + sig + '</div></div></div>';
   
   if (id === 'T11') {
     var phone = document.getElementById('instPhone').value || '+91 98765 43210';
@@ -756,11 +778,13 @@ function back(id, stu = null) {
     var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
     var sc = escapeHtml(S.name); 
     
-    // T11 specifically uses the bg image at 25% opacity as its core design
     var bgImg = S.schoolBgUrl ? escapeAttr(S.schoolBgUrl) : 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=800&auto=format&fit=crop';
+    var t11BgStyle = S.schoolBgUrl 
+      ? 'background: url(\'' + bgImg + '\') ' + posX + '% ' + posY + '% / ' + zoom + ' auto no-repeat; opacity:' + op + '; mix-blend-mode:multiply;' 
+      : 'background: url(\'' + bgImg + '\') center/cover; opacity: 0.25;';
     
     return '<div class="t11b-i">' +
-             '<div class="t11-bg-img" style="background: url(\'' + bgImg + '\') center/cover;"></div>' +
+             '<div class="t11-bg-img" style="' + t11BgStyle + '"></div>' +
              '<div class="t11-hd"></div>' +
              '<div class="t11-w1"></div>' +
              '<div class="t11-w2"></div>' +
@@ -780,17 +804,16 @@ function back(id, stu = null) {
     var sc = escapeHtml(S.name);
     var city = document.getElementById('instCity').value || 'Here City, State';
     
-    return '<div class="t12b-i">' +
+    return wm + '<div class="t12b-i">' +
              '<div class="t12-bg-curve"></div>' +
-             wm + 
              '<div class="t12b-blob-tl"></div>' +
              '<div class="t12b-blob-br"></div>' +
              '<div class="t12b-diag-tr"></div>' +
              '<div class="t12b-diag-bl"></div>' +
              '<div class="t12b-logo-wrap">' + logoMark() + '</div>' +
              '<div class="t12b-sn-wrap">' +
-               '<div class="t12b-sn">' + sc + '</div>' +
-               (city ? '<div class="t12b-sub">' + escapeHtml(city) + '</div>' : '') +
+               '<div class="t12b-sn" style="position:relative; z-index:2;">' + sc + '</div>' +
+               (city ? '<div class="t12b-sub" style="position:relative; z-index:2;">' + escapeHtml(city) + '</div>' : '') +
              '</div>' +
              '<div class="t12b-sep"></div>' +
              '<div class="t12b-inst-wrap" style="position:relative; z-index:2;">' +
@@ -806,16 +829,14 @@ function back(id, stu = null) {
   }
 
   var lc = id.toLowerCase();
-  return '<div class="' + lc + 'b-i">' + wm + '<div class="bhd" style="position:relative; z-index:2;"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig">' + sig + '</div></div><div class="ft" style="position:relative; z-index:2;"></div></div>';
+  return wm + '<div class="' + lc + 'b-i"><div class="bhd" style="position:relative; z-index:2;"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2;">' + sig + '</div></div><div class="ft" style="position:relative; z-index:2;"></div></div>';
 }
 
-// ✅ FIX 3: Inject real selected student into Step 3 previews!
 function renderGrid() {
   var grid = document.getElementById('tplGrid');
   if (!grid) return;
   grid.innerHTML = '';
   
-  // Grab the first selected student to show in the preview grid!
   var selectedArr = Object.values(S.selected);
   var sampleStudent = selectedArr.length > 0 ? selectedArr[0] : null;
 
@@ -839,8 +860,6 @@ function renderGrid() {
   }
 }
 
-
-
 function clickTpl(id, name) {
   var sc = document.getElementById('tsc-' + id);
   if (S.flipped === id) { sc.classList.remove('flipped'); S.flipped = null; }
@@ -859,7 +878,6 @@ function updateTplPreview(id, name) {
   document.getElementById('tplPTitle').textContent = name;
   document.getElementById('tplPBadge').textContent = '✦ ' + id + ' Selected';
   
-  // Grab the first selected student to show in the big preview!
   var selectedArr = Object.values(S.selected);
   var sampleStudent = selectedArr.length > 0 ? selectedArr[0] : null;
 
@@ -890,18 +908,12 @@ function pickPos(el, v) {
 // ════════════════════════════════════════════════════════════════════
 //  STEP 5 — PREVIEW + COST
 // ════════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════════
-//  STEP 5 — REAL DATA PREVIEW SLIDER & COST
-// ════════════════════════════════════════════════════════════════════
-
 function renderFinal() {
   var selectedArr = Object.values(S.selected);
   if (selectedArr.length === 0) return;
 
-  // Initialize preview index
   if (S.previewIndex === undefined) S.previewIndex = 0;
   
-  // Wrap around logic
   if (S.previewIndex >= selectedArr.length) S.previewIndex = 0;
   if (S.previewIndex < 0) S.previewIndex = selectedArr.length - 1;
 
@@ -935,8 +947,6 @@ function renderFinal() {
   `;
   
   document.getElementById('finalPreview').innerHTML = html;
-  
-  // Update grid template inside the HTML directly for the final view
   document.getElementById('finalPreview').style.display = 'block';
 }
 
@@ -970,12 +980,11 @@ function updateCost() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  ORDER + PAYMENT  (plain Razorpay checkout — H2O's own revenue)
+//  ORDER + PAYMENT 
 // ════════════════════════════════════════════════════════════════════
 function buildOrderPayload() {
   var p = pricing();
   var studentIds = Object.keys(S.selected);
-  // lightweight per-student snapshot so the print bundle is self-contained
   var students = studentIds.map(function (id) {
     var s = S.selected[id];
     return {
@@ -1017,8 +1026,6 @@ function initiatePayment() {
   var btn = document.getElementById('payBtn');
   if (selectedCount() === 0) { showToast('No students selected', 'error'); return; }
   
-
-  // Soft warning for missing photos
   var missing = Object.values(S.selected).filter(function (s) { return !(S.photos[String(s._id)] || s.photo); });
   if (missing.length && !confirm(missing.length + ' selected student(s) have no photo. Place the order anyway?')) return;
 
@@ -1027,12 +1034,10 @@ function initiatePayment() {
   
   var payload = buildOrderPayload();
 
-  // Hit the direct order endpoint instead of the Razorpay one
   apiPost(API_BASE_URL + '/icard/order', payload, true)
     .then(function (data) {
       if (!data || !data.success) throw new Error((data && data.message) || 'Failed to place order');
       
-      // Show success screen instantly
       document.getElementById('sOrdId').textContent = '#' + data.data.orderId;
       document.getElementById('successOverlay').classList.add('show');
     })
@@ -1061,7 +1066,6 @@ function escapeAttr(s) {
   return String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Optional: prefill institution info from a saved profile, if your config exposes it.
 (function prefillInstitution() {
   try {
     var name = localStorage.getItem('institutionName');
@@ -1077,15 +1081,33 @@ function escapeAttr(s) {
 var lastSavedDraftStr = "";
 
 function syncDraftToCloud() {
-  if (S.classes.length === 0 && Object.keys(S.selected).length === 0 && !S.logoUrl && !S.signatureUrl) return;
+  // 1. Build a microscopic, 100% safe payload manually
+  var tinyState = {
+    step: S.step,
+    fields: S.fields,
+    tpl: S.tpl,
+    strapStyle: S.strapStyle,
+    strapPos: S.strapPos,
+    flipped: S.flipped,
+    logoUrl: S.logoUrl,
+    signatureUrl: S.signatureUrl,
+    schoolBgUrl: S.schoolBgUrl,
+    bgOpacity: S.bgOpacity,
+    bgZoom: S.bgZoom,
+    bgPosX: S.bgPosX,
+    bgPosY: S.bgPosY,
+    selectedClassId: S.selectedClassId,
+    // 🚨 FIX: We only save an array of IDs now (e.g. ["123", "456"]), NOT full objects!
+    selectedIds: Object.keys(S.selected) 
+  };
 
   var draftPayload = {
-    state: S,
+    state: tinyState,
     inputs: {
-      instName: document.getElementById('instName').value,
-      instPhone: document.getElementById('instPhone').value,
-      instCity: document.getElementById('instCity').value,
-      instAddr: document.getElementById('instAddr').value
+      instName: document.getElementById('instName').value || '',
+      instPhone: document.getElementById('instPhone').value || '',
+      instCity: document.getElementById('instCity').value || '',
+      instAddr: document.getElementById('instAddr').value || ''
     }
   };
 
@@ -1093,7 +1115,8 @@ function syncDraftToCloud() {
   if (currentStr === lastSavedDraftStr) return;
 
   apiPost(API_ICARD_DRAFT, { draftState: draftPayload }, true)
-    .then(function(r) { if (r && r.success) lastSavedDraftStr = currentStr; });
+    .then(function(r) { if (r && r.success) lastSavedDraftStr = currentStr; })
+    .catch(function(e) { console.warn("Draft skip:", e); }); 
 }
 
 // Auto-save silently every 15 seconds
@@ -1103,10 +1126,29 @@ setInterval(syncDraftToCloud, 15000);
 apiGet(API_ICARD_DRAFT, true).then(function(r) {
   if (r && r.success && r.data) {
     if (confirm('You have an unsaved I-Card order draft from a previous session.\n\nWould you like to resume it?')) {
-      S = r.data.state;
+      
+      var saved = r.data.state || {};
+      
+      // 1. Safely restore basic values
+      S.step = saved.step || 1;
+      S.fields = saved.fields || ['name', 'class', 'rollno', 'dob'];
+      S.tpl = saved.tpl || 'T01';
+      S.strapStyle = saved.strapStyle || 'S01';
+      S.strapPos = saved.strapPos || 'center';
+      S.flipped = saved.flipped || null;
+      S.logoUrl = saved.logoUrl || null;
+      S.signatureUrl = saved.signatureUrl || null;
+      S.schoolBgUrl = saved.schoolBgUrl || null;
+      S.bgOpacity = saved.bgOpacity !== undefined ? saved.bgOpacity : 12;
+      S.bgZoom = saved.bgZoom !== undefined ? saved.bgZoom : 200;
+      S.bgPosX = saved.bgPosX !== undefined ? saved.bgPosX : 50;
+      S.bgPosY = saved.bgPosY !== undefined ? saved.bgPosY : 50;
+      S.selectedClassId = saved.selectedClassId || '';
+      
+      var selectedIdsToRestore = saved.selectedIds || [];
       lastSavedDraftStr = JSON.stringify(r.data);
 
-      // Restore Step 1 text inputs
+      // 2. Restore Step 1 text inputs
       if (r.data.inputs) {
         if(r.data.inputs.instName) document.getElementById('instName').value = r.data.inputs.instName;
         if(r.data.inputs.instPhone) document.getElementById('instPhone').value = r.data.inputs.instPhone;
@@ -1114,15 +1156,59 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
         if(r.data.inputs.instAddr) document.getElementById('instAddr').value = r.data.inputs.instAddr;
       }
 
-      // Restore Step 1 image previews
-      if (S.logoUrl) { document.getElementById('logoPrev').src = S.logoUrl; document.getElementById('logoPrev').style.display='block'; document.getElementById('logoIcon').style.display='none'; }
-      if (S.signatureUrl) { document.getElementById('sigPrev').src = S.signatureUrl; document.getElementById('sigPrev').style.display='block'; document.getElementById('sigIcon').style.display='none'; }
-      if (S.schoolBgUrl) { document.getElementById('schoolBgPrev').src = S.schoolBgUrl; document.getElementById('schoolBgPrev').style.display='block'; document.getElementById('schoolBgIcon').style.display='none'; } 
-
+      // 3. Restore Images & Sliders
+      if (S.logoUrl) { 
+          document.getElementById('logoPrev').src = S.logoUrl; document.getElementById('logoPrev').style.display='block'; 
+          document.getElementById('logoIcon').style.display='none'; document.getElementById('logoDel').style.display='flex'; 
+      }
+      if (S.signatureUrl) { 
+          document.getElementById('sigPrev').src = S.signatureUrl; document.getElementById('sigPrev').style.display='block'; 
+          document.getElementById('sigIcon').style.display='none'; document.getElementById('sigDel').style.display='flex'; 
+      }
+      if (S.schoolBgUrl) { 
+          document.getElementById('schoolBgPrev').src = S.schoolBgUrl; document.getElementById('schoolBgPrev').style.display='block'; 
+          document.getElementById('schoolBgIcon').style.display='none'; document.getElementById('schoolBgDel').style.display='flex'; 
+          document.getElementById('bgControls').style.display='flex'; 
+          
+          updateBgSettings('opacity', S.bgOpacity);
+          updateBgSettings('zoom', S.bgZoom);
+          updateBgSettings('posY', S.bgPosY);
+          updateBgSettings('posX', S.bgPosX);
+      }
+      
+      // 4. Go to step and Re-hydrate Grid Data
       goStep(S.step);
-      if (S.step >= 2) { loadClasses(); renderStudents(); }
+      
+      if (S.step >= 2 && S.selectedClassId) { 
+          apiGet(API_ENDPOINTS.CLASSES, true).then(function (cr) {
+              S.classes = (cr.data || []).filter(function (c) { return c.isActive !== false; });
+              fillClassDropdown();
+              
+              document.getElementById('classSelect').value = S.selectedClassId;
+              apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(S.selectedClassId) + '&limit=9999&isActive=true', true)
+                .then(function (sr) {
+                    var list = sr.data || [];
+                    S.studentsByClass[S.selectedClassId] = list;
+                    S.students = list;
+                    
+                    // Rebuild S.selected map and S.photos map perfectly
+                    S.selected = {};
+                    S.photos = {};
+                    list.forEach(function(stu) {
+                        if (stu.photo) S.photos[String(stu._id)] = stu.photo;
+                        if (selectedIdsToRestore.includes(String(stu._id))) {
+                            S.selected[String(stu._id)] = stu;
+                        }
+                    });
 
-      if (S.step >= 3) { renderFields(); renderGrid(); }
+                    renderStudents(); 
+                    if (S.step >= 3) { renderFields(); renderGrid(); }
+                    if (S.step === 5) { renderFinal(); updateCost(); }
+                });
+          });
+      } else if (S.step >= 3) { 
+          renderFields(); renderGrid(); 
+      }
 
       showToast('Draft restored from cloud ☁️', 'success');
     } else {
@@ -1132,49 +1218,41 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
   } else {
     goStep(1);
   }
-}).catch(function() {
+}).catch(function(err) {
+  console.warn("Draft corrupted. Wiping database block to self-heal.", err);
+  // 🚨 EMERGENCY SELF-HEAL: If GET fails due to a corrupted 500 error string, 
+  // it instantly sends a 'null' wipe command to the DB to fix your server!
+  apiPost(API_ICARD_DRAFT, { draftState: null }, true);
   goStep(1);
 });
 
 function finishOrder() {
-  // Clear the draft from the cloud because the order is complete!
   apiPost(API_ICARD_DRAFT, { draftState: null }, true); 
-
-  // Hide the popup
   var overlay = document.getElementById('successOverlay');
   if (overlay) overlay.classList.remove('show');
-
-  // Reload the page to clear the wizard and start fresh
   window.location.reload(); 
 }
 
-
-// Function to delete the photo from the UI and state
 function clearPhoto(studentId) {
   if(!confirm("Are you sure you want to completely remove this student's photo?")) return;
-  
-  // Show a loading toast so the user knows it's working
   showToast('Deleting photo...', '');
 
-  // Call your backend to delete the photo permanently
   apiPost(API_BASE_URL + '/icard/photo/delete', { studentId: studentId }, true)
     .then(function (r) {
       if (!r || !r.success) throw new Error((r && r.message) || 'Failed to delete photo');
       
-      // If the backend successfully deleted it, clear it from our frontend memory
       delete S.photos[studentId];
       var s = S.students.find(function (x) { return String(x._id) === studentId; });
       if (s) s.photo = null;
       
       showToast('Photo permanently deleted', 'success');
-      renderStudents(); // Refresh the grid to show the red missing icon
+      renderStudents(); 
     })
     .catch(function (e) {
       showToast(e.message || 'Error deleting photo', 'error');
     });
 }
 
-// Function to pop up the large photo viewer
 function viewPhoto(url, name) {
   var html = 
     '<div class="cam-overlay show" id="photoViewer" style="z-index:1005;" onclick="this.remove()">' +
@@ -1200,9 +1278,8 @@ function printCards() {
     return;
   }
 
-  var id = S.tpl; // Current selected template
+  var id = S.tpl; 
   
-  // Build the print layout
   var printHtml = '<div style="text-align:center; font-family:\'DM Sans\',sans-serif; margin-bottom:10mm;">' +
                   '<h2 style="margin:0; font-size:24px; color:#111;">' + escapeHtml(S.name) + ' — ID Cards</h2>' +
                   '<p style="margin:5px 0 0; color:#555; font-size:14px;">Total Cards: ' + selectedArr.length + ' | Template: ' + id + '</p>' +
@@ -1210,7 +1287,6 @@ function printCards() {
                   
   printHtml += '<div class="print-grid">';
   
-  // Loop through every selected student and generate their front and back
   selectedArr.forEach(function(student) {
     var f = front(id, student);
     var b = back(id, student);
@@ -1224,12 +1300,9 @@ function printCards() {
   
   printHtml += '</div>';
   
-  // Inject into the hidden print area
   document.getElementById('printArea').innerHTML = printHtml;
-  
   showToast('Preparing PDF...', 'success');
   
-  // Slight delay to ensure all photos and SVGs render in the hidden div before printing
   setTimeout(function() {
     window.print();
   }, 500);

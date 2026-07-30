@@ -36,7 +36,7 @@ input[type=text],input[type=number],select,textarea{width:100%;background:var(--
 input:focus,select:focus,textarea:focus{border-color:var(--gold);}
 select option{background:var(--panel);}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:18px;align-items:start;}
 .fg{margin-bottom:18px;}
 .fg.full{grid-column:1/-1;}
 .upload-box{border:2px dashed var(--rim);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;}
@@ -426,6 +426,15 @@ input[type=file]{display:none;}
 .btn-gold:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(212,168,67,.3);}
 .btn-green{background:linear-gradient(135deg,var(--success),#16a34a);color:#fff;}
 .btn-green:hover{transform:translateY(-1px);}
+
+.bg-controls-toolbar { background: rgba(212,168,67,0.05); border: 1px solid rgba(212,168,67,0.3); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; display: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; animation: fadeUp 0.3s ease; }
+.bg-toolbar-title { font-size: 13px; font-weight: 600; color: var(--gold); }
+.bg-toolbar-items { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.bg-toolbar-items .ctrl-row { display: flex; align-items: center; gap: 10px; }
+.bg-toolbar-items label { margin: 0; font-size: 12px; color: var(--silver); }
+.bg-toolbar-items input[type=range] { width: 100px; cursor: pointer; }
+.bg-toolbar-items select { width: auto; padding: 5px 10px; font-size: 12px; background: var(--panel); border: 1px solid var(--rim); color: var(--text); border-radius: 6px; cursor: pointer; }
+
 /* Camera modal */
 .cam-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:998;align-items:center;justify-content:center;padding:18px;}
 .cam-overlay.show{display:flex;}
@@ -435,6 +444,21 @@ input[type=file]{display:none;}
 .cam-stage{position:relative;width:280px;height:280px;margin:0 auto 16px;border-radius:14px;overflow:hidden;background:#000;border:1.5px solid var(--rim);}
 .cam-stage video,.cam-stage canvas{width:100%;height:100%;object-fit:cover;}
 .cam-guide{position:absolute;inset:14%;border:2px dashed rgba(212,168,67,.5);border-radius:50%;pointer-events:none;}
+
+/* Number input styling (hides the default up/down arrows) */
+.tiny-input { width: 44px; padding: 2px 4px; font-size: 11px; background: var(--panel); border: 1px solid var(--rim); color: var(--gold); border-radius: 4px; text-align: center; margin-left: 6px; appearance: textfield; -moz-appearance: textfield; outline: none; }
+.tiny-input:focus { border-color: var(--gold); }
+.tiny-input::-webkit-outer-spin-button, .tiny-input::-webkit-inner-spin-button { appearance: none; -webkit-appearance: none; margin: 0; }
+
+.num-input {
+  width: 55px; background: var(--panel); border: 1.5px solid var(--rim);
+  color: var(--text); border-radius: 6px; padding: 4px; text-align: center;
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-left: 5px;
+  appearance: textfield; -moz-appearance: textfield;
+}
+.num-input:focus { border-color: var(--gold); outline: none; }
+.num-input::-webkit-outer-spin-button, .num-input::-webkit-inner-spin-button { appearance: none; -webkit-appearance: none; margin: 0; }
+
 /* Overlay */
 .success-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;}
 .success-overlay.show{display:flex;}
@@ -449,6 +473,8 @@ input[type=file]{display:none;}
 @media(max-width:600px){.grid2{grid-template-columns:1fr;}.tpl-grid{grid-template-columns:repeat(3,1fr);}.fields-grid{grid-template-columns:repeat(2,1fr);}.hdr{padding:14px 18px;}.main{padding:0 14px;}.student-grid{grid-template-columns:1fr 1fr;}}
 /* ════ PDF & PRINT LAYOUT STYLES ════ */
 #printArea { display: none; }
+
+
 
 @media print {
   @page { size: A4; margin: 15mm; }
@@ -520,29 +546,43 @@ input[type=file]{display:none;}
       <div class="fg"><label>City</label><input type="text" id="instCity" placeholder="e.g. Moradabad, UP"/></div>
     </div>
     
-    <div class="grid3">
+<div class="grid3">
+      <!-- LOGO -->
       <div class="fg">
         <label>School Logo</label>
-        <div class="upload-box" id="logoBox">
-          <input type="file" id="logoInput" accept="image/*" onchange="uploadAsset(this,'logo')">
-          <img class="upload-preview" id="logoPrev">
-          <div id="logoIcon"><div class="upload-icon">🏫</div><div class="upload-text">Click to upload logo<br><b>PNG recommended</b></div></div>
+        <div class="upload-wrapper" style="position: relative;">
+          <div class="upload-box" id="logoBox">
+            <input type="file" id="logoInput" accept="image/*" onchange="uploadAsset(this,'logo')">
+            <img class="upload-preview" id="logoPrev">
+            <div id="logoIcon"><div class="upload-icon">🏫</div><div class="upload-text">Click to upload logo<br><b>PNG recommended</b></div></div>
+          </div>
+          <button id="logoDel" onclick="removeAsset('logo')" title="Remove Logo" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
       </div>
+      
+      <!-- SIGNATURE -->
       <div class="fg">
         <label>Principal's Signature</label>
-        <div class="upload-box" id="sigBox">
-          <input type="file" id="sigInput" accept="image/*" onchange="uploadAsset(this,'signature')">
-          <img class="upload-preview" id="sigPrev">
-          <div id="sigIcon"><div class="upload-icon">✍️</div><div class="upload-text">Upload signature image<br><b>White background preferred</b></div></div>
+        <div class="upload-wrapper" style="position: relative;">
+          <div class="upload-box" id="sigBox">
+            <input type="file" id="sigInput" accept="image/*" onchange="uploadAsset(this,'signature')">
+            <img class="upload-preview" id="sigPrev">
+            <div id="sigIcon"><div class="upload-icon">✍️</div><div class="upload-text">Upload signature image<br><b>White background preferred</b></div></div>
+          </div>
+          <button id="sigDel" onclick="removeAsset('signature')" title="Remove Signature" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
       </div>
+      
+      <!-- SCHOOL PHOTO -->
       <div class="fg">
         <label>School Building Photo</label>
-        <div class="upload-box" id="schoolBgBox">
-          <input type="file" id="schoolBgInput" accept="image/*" onchange="uploadAsset(this,'schoolBg')">
-          <img class="upload-preview" id="schoolBgPrev" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
-          <div id="schoolBgIcon"><div class="upload-icon">🏢</div><div class="upload-text">Upload school photo<br><b>Appears as elegant card watermark</b></div></div>
+        <div class="upload-wrapper" style="position: relative;">
+          <div class="upload-box" id="schoolBgBox">
+            <input type="file" id="schoolBgInput" accept="image/*" onchange="uploadAsset(this,'schoolBg')">
+            <img class="upload-preview" id="schoolBgPrev" style="width: 100%; height: 120px; object-fit: contain; background: #000; border-radius: 6px;">
+            <div id="schoolBgIcon"><div class="upload-icon">🏢</div><div class="upload-text">Upload school photo<br><b>Appears as card watermark</b></div></div>
+          </div>
+          <button id="schoolBgDel" onclick="removeAsset('schoolBg')" title="Remove Photo" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
       </div>
     </div>
@@ -611,6 +651,30 @@ input[type=file]{display:none;}
       </div>
       <div class="preview-cards" id="tplPCards"></div>
     </div>
+
+    <!-- LIVE WATERMARK TOOLBAR -->
+    <div class="bg-controls-toolbar" id="bgControls">
+      <div class="bg-toolbar-title">🏢 Background Adjustments</div>
+      <div class="bg-toolbar-items">
+        <div class="ctrl-row">
+            <label>Opacity: <input type="number" id="opNum" class="num-input" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">%</label>
+            <input type="range" id="opSlider" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">
+        </div>
+        <div class="ctrl-row">
+            <label>🔍 Zoom: <input type="number" id="zoomNum" class="num-input" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">%</label>
+            <input type="range" id="zoomSlider" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">
+        </div>
+        <div class="ctrl-row">
+            <label>↔ Move X: <input type="number" id="posXNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">%</label>
+            <input type="range" id="posXSlider" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">
+        </div>
+        <div class="ctrl-row">
+            <label>↕ Move Y: <input type="number" id="posYNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">%</label>
+            <input type="range" id="posYSlider" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">
+        </div>
+      </div>
+    </div>
+
     <div class="tpl-grid" id="tplGrid"></div>
 
     <div class="btn-row">
