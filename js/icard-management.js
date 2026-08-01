@@ -1130,7 +1130,7 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       var saved = r.data.state || {};
       
       // 1. Safely restore basic values
-      S.step = saved.step || 1;
+      var targetStep = saved.step || 1;
       S.fields = saved.fields || ['name', 'class', 'rollno', 'dob'];
       S.tpl = saved.tpl || 'T01';
       S.strapStyle = saved.strapStyle || 'S01';
@@ -1177,7 +1177,7 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       }
       
       // 4. Go to step and Re-hydrate Grid Data
-      goStep(S.step);
+      goStep(targetStep);
       
       if (S.step >= 2 && S.selectedClassId) { 
           apiGet(API_ENDPOINTS.CLASSES, true).then(function (cr) {
