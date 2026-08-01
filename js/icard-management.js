@@ -1179,36 +1179,28 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       // 4. Go to step and Re-hydrate Grid Data
       goStep(targetStep);
       
-      if (S.step >= 2 && S.selectedClassId) { 
-          apiGet(API_ENDPOINTS.CLASSES, true).then(function (cr) {
-              S.classes = (cr.data || []).filter(function (c) { return c.isActive !== false; });
-              fillClassDropdown();
-              
-              document.getElementById('classSelect').value = S.selectedClassId;
-              apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(S.selectedClassId) + '&limit=9999&isActive=true', true)
-                .then(function (sr) {
-                    var list = sr.data || [];
-                    S.studentsByClass[S.selectedClassId] = list;
-                    S.students = list;
-                    
-                    // Rebuild S.selected map and S.photos map perfectly
-                    S.selected = {};
-                    S.photos = {};
-                    list.forEach(function(stu) {
-                        if (stu.photo) S.photos[String(stu._id)] = stu.photo;
-                        if (selectedIdsToRestore.includes(String(stu._id))) {
-                            S.selected[String(stu._id)] = stu;
-                        }
-                    });
-
-                    renderStudents(); 
-                    if (S.step >= 3) { renderFields(); renderGrid(); }
-                    if (S.step === 5) { renderFinal(); updateCost(); }
-                });
+      if (targetStep >= 2 && S.selectedClassId) {
+    apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(S.selectedClassId) + '&limit=9999&isActive=true', true)
+      .then(function (sr) {
+          var list = sr.data || [];
+          S.studentsByClass[S.selectedClassId] = list;
+          S.students = list;
+          S.selected = {};
+          S.photos = {};
+          list.forEach(function(stu) {
+              if (stu.photo) S.photos[String(stu._id)] = stu.photo;
+              if (selectedIdsToRestore.includes(String(stu._id))) {
+                  S.selected[String(stu._id)] = stu;
+              }
           });
-      } else if (S.step >= 3) { 
-          renderFields(); renderGrid(); 
-      }
+          document.getElementById('classSelect').value = S.selectedClassId;
+          renderStudents();
+          if (targetStep >= 3) { renderFields(); renderGrid(); }
+          if (targetStep === 5) { renderFinal(); updateCost(); }
+      });
+} else if (targetStep >= 3) {
+    renderFields(); renderGrid();
+}
 
       showToast('Draft restored from cloud ☁️', 'success');
     } else {
