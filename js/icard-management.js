@@ -17,7 +17,13 @@ var S = {
   flipped:     null,
   name:        'Hello School',
   logoUrl:     null,
+  logoZoom:    100,  // <-- ADD THIS
+  logoPosX:    50,   // <-- ADD THIS
+  logoPosY:    50,   // <-- ADD THIS
   signatureUrl:null,
+  sigZoom:     100,  // <-- ADD THIS
+  sigPosX:     50,   // <-- ADD THIS
+  sigPosY:     50,   // <-- ADD THIS
   schoolBgUrl: null,
   bgOpacity:   12,    
   bgZoom:      200,  
@@ -471,7 +477,8 @@ function uploadAsset(input, kind) {
       document.getElementById(iconId).style.display = 'none';
       document.getElementById(delId).style.display = 'flex'; // Show Delete Button
 
-      if (kind === 'schoolBg') document.getElementById('bgControls').style.display = 'flex'; // Show Toolbar in Step 3
+      // 🚨 NEW: Trigger the Unified Panel check
+      evaluateMasterPanel();
       
       var tsg = kind === 'logo' ? 'Logo' : kind === 'signature' ? 'Signature' : 'School Photo';
       showToast(tsg + ' uploaded', 'success');
@@ -493,16 +500,16 @@ function removeAsset(kind) {
 
   if (kind === 'logo') S.logoUrl = null;
   else if (kind === 'signature') S.signatureUrl = null;
-  else if (kind === 'schoolBg') {
-      S.schoolBgUrl = null;
-      document.getElementById('bgControls').style.display = 'none';
-  }
+  else if (kind === 'schoolBg') S.schoolBgUrl = null;
 
   document.getElementById(prevId).src = '';
   document.getElementById(prevId).style.display = 'none';
   document.getElementById(iconId).style.display = 'block';
   document.getElementById(delId).style.display = 'none';
   document.getElementById(inputId).value = ''; 
+
+  // 🚨 NEW: Trigger the Unified Panel check
+  evaluateMasterPanel();
 
   syncDraftToCloud();
   if (S.step >= 3) renderGrid();
@@ -538,6 +545,64 @@ function updateBgSettings(key, val) {
 
   if (S.step >= 3) renderGrid();
   if (S.step === 5) renderFinal();
+}
+
+// ── Asset Adjustments (Logo & Signature Zoom / Position Two-Way Sync) ──
+function updateAssetSettings(type, key, val) {
+  var numId, sliderId;
+  var parsedVal = parseInt(val) || 0;
+
+  if (type === 'logo') {
+    if (key === 'zoom') { S.logoZoom = parsedVal; numId = 'logoZoomNum'; sliderId = 'logoZoomSlider'; }
+    else if (key === 'posX') { S.logoPosX = parsedVal; numId = 'logoPosXNum'; sliderId = 'logoPosXSlider'; }
+    else if (key === 'posY') { S.logoPosY = parsedVal; numId = 'logoPosYNum'; sliderId = 'logoPosYSlider'; }
+  } else if (type === 'signature') {
+    if (key === 'zoom') { S.sigZoom = parsedVal; numId = 'sigZoomNum'; sliderId = 'sigZoomSlider'; }
+    else if (key === 'posX') { S.sigPosX = parsedVal; numId = 'sigPosXNum'; sliderId = 'sigPosXSlider'; }
+    else if (key === 'posY') { S.sigPosY = parsedVal; numId = 'sigPosYNum'; sliderId = 'sigPosYSlider'; }
+  }
+
+  var numEl = document.getElementById(numId);
+  var sliderEl = document.getElementById(sliderId);
+  if (numEl && numEl.value !== val) numEl.value = val;
+  if (sliderEl && sliderEl.value !== val) sliderEl.value = val;
+
+  if (S.step >= 3) renderGrid();
+  if (S.step === 5) renderFinal();
+}
+
+// ── Unified Panel Manager ──
+function evaluateMasterPanel() {
+  var sel = document.getElementById('assetSelect');
+  if (!sel) return;
+  var oldVal = sel.value;
+  sel.innerHTML = ''; // Clear dropdown
+
+  if (S.schoolBgUrl) sel.innerHTML += '<option value="bg">🏢 Background Watermark</option>';
+  if (S.logoUrl) sel.innerHTML += '<option value="logo">🏫 School Logo</option>';
+  if (S.signatureUrl) sel.innerHTML += '<option value="sig">✍️ Principal\'s Signature</option>';
+
+  var masterPanel = document.getElementById('masterAdjustmentPanel');
+  if (sel.options.length === 0) {
+      masterPanel.style.display = 'none'; // Hide if no images uploaded
+      return;
+  }
+  
+  masterPanel.style.display = 'flex'; // Show if at least one image exists
+
+  // Try to keep previous selection, otherwise default to first available
+  var hasOldVal = Array.from(sel.options).some(function(o) { return o.value === oldVal; });
+  if (hasOldVal) sel.value = oldVal;
+  else sel.selectedIndex = 0;
+
+  switchAdjustmentPanel();
+}
+
+function switchAdjustmentPanel() {
+  var val = document.getElementById('assetSelect').value;
+  document.getElementById('panel-bg').style.display = (val === 'bg') ? 'block' : 'none';
+  document.getElementById('panel-logo').style.display = (val === 'logo') ? 'block' : 'none';
+  document.getElementById('panel-sig').style.display = (val === 'sig') ? 'block' : 'none';
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -671,8 +736,14 @@ function bt() {
 
 function logoMark() {
   if (S.logoUrl) {
-    // We add inline CSS to force the image to shrink, contain itself, and respect the circle!
-    return '<img src="' + escapeAttr(S.logoUrl) + '" alt="" style="width:100%; height:100%; object-fit:contain; border-radius:inherit; display:block;">';
+    var zoom = (S.logoZoom !== undefined ? S.logoZoom : 100) / 100;
+    var posX = ((S.logoPosX !== undefined ? S.logoPosX : 50) - 50) * 2;
+    var posY = ((S.logoPosY !== undefined ? S.logoPosY : 50) - 50) * 2;
+    
+    // Wrap the image in a stationary div so the circular mask doesn't scale with the zoom!
+    return '<div style="width:100%; height:100%; border-radius:inherit; overflow:hidden; display:flex; align-items:center; justify-content:center;">' +
+             '<img src="' + escapeAttr(S.logoUrl) + '" alt="" style="width:100%; height:100%; object-fit:contain; transform:translate(' + posX + '%, ' + posY + '%) scale(' + zoom + '); display:block;">' +
+           '</div>';
   }
   var ch = (S.name && S.name.trim()[0]) ? S.name.trim()[0].toUpperCase() : 'S';
   return ch;
@@ -701,8 +772,12 @@ function front(id, stu = null) {
   
  if (id === 'T11') {
     // 🚨 Added max-height:none !important to defeat the CSS bug, and filter:contrast(2) to destroy the grey background!
-var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); margin-bottom:2px; display:block;">' : '<div style="height:12px;"></div>';    var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';
-    
+    var sigZoom = (S.sigZoom !== undefined ? S.sigZoom : 100) / 100;
+    var sigPosX = ((S.sigPosX !== undefined ? S.sigPosX : 50) - 50) * 2;
+    var sigPosY = ((S.sigPosY !== undefined ? S.sigPosY : 50) - 50) * 4;
+    var sigStyle = 'width:100%; height:12px; max-height:none !important; object-fit:contain; transform:translate(' + sigPosX + '%, ' + sigPosY + '%) scale(' + sigZoom + '); mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); margin-bottom:2px; display:block;';
+    var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="' + sigStyle + '">' : '<div style="height:12px;"></div>';
+    var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';    
     var customFields = p.map(function(pair) {
       return '<div class="t11-fr"><div class="t11-fk">' + pair[0] + '</div><div class="t11-fc">:</div><div class="t11-fv">' + pair[1] + '</div></div>';
     }).join('');
@@ -771,10 +846,12 @@ var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style=
 function back(id, stu = null) {
   var b = bt();
   
-  // 🚨 The Universal Signature Fix: Image -> Line -> Text
-  var sigImg = S.signatureUrl 
-    ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); display:block; margin: 0 auto 2px;">' 
-    : '<div style="height:12px;"></div>';
+ // 🚨 The Universal Signature Fix: Image -> Line -> Text
+ var sigZoom = (S.sigZoom !== undefined ? S.sigZoom : 100) / 100;
+ var sigPosX = ((S.sigPosX !== undefined ? S.sigPosX : 50) - 50) * 2;
+ var sigPosY = ((S.sigPosY !== undefined ? S.sigPosY : 50) - 50) * 4;
+ var sigImgStyle = 'width:100%; height:12px; max-height:none !important; object-fit:contain; transform:translate(' + sigPosX + '%, ' + sigPosY + '%) scale(' + sigZoom + '); mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); display:block; margin: 0 auto 2px;';
+ var sigImg = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="' + sigImgStyle + '">' : '<div style="height:12px;"></div>';
     
   var sigText = '<div style="border-top: 0.6px solid currentColor; padding-top: 2px; width: 100%; font-size: 2.2px;">Authorised Signatory</div>';
   var sig = sigImg + sigText;
@@ -794,8 +871,8 @@ function back(id, stu = null) {
   if (id === 'T11') {
     var phone = document.getElementById('instPhone').value || '+91 98765 43210';
     var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
-var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); margin-bottom:2px; display:block;">' : '<div style="height:12px;"></div>';    var sc = escapeHtml(S.name); 
-    
+    var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="' + sigImgStyle + '">' : '<div style="height:12px;"></div>';
+    var sc = escapeHtml(S.name);    
     var bgImg = S.schoolBgUrl ? escapeAttr(S.schoolBgUrl) : 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=800&auto=format&fit=crop';
     var t11BgStyle = S.schoolBgUrl 
       ? 'background: url(\'' + bgImg + '\') ' + posX + '% ' + posY + '% / ' + zoom + ' auto no-repeat; opacity:' + op + '; mix-blend-mode:multiply;' 
@@ -1076,7 +1153,13 @@ function buildOrderPayload() {
     institutionCity:  document.getElementById('instCity').value || null,
     institutionAddr:  document.getElementById('instAddr').value || null,
     logoUrl:          S.logoUrl,
+    logoZoom:         S.logoZoom, // <-- ADD THIS
+    logoPosX:         S.logoPosX, // <-- ADD THIS
+    logoPosY:         S.logoPosY, // <-- ADD THIS
     signatureUrl:     S.signatureUrl,
+    sigZoom:          S.sigZoom,  // <-- ADD THIS
+    sigPosX:          S.sigPosX,  // <-- ADD THIS
+    sigPosY:          S.sigPosY,  // <-- ADD THIS
     schoolBgUrl:      S.schoolBgUrl,
     classId:          S.selectedClassId,
     selectedFields:   S.fields,
@@ -1166,7 +1249,13 @@ function syncDraftToCloud() {
     strapPos: S.strapPos,
     flipped: S.flipped,
     logoUrl: S.logoUrl,
+    logoZoom: S.logoZoom, // <-- ADD THIS
+    logoPosX: S.logoPosX, // <-- ADD THIS
+    logoPosY: S.logoPosY, // <-- ADD THIS
     signatureUrl: S.signatureUrl,
+    sigZoom: S.sigZoom,   // <-- ADD THIS
+    sigPosX: S.sigPosX,   // <-- ADD THIS
+    sigPosY: S.sigPosY,   // <-- ADD THIS
     schoolBgUrl: S.schoolBgUrl,
     bgOpacity: S.bgOpacity,
     bgZoom: S.bgZoom,
@@ -1236,21 +1325,31 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       if (S.logoUrl) { 
           document.getElementById('logoPrev').src = S.logoUrl; document.getElementById('logoPrev').style.display='block'; 
           document.getElementById('logoIcon').style.display='none'; document.getElementById('logoDel').style.display='flex'; 
+          
+          updateAssetSettings('logo', 'zoom', S.logoZoom);
+          updateAssetSettings('logo', 'posX', S.logoPosX);
+          updateAssetSettings('logo', 'posY', S.logoPosY);
       }
       if (S.signatureUrl) { 
           document.getElementById('sigPrev').src = S.signatureUrl; document.getElementById('sigPrev').style.display='block'; 
           document.getElementById('sigIcon').style.display='none'; document.getElementById('sigDel').style.display='flex'; 
+          
+          updateAssetSettings('signature', 'zoom', S.sigZoom);
+          updateAssetSettings('signature', 'posX', S.sigPosX);
+          updateAssetSettings('signature', 'posY', S.sigPosY);
       }
       if (S.schoolBgUrl) { 
           document.getElementById('schoolBgPrev').src = S.schoolBgUrl; document.getElementById('schoolBgPrev').style.display='block'; 
           document.getElementById('schoolBgIcon').style.display='none'; document.getElementById('schoolBgDel').style.display='flex'; 
-          document.getElementById('bgControls').style.display='flex'; 
           
           updateBgSettings('opacity', S.bgOpacity);
           updateBgSettings('zoom', S.bgZoom);
           updateBgSettings('posY', S.bgPosY);
           updateBgSettings('posX', S.bgPosX);
       }
+
+      // 🚨 NEW: Set up the unified panel
+      evaluateMasterPanel();
       
       // 4. Go to step and Re-hydrate Grid Data
       goStep(targetStep);

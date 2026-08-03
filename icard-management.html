@@ -584,7 +584,7 @@ input[type=file]{display:none;}
     </div>
     
 <div class="grid3">
-      <!-- LOGO -->
+      <!-- LOGO WITH CUSTOM CONTROLS -->
       <div class="fg">
         <label>School Logo</label>
         <div class="upload-wrapper" style="position: relative;">
@@ -595,9 +595,10 @@ input[type=file]{display:none;}
           </div>
           <button id="logoDel" onclick="removeAsset('logo')" title="Remove Logo" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
+        
       </div>
       
-      <!-- SIGNATURE -->
+      <!-- SIGNATURE WITH CUSTOM CONTROLS -->
       <div class="fg">
         <label>Principal's Signature</label>
         <div class="upload-wrapper" style="position: relative;">
@@ -608,6 +609,7 @@ input[type=file]{display:none;}
           </div>
           <button id="sigDel" onclick="removeAsset('signature')" title="Remove Signature" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
+        
       </div>
       
       <!-- SCHOOL PHOTO -->
@@ -622,7 +624,7 @@ input[type=file]{display:none;}
           <button id="schoolBgDel" onclick="removeAsset('schoolBg')" title="Remove Photo" style="display:none; position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:#fff; border:2px solid var(--panel); border-radius:50%; font-size:10px; cursor:pointer; align-items:center; justify-content:center; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.3);">✕</button>
         </div>
       </div>
-    </div>
+</div>
 
     <div class="grid2">
       <div class="fg full"><label>Address (printed on back)</label><textarea id="instAddr" rows="2" placeholder="Full address of your institution..." style="resize:none"></textarea></div>
@@ -689,25 +691,70 @@ input[type=file]{display:none;}
       <div class="preview-cards" id="tplPCards"></div>
     </div>
 
-    <!-- LIVE WATERMARK TOOLBAR -->
-    <div class="bg-controls-toolbar" id="bgControls">
-      <div class="bg-toolbar-title">🏢 Background Adjustments</div>
-      <div class="bg-toolbar-items">
-        <div class="ctrl-row">
-            <label>Opacity: <input type="number" id="opNum" class="num-input" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">%</label>
-            <input type="range" id="opSlider" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">
+  <!-- UNIFIED IMAGE ADJUSTMENTS PANEL -->
+    <div class="bg-controls-toolbar" id="masterAdjustmentPanel" style="display:none; flex-direction:column; align-items:stretch; border-color: rgba(212,168,67,0.3); background: rgba(212,168,67,0.05);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap: wrap; gap: 10px;">
+        <div class="bg-toolbar-title" style="color: var(--gold); font-size: 14px;">🎨 Image Adjustments</div>
+        <select id="assetSelect" onchange="switchAdjustmentPanel()" style="background:var(--panel); border:1.5px solid var(--rim); color:var(--text); padding:6px 12px; border-radius:8px; font-size:12px; cursor:pointer; font-weight: 600;">
+          <!-- JS will inject options here based on what is uploaded -->
+        </select>
+      </div>
+
+      <!-- BG SLIDERS -->
+      <div id="panel-bg" class="adjustment-panel" style="display:none;">
+        <div class="bg-toolbar-items">
+          <div class="ctrl-row">
+              <label>Opacity: <input type="number" id="opNum" class="num-input" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">%</label>
+              <input type="range" id="opSlider" min="0" max="100" value="12" oninput="updateBgSettings('opacity', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>🔍 Zoom: <input type="number" id="zoomNum" class="num-input" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">%</label>
+              <input type="range" id="zoomSlider" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↔ Move X: <input type="number" id="posXNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">%</label>
+              <input type="range" id="posXSlider" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↕ Move Y: <input type="number" id="posYNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">%</label>
+              <input type="range" id="posYSlider" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">
+          </div>
         </div>
-        <div class="ctrl-row">
-            <label>🔍 Zoom: <input type="number" id="zoomNum" class="num-input" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">%</label>
-            <input type="range" id="zoomSlider" min="50" max="500" value="200" oninput="updateBgSettings('zoom', this.value)">
+      </div>
+
+      <!-- LOGO SLIDERS -->
+      <div id="panel-logo" class="adjustment-panel" style="display:none;">
+        <div class="bg-toolbar-items">
+          <div class="ctrl-row">
+              <label>🔍 Zoom: <input type="number" id="logoZoomNum" class="num-input" min="20" max="300" value="100" oninput="updateAssetSettings('logo', 'zoom', this.value)">%</label>
+              <input type="range" id="logoZoomSlider" min="20" max="300" value="100" oninput="updateAssetSettings('logo', 'zoom', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↔ Move X: <input type="number" id="logoPosXNum" class="num-input" min="0" max="100" value="50" oninput="updateAssetSettings('logo', 'posX', this.value)">%</label>
+              <input type="range" id="logoPosXSlider" min="0" max="100" value="50" oninput="updateAssetSettings('logo', 'posX', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↕ Move Y: <input type="number" id="logoPosYNum" class="num-input" min="0" max="100" value="50" oninput="updateAssetSettings('logo', 'posY', this.value)">%</label>
+              <input type="range" id="logoPosYSlider" min="0" max="100" value="50" oninput="updateAssetSettings('logo', 'posY', this.value)">
+          </div>
         </div>
-        <div class="ctrl-row">
-            <label>↔ Move X: <input type="number" id="posXNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">%</label>
-            <input type="range" id="posXSlider" min="0" max="100" value="50" oninput="updateBgSettings('posX', this.value)">
-        </div>
-        <div class="ctrl-row">
-            <label>↕ Move Y: <input type="number" id="posYNum" class="num-input" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">%</label>
-            <input type="range" id="posYSlider" min="0" max="100" value="50" oninput="updateBgSettings('posY', this.value)">
+      </div>
+
+      <!-- SIGNATURE SLIDERS -->
+      <div id="panel-sig" class="adjustment-panel" style="display:none;">
+        <div class="bg-toolbar-items">
+          <div class="ctrl-row">
+              <label>🔍 Zoom: <input type="number" id="sigZoomNum" class="num-input" min="20" max="300" value="100" oninput="updateAssetSettings('signature', 'zoom', this.value)">%</label>
+              <input type="range" id="sigZoomSlider" min="20" max="300" value="100" oninput="updateAssetSettings('signature', 'zoom', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↔ Move X: <input type="number" id="sigPosXNum" class="num-input" min="0" max="100" value="50" oninput="updateAssetSettings('signature', 'posX', this.value)">%</label>
+              <input type="range" id="sigPosXSlider" min="0" max="100" value="50" oninput="updateAssetSettings('signature', 'posX', this.value)">
+          </div>
+          <div class="ctrl-row">
+              <label>↕ Move Y: <input type="number" id="sigPosYNum" class="num-input" min="0" max="100" value="50" oninput="updateAssetSettings('signature', 'posY', this.value)">%</label>
+              <input type="range" id="sigPosYSlider" min="0" max="100" value="50" oninput="updateAssetSettings('signature', 'posY', this.value)">
+          </div>
         </div>
       </div>
     </div>
