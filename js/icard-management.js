@@ -67,7 +67,12 @@ var PSvg = '<svg style="width:55%;opacity:.6" viewBox="0 0 24 24"><use href="#pe
 // ════════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════════════════════════════════════════
 function goStep(n) {
+  syncName(); // 🚨 NEW FIX: Forces the app to memorize the school name before drawing the cards!
+
   if (n >= 3 && Object.keys(S.selected).length === 0) {
     showToast('Select at least one student first', 'error');
     return;
@@ -86,7 +91,11 @@ function goStep(n) {
   if (n === 2) loadClasses();
   if (n === 3) { renderFields(); renderGrid(); }
   if (n === 4) { document.getElementById('optCount').textContent = selectedCount(); }
-  if (n === 5) { renderFinal(); updateCost(); }
+  if (n === 5) { 
+    S.previewIndex = 0; 
+    renderLivePreview(); 
+    updateCost(); 
+  }
 }
 
 function syncName() {
@@ -129,7 +138,8 @@ function onClassChange() {
   if (S.studentsByClass[cid]) { S.students = S.studentsByClass[cid]; renderStudents(); return; }
 
   grid.innerHTML = '<div class="empty-note">⏳ Loading students…</div>';
-  apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(cid) + '&limit=9999&isActive=true', true)
+  // The Date.now() forces the browser to fetch fresh photos every single time!
+  apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(cid) + '&limit=9999&isActive=true&_t=' + Date.now(), true)
     .then(function (r) {
       var list = r.data || [];
       list.forEach(function (s) { if (s.photo) S.photos[String(s._id)] = s.photo; });
@@ -439,9 +449,10 @@ function uploadAsset(input, kind) {
   var delId  = kind === 'logo' ? 'logoDel' : kind === 'signature' ? 'sigDel' : 'schoolBgDel';
   
   var size = kind === 'schoolBg' ? 800 : 400; 
-  var isBackground = (kind === 'schoolBg'); // 🚨 BUG FIX: Use preserveAspect for background!
+  // 🚨 NEW BUG FIX: Tell the compressor to preserve the rectangular shape for Signatures, Logos, AND Backgrounds!
+  var preserveAspect = (kind === 'schoolBg' || kind === 'signature' || kind === 'logo'); 
 
-  compressImage(file, size, 0.85, isBackground)
+  compressImage(file, size, 0.85, preserveAspect)
     .then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, kind + '.jpg');
@@ -659,7 +670,10 @@ function bt() {
 }
 
 function logoMark() {
-  if (S.logoUrl) return '<img src="' + escapeAttr(S.logoUrl) + '" alt="">';
+  if (S.logoUrl) {
+    // We add inline CSS to force the image to shrink, contain itself, and respect the circle!
+    return '<img src="' + escapeAttr(S.logoUrl) + '" alt="" style="width:100%; height:100%; object-fit:contain; border-radius:inherit; display:block;">';
+  }
   var ch = (S.name && S.name.trim()[0]) ? S.name.trim()[0].toUpperCase() : 'S';
   return ch;
 }
@@ -686,8 +700,8 @@ function front(id, stu = null) {
   if (id === 'T10') return '<div class="t10-frame"><div class="t10-i"><div class="mono">' + logoMark() + '</div><div class="sn">' + sc + '</div><div class="rule"></div><div class="ph">' + photoHtml + '</div><div class="nm">' + nm + '</div>' + rows('fr','fk','fv',p).join('') + '</div></div>';
   
  if (id === 'T11') {
-    var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
-    var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';
+    // 🚨 Added max-height:none !important to defeat the CSS bug, and filter:contrast(2) to destroy the grey background!
+var sig = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); margin-bottom:2px; display:block;">' : '<div style="height:12px;"></div>';    var sess = stu && stu.academicYear ? stu.academicYear : '2025-26';
     
     var customFields = p.map(function(pair) {
       return '<div class="t11-fr"><div class="t11-fk">' + pair[0] + '</div><div class="t11-fc">:</div><div class="t11-fv">' + pair[1] + '</div></div>';
@@ -701,7 +715,7 @@ function front(id, stu = null) {
              '<div class="t11-sn">' + sc + '</div>' +
              '<div class="t11-sess">SESSION:- ' + escapeHtml(sess) + '</div>' +
              '<div class="t11-ph">' + photoHtml + '</div>' +
-             '<div class="t11-sig">' + sig + 'Principal\'s Sign.</div>' +
+             '<div class="t11-sig" style="border-top:none; padding-top:0;">' + sig + '<div style="border-top: 0.6px solid #111; padding-top: 1.5px;">Principal\'s Sign.</div></div>' +
              '<div class="t11-fields">' + customFields + '</div>' +
              '<div class="t11-fbw"></div>' +
            '</div>';
@@ -756,9 +770,14 @@ function front(id, stu = null) {
  
 function back(id, stu = null) {
   var b = bt();
-  var sig = S.signatureUrl 
-    ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="max-height:10px; max-width:80%; display:block; margin: 0 auto 1px;"><div style="font-size:2.2px;">Authorised Signatory</div>' 
-    : 'Authorised Signatory';
+  
+  // 🚨 The Universal Signature Fix: Image -> Line -> Text
+  var sigImg = S.signatureUrl 
+    ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); display:block; margin: 0 auto 2px;">' 
+    : '<div style="height:12px;"></div>';
+    
+  var sigText = '<div style="border-top: 0.6px solid currentColor; padding-top: 2px; width: 100%; font-size: 2.2px;">Authorised Signatory</div>';
+  var sig = sigImg + sigText;
 
   // Opacity, Zoom, and Position mapping
   var op = (S.bgOpacity !== undefined ? S.bgOpacity : 12) / 100;
@@ -770,13 +789,12 @@ function back(id, stu = null) {
     ? '<div style="position:absolute; inset:0; background:url(\'' + escapeAttr(S.schoolBgUrl) + '\') ' + posX + '% ' + posY + '% / ' + zoom + ' auto no-repeat; opacity:' + op + '; mix-blend-mode:multiply; pointer-events:none; z-index:0;"></div>' 
     : '';
 
-  if (id === 'T10') return wm + '<div class="t10b-i"><div class="bttl" style="position:relative; z-index:2;">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2;">' + sig + '</div></div></div>';
+  if (id === 'T10') return wm + '<div class="t10b-i"><div class="bttl" style="position:relative; z-index:2;">Information</div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2; border-top:none; padding-top:0;">' + sig + '</div></div></div>';
   
   if (id === 'T11') {
     var phone = document.getElementById('instPhone').value || '+91 98765 43210';
     var addr = document.getElementById('instAddr').value || 'Your Institution Address Here';
-    var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '">' : '';
-    var sc = escapeHtml(S.name); 
+var sig2 = S.signatureUrl ? '<img src="' + escapeAttr(S.signatureUrl) + '" style="width:100%; height:12px; max-height:none !important; object-fit:contain; mix-blend-mode:multiply; filter:grayscale(1) contrast(4) brightness(1.2); margin-bottom:2px; display:block;">' : '<div style="height:12px;"></div>';    var sc = escapeHtml(S.name); 
     
     var bgImg = S.schoolBgUrl ? escapeAttr(S.schoolBgUrl) : 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?q=80&w=800&auto=format&fit=crop';
     var t11BgStyle = S.schoolBgUrl 
@@ -796,7 +814,7 @@ function back(id, stu = null) {
              '</div>' +
              '<div class="t11-bbw1"></div>' +
              '<div class="t11-bbw2"></div>' +
-             '<div class="t11-sig-b">' + sig2 + 'Principal\'s Sign.</div>' +
+             '<div class="t11-sig-b" style="border-top:none; padding-top:0;">' + sig2 + '<div style="border-top: 0.6px solid #111; padding-top: 1.5px;">Principal\'s Sign.</div></div>' +
            '</div>';
   }
 
@@ -829,7 +847,7 @@ function back(id, stu = null) {
   }
 
   var lc = id.toLowerCase();
-  return wm + '<div class="' + lc + 'b-i"><div class="bhd" style="position:relative; z-index:2;"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2;">' + sig + '</div></div><div class="ft" style="position:relative; z-index:2;"></div></div>';
+  return wm + '<div class="' + lc + 'b-i"><div class="bhd" style="position:relative; z-index:2;"><div class="bttl">Information</div></div><div class="bbd" style="flex:1; display:flex; flex-direction:column; position:relative; z-index:2;"><div class="btx" style="flex:1; display:flex; align-items:center; justify-content:center;">' + b + '</div><div class="sig" style="position:relative; z-index:2; border-top:none; padding-top:0;">' + sig + '</div></div><div class="ft" style="position:relative; z-index:2;"></div></div>';
 }
 
 function renderGrid() {
@@ -925,7 +943,7 @@ function renderFinal() {
       <button class="btn btn-out" style="padding: 6px 14px;" onclick="S.previewIndex--; renderFinal();">❮</button>
       <div>
         <div style="font-size:12px; color:var(--silver); font-weight:600; font-family:'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">
-          Preview ${S.previewIndex + 1} of ${selectedArr.length}
+          Peview ${S.previewIndex + 1} of ${selectedArr.length}
         </div>
         <div style="font-family:'Playfair Display',serif; font-size:18px; color:var(--gold);">
           ${escapeHtml(student.name)}
@@ -948,6 +966,64 @@ function renderFinal() {
   
   document.getElementById('finalPreview').innerHTML = html;
   document.getElementById('finalPreview').style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  STEP 5 — PREVIEW + COST (LIVE VERIFIER CAROUSEL)
+// ════════════════════════════════════════════════════════════════════
+function renderLivePreview() {
+  const container = document.getElementById('live-preview-container');
+  const counter = document.getElementById('preview-counter');
+  
+  if (!S.students || S.students.length === 0) {
+    if (container) container.innerHTML = `<div style="color: var(--muted); font-family: 'IBM Plex Mono', monospace;">No student data uploaded yet.</div>`;
+    if (counter) counter.textContent = "Student 0 of 0";
+    return;
+  }
+
+  // 1. Safeguard the index
+  if (S.previewIndex === undefined || S.previewIndex < 0) S.previewIndex = 0;
+  if (S.previewIndex >= S.students.length) S.previewIndex = S.students.length - 1;
+
+  // 2. Get the current student & correct template class
+  const stu = S.students[S.previewIndex];
+  const tplClass = (S.tpl || 'T01').toLowerCase();
+
+  // 🚨 FIX: Determine if it's Landscape or Portrait so it doesn't get cut off!
+  const isLandscape = (S.tpl === 'T11'); 
+  const cardW = isLandscape ? '86mm' : '54mm';
+  const cardH = isLandscape ? '54mm' : '86mm';
+
+  // 3. Inject the Front and Back cards with dynamic dimensions
+  if (container) {
+    container.innerHTML = `
+      <div class="icard ${tplClass}" style="width: ${cardW}; height: ${cardH}; position: relative; box-shadow: 0 15px 35px rgba(0,0,0,0.4); flex-shrink: 0; border-radius: 6px; overflow: hidden; background: #fff;">
+        ${front(S.tpl, stu)}
+      </div>
+      <div class="icard ${tplClass}b" style="width: ${cardW}; height: ${cardH}; position: relative; box-shadow: 0 15px 35px rgba(0,0,0,0.4); flex-shrink: 0; border-radius: 6px; overflow: hidden; background: #fff;">
+        ${back(S.tpl, stu)}
+      </div>
+    `;
+  }
+
+  // 4. Update the Counter text
+  if (counter) {
+    counter.textContent = `Student ${S.previewIndex + 1} of ${S.students.length}`;
+  }
+}
+
+function nextPreviewStudent() {
+  if (S.students && S.previewIndex < S.students.length - 1) {
+    S.previewIndex++;
+    renderLivePreview();
+  }
+}
+
+function prevPreviewStudent() {
+  if (S.students && S.previewIndex > 0) {
+    S.previewIndex--;
+    renderLivePreview();
+  }
 }
 
 function pricing() {
@@ -1097,8 +1173,8 @@ function syncDraftToCloud() {
     bgPosX: S.bgPosX,
     bgPosY: S.bgPosY,
     selectedClassId: S.selectedClassId,
-    // 🚨 FIX: We only save an array of IDs now (e.g. ["123", "456"]), NOT full objects!
-    selectedIds: Object.keys(S.selected) 
+    selectedIds: Object.keys(S.selected),
+    photos: S.photos
   };
 
   var draftPayload = {
@@ -1180,25 +1256,33 @@ apiGet(API_ICARD_DRAFT, true).then(function(r) {
       goStep(targetStep);
       
       if (targetStep >= 2 && S.selectedClassId) {
-    apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(S.selectedClassId) + '&limit=9999&isActive=true', true)
-      .then(function (sr) {
-          var list = sr.data || [];
-          S.studentsByClass[S.selectedClassId] = list;
-          S.students = list;
-          S.selected = {};
-          S.photos = {};
-          list.forEach(function(stu) {
-              if (stu.photo) S.photos[String(stu._id)] = stu.photo;
-              if (selectedIdsToRestore.includes(String(stu._id))) {
-                  S.selected[String(stu._id)] = stu;
-              }
+        // Add cache buster here too!
+        apiGet(API_ENDPOINTS.STUDENTS + '?classId=' + encodeURIComponent(S.selectedClassId) + '&limit=9999&isActive=true&_t=' + Date.now(), true)
+          .then(function (sr) {
+              var list = sr.data || [];
+              S.studentsByClass[S.selectedClassId] = list;
+              S.students = list;
+              S.selected = {};
+              
+              // 🚨 Safely restore photos from the draft
+              S.photos = saved.photos || {}; 
+              
+              list.forEach(function(stu) {
+                  // Failsafe: Sync DB photos with Draft photos
+                  if (stu.photo && !S.photos[String(stu._id)]) {
+                      S.photos[String(stu._id)] = stu.photo;
+                  }
+                  if (selectedIdsToRestore.includes(String(stu._id))) {
+                      S.selected[String(stu._id)] = stu;
+                  }
+              });
+              
+              document.getElementById('classSelect').value = S.selectedClassId;
+              renderStudents();
+              if (targetStep >= 3) { renderFields(); renderGrid(); }
+              if (targetStep === 5) { S.previewIndex = 0; renderLivePreview(); updateCost(); }
           });
-          document.getElementById('classSelect').value = S.selectedClassId;
-          renderStudents();
-          if (targetStep >= 3) { renderFields(); renderGrid(); }
-          if (targetStep === 5) { renderFinal(); updateCost(); }
-      });
-} else if (targetStep >= 3) {
+      } else if (targetStep >= 3) {
     renderFields(); renderGrid();
 }
 
@@ -1258,6 +1342,86 @@ function viewPhoto(url, name) {
   var wrap = document.createElement('div');
   wrap.innerHTML = html;
   document.body.appendChild(wrap.firstChild);
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   ENTERPRISE RASTER ENGINE (JPEG PROOF GENERATOR)
+══════════════════════════════════════════════════════════ */
+async function downloadSampleProof() {
+  const btn = document.getElementById('proof-btn');
+  const originalText = btn ? btn.innerHTML : 'Download Sample Proof';
+  
+  if(btn) {
+    btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Generating...';
+    btn.disabled = true;
+  }
+
+  try {
+    // 1. Grab the live preview cards already visible on the screen
+    const screenCards = document.querySelectorAll('#live-preview-container .icard');
+    if (screenCards.length === 0) {
+      alert("No preview cards found to capture.");
+      return;
+    }
+
+    // 2. Create a hidden off-screen container
+    const offScreen = document.createElement('div');
+    offScreen.style.position = 'fixed';
+    offScreen.style.left = '-9999px';
+    offScreen.style.top = '0';
+    offScreen.style.display = 'flex';
+    offScreen.style.gap = '20px';
+    offScreen.style.padding = '20px';
+    offScreen.style.background = '#ffffff';
+    document.body.appendChild(offScreen);
+
+    // 3. Determine Dimensions & Clone Cards
+    const isLandscape = (S.tpl === 'T11');
+    const cardW = isLandscape ? '86mm' : '54mm';
+    const cardH = isLandscape ? '54mm' : '86mm';
+
+    Array.from(screenCards).slice(0, 2).forEach(card => {
+      const clone = card.cloneNode(true);
+      clone.classList.add('proof-watermark'); 
+      clone.style.width = cardW;
+      clone.style.height = cardH;
+      clone.style.transform = 'none'; 
+      clone.style.position = 'relative';
+      clone.style.margin = '0';
+      offScreen.appendChild(clone);
+    });
+
+    // 4. Wait for images to attach
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 5. Take High-Res Screenshot
+    const canvas = await html2canvas(offScreen, {
+      scale: 2.5,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    // 6. Download File
+    const imgData = canvas.toDataURL('image/jpeg', 0.9);
+    const link = document.createElement('a');
+    link.download = `HelloSchool_Unpaid_Proof.jpg`;
+    link.href = imgData;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    document.body.removeChild(offScreen);
+
+  } catch (err) {
+    console.error('Raster Engine Error:', err);
+    alert("Proof generation failed. Check the Console for the red error message.");
+  } finally {
+    if(btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════

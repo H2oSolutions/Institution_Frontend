@@ -93,11 +93,30 @@ input[type=file]{display:none;}
 .photo-act.busy{opacity:.5;pointer-events:none;}
 .empty-note{text-align:center;color:var(--muted);font-size:13px;padding:40px 20px;}
 
-.tpl-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-bottom:28px;}
-.tpl-scene{perspective:700px;cursor:pointer;position:relative;}
-.tpl-scene:hover .tpl-body{transform:rotateY(6deg) scale(1.03);}
-.tpl-scene.flipped .tpl-body{transform:rotateY(180deg);}
-.tpl-scene.picked::before{content:'';position:absolute;inset:-3px;border-radius:13px;z-index:-1;background:linear-gradient(135deg,var(--gold),var(--gold2),var(--gold));animation:ringPulse 2s ease-in-out infinite;}
+/* 🚨 The magic fix: minmax(0, 1fr) stops the columns from blowing out! */
+.tpl-grid {
+  display: grid; 
+  grid-template-columns: repeat(5, minmax(0, 1fr)); 
+  gap: 18px; 
+  margin-bottom: 28px;
+}
+
+/* min-width: 0 forces the child to respect the grid bounds */
+.tpl-scene {
+  perspective: 700px; 
+  cursor: pointer; 
+  position: relative; 
+  min-width: 0; 
+}
+
+/* Ensure the body scales perfectly */
+.tpl-body {
+  position: relative; 
+  transform-style: preserve-3d; 
+  transition: transform .6s cubic-bezier(.4,0,.2,1); 
+  border-radius: 12px; 
+  width: 100%;
+}
 @keyframes ringPulse{0%,100%{opacity:1}50%{opacity:.55}}
 .tpl-body{position:relative;transform-style:preserve-3d;transition:transform .6s cubic-bezier(.4,0,.2,1);border-radius:12px;}
 .tpl-face,.tpl-backface{backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:12px;overflow:hidden;}
@@ -246,8 +265,25 @@ input[type=file]{display:none;}
 
 /* Logo & School Name */
 .t11-logo { position: absolute; top: 3%; left: 3%; width: 16%; aspect-ratio: 1; background: #fff; border-radius: 50%; border: 0.5px solid #aaa; z-index: 15; padding: 1.5%; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; }
-.t11-sn { position: absolute; top: 5%; left: 22%; right: 2%; font-family: 'Times New Roman', Times, serif; font-size: 5.6px; font-weight: 900; color: #fff; z-index: 11; letter-spacing: 0.3px; text-shadow: 0.5px 0.5px 1px #000; text-transform: uppercase; }
-
+.t11-sn { 
+  position: absolute; 
+  top: 0; 
+  left: 21%; 
+  right: 2%; 
+  height: 18%; /* Matches the exact height of the top navy band */
+  display: flex; 
+  align-items: center; /* Centers perfectly vertically */
+  justify-content: center; /* Centers perfectly horizontally */
+  text-align: center; 
+  font-family: 'Times New Roman', Times, serif; 
+  font-size: 5.6px; 
+  font-weight: 900; 
+  color: #fff; 
+  z-index: 11; 
+  letter-spacing: 0.3px; 
+  text-shadow: 0.5px 0.5px 1px rgba(0,0,0,0.5); 
+  text-transform: uppercase; 
+}
 /* Front Body Elements */
 .t11-sess { position: absolute; top: 21%; right: 4%; font-size: 3.2px; font-weight: 800; color: #111; z-index: 15; }
 .t11-ph { position: absolute; top: 31%; left: 3.5%; width: 22%; aspect-ratio: 3/4; border: 1px solid #111; border-radius: 5px; z-index: 10; background: #f0f0f0; overflow: hidden; }
@@ -510,6 +546,7 @@ input[type=file]{display:none;}
 }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
@@ -737,16 +774,34 @@ input[type=file]{display:none;}
   <div class="card" id="step5" style="display:none">
     <div class="card-title">Preview &amp; Final Cost</div>
     <div class="card-sub">Review your I-Card design and order details before confirming.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;margin-bottom:28px" id="finalPreview"></div>
+    
+    <!-- LIVE DATA VERIFIER CAROUSEL (Now safely outside the cost card!) -->
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+      <div style="text-align: center; margin-bottom: 16px;">
+        <h3 style="color: #fff; font-size: 16px; margin-bottom: 4px;">Live Data Verifier</h3>
+        <p style="color: var(--text-dim); font-size: 12px; font-family: var(--mono);">Review all students before placing your order</p>
+      </div>
+      <div id="live-preview-container" style="display: flex; gap: 20px; justify-content: center; align-items: center; margin-bottom: 24px; overflow-x: auto; padding-bottom: 10px;">
+          <!-- JS injects Front and Back here -->
+      </div>
+      <div style="display: flex; justify-content: center; align-items: center; gap: 20px;">
+        <button class="btn btn-ghost" onclick="prevPreviewStudent()">← Previous</button>
+        <div id="preview-counter" class="mono" style="font-size: 14px; font-weight: bold; color: var(--cyan);">Student 0 of 0</div>
+        <button class="btn btn-ghost" onclick="nextPreviewStudent()">Next →</button>
+      </div>
+    </div>
+
+    <!-- PRICING BOX -->
     <div class="cost-card">
       <div style="font-size:13px;color:var(--silver);margin-bottom:8px">Total Order Cost</div>
       <div class="cost-amt" id="finalAmt">₹0</div>
       <div class="cost-sub2" id="finalSub">calculating...</div>
       <div class="cost-rows" id="costRows"></div>
     </div>
+    
     <div class="btn-row">
       <button class="btn btn-out" onclick="goStep(4)">← Edit Options</button>
-      <button class="btn btn-out" onclick="printCards()" style="border-color: var(--teal); color: var(--teal);">📄 Print / Save PDF</button>
+      <button class="btn btn-out" onclick="printCards()" style="border-color: var(--teal); color: var(--teal);">📄 Print All to PDF</button>
       <button class="btn btn-green" onclick="initiatePayment()" id="payBtn">💳 Pay &amp; Place Order</button>
     </div>
   </div>
