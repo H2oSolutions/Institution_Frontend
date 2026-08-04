@@ -764,9 +764,8 @@ function logoMark() {
     var posX = ((S.logoPosX !== undefined ? S.logoPosX : 50) - 50) * 2;
     var posY = ((S.logoPosY !== undefined ? S.logoPosY : 50) - 50) * 2;
     
-    // Wrap the image in a stationary div so the circular mask doesn't scale with the zoom!
-    return '<div style="width:100%; height:100%; border-radius:inherit; overflow:hidden; display:flex; align-items:center; justify-content:center;">' +
-             '<img src="' + escapeAttr(S.logoUrl) + '" alt="" style="width:100%; height:100%; object-fit:contain; transform:translate(' + posX + '%, ' + posY + '%) scale(' + zoom + '); display:block;">' +
+    return '<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:visible;">' +
+             '<img src="' + escapeAttr(S.logoUrl) + '" alt="" style="width:100%; height:100%; object-fit:contain; transform:translate(' + posX + '%, ' + posY + '%) scale(' + zoom + '); display:block; overflow:visible;">' +
            '</div>';
   }
   var ch = (S.name && S.name.trim()[0]) ? S.name.trim()[0].toUpperCase() : 'S';
@@ -1185,6 +1184,10 @@ function buildOrderPayload() {
     sigPosX:          S.sigPosX,  // <-- ADD THIS
     sigPosY:          S.sigPosY,  // <-- ADD THIS
     schoolBgUrl:      S.schoolBgUrl,
+    bgOpacity:        S.bgOpacity, // 🚨 NEW FIX: Save Opacity to DB
+    bgZoom:           S.bgZoom,    // 🚨 NEW FIX: Save Bg Zoom to DB
+    bgPosX:           S.bgPosX,    // 🚨 NEW FIX: Save Bg X to DB
+    bgPosY:           S.bgPosY,    // 🚨 NEW FIX: Save Bg Y to DB
     classId:          S.selectedClassId,
     selectedFields:   S.fields,
     templateId:       S.tpl,

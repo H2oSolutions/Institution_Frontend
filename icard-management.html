@@ -545,6 +545,11 @@ input[type=file]{display:none;}
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 
+/* 🚨 FIX: Force ALL logo containers to allow ribbons to spill over the edge! */
+.lg, .crest, .mono, .t11-logo, .t12-logo-wrap, .t12b-logo-wrap {
+    overflow: visible !important;
+}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
