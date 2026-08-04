@@ -315,6 +315,12 @@ function applyPhoto(studentId, url) {
   S.photos[studentId] = url;
   var s = S.students.find(function (x) { return String(x._id) === studentId; });
   if (s) s.photo = url;
+  
+  // 🚨 FIX: Explicitly update selected student object
+  if (S.selected[studentId]) {
+    S.selected[studentId].photo = url;
+  }
+
   var tile = document.getElementById('stu-' + studentId);
   if (tile) {
     var av = tile.querySelector('.stu-avatar');
@@ -358,17 +364,25 @@ function bulkPhotoMatch(files) {
   });
 
   if (autoJobs.length) {
-    showToast('Uploading ' + autoJobs.length + ' matched photo' + (autoJobs.length > 1 ? 's' : '') + '…', 'success');
-    var jobs = autoJobs.map(function (j) {
-      var id = String(j.student._id);
-      return compressImage(j.file)
-        .then(function (blob) { return uploadStudentPhoto(id, blob); })
-        .then(function (url) { applyPhoto(id, url); })
-        .catch(function () {});
-    });
-    Promise.all(jobs).then(function () {
-      showToast(autoJobs.length + ' photo(s) matched by name', 'success');
-    });
+    showToast('Uploading ' + autoJobs.length + ' matched photo' + (autoJobs.length > 1 ? 's' : '') + ' in batches…', 'success');
+    
+    // 🚨 BATCH UPLOAD: Uploads 5 photos at a time to prevent server/browser crash
+    (async function() {
+      const batchSize = 5; 
+      for (let i = 0; i < autoJobs.length; i += batchSize) {
+        const batch = autoJobs.slice(i, i + batchSize);
+        await Promise.all(batch.map(function (j) {
+          var id = String(j.student._id);
+          setPhotoBusy(id, true); // Show loading UI for this specific student
+          return compressImage(j.file)
+            .then(function (blob) { return uploadStudentPhoto(id, blob); })
+            .then(function (url) { applyPhoto(id, url); })
+            .catch(function (e) { console.error('Upload failed for', j.file.name, e); })
+            .finally(function () { setPhotoBusy(id, false); });
+        }));
+      }
+      showToast(autoJobs.length + ' photo(s) matched and uploaded successfully', 'success');
+    })();
   }
 
   if (conflicts.length) {
@@ -426,24 +440,34 @@ function closeBulkResolver() {
 }
 
 function applyBulkResolver() {
-  var jobs = [];
+  var tasks = [];
   _bulkConflicts.forEach(function (c, i) {
     var sel = document.getElementById('bres-' + i);
     var sid = sel && sel.value;
     if (!sid) return;                    // skipped
-    jobs.push(
-      compressImage(c.file)
-        .then(function (blob) { return uploadStudentPhoto(sid, blob); })
-        .then(function (url) { applyPhoto(sid, url); })
-        .catch(function () {})
-    );
+    tasks.push({ file: c.file, sid: sid });
   });
-  if (!jobs.length) { closeBulkResolver(); showToast('Nothing selected', 'error'); return; }
-  showToast('Uploading ' + jobs.length + ' photo(s)…', 'success');
-  Promise.all(jobs).then(function () {
-    showToast(jobs.length + ' photo(s) uploaded', 'success');
+
+  if (!tasks.length) { closeBulkResolver(); showToast('Nothing selected', 'error'); return; }
+  showToast('Uploading ' + tasks.length + ' photo(s) in batches…', 'success');
+
+  // 🚨 BATCH UPLOAD: Protects server when resolving multiple conflicts
+  (async function() {
+    const batchSize = 5;
+    for (let i = 0; i < tasks.length; i += batchSize) {
+      const batch = tasks.slice(i, i + batchSize);
+      await Promise.all(batch.map(function(t) {
+         setPhotoBusy(t.sid, true);
+         return compressImage(t.file)
+           .then(function (blob) { return uploadStudentPhoto(t.sid, blob); })
+           .then(function (url) { applyPhoto(t.sid, url); })
+           .catch(function (e) { console.error('Conflict upload failed', e); })
+           .finally(function () { setPhotoBusy(t.sid, false); });
+      }));
+    }
+    showToast(tasks.length + ' photo(s) uploaded successfully', 'success');
     closeBulkResolver();
-  });
+  })();
 }
 
 // ── Upload Asset ──
