@@ -638,9 +638,6 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     white-space: nowrap;
 }
 
-
-
-
 /* --- LIVE CASHIER CONSOLE --- */
 .live-checkout {
   position: sticky;
@@ -691,6 +688,19 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 /* Hide the old bottom bulk bar permanently */
 #bulk-bar { display: none !important; }
 
+/* Add a custom dropdown arrow to all select fields */
+.fm-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 14px;
+    padding-right: 36px; /* Prevents text from overlapping the arrow */
+    cursor: pointer;
+}
+
 </style>
 </head>
 
@@ -716,6 +726,7 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     <button class="fm-tab" id="tab4-btn" onclick="switchTab(4)"><div class="fm-tab-num">4</div>Fee Status</button>
     <button class="fm-tab" id="tab5-btn" onclick="switchTab(5)"><div class="fm-tab-num">5</div>Collection Report</button>
     <button class="fm-tab" id="tab6-btn" onclick="switchTab(6)"><div class="fm-tab-num">6</div>Dues Report</button>
+    <button class="fm-tab" id="tab7-btn" onclick="switchTab(7)"><div class="fm-tab-num">7</div>Extra Dues</button>
   </div>
 
   <!-- TAB 1: FEE HEADS -->
@@ -945,6 +956,89 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     </div>
   </div>
 
+  <!-- TAB 7: EXTRA DUES / FEES -->
+  <div id="tab7" style="display:none">
+    <div class="fm-card">
+      <div class="fm-card-title">&#128176; Assign Extra Dues & Fines</div>
+      <div class="fm-card-sub">Assign specific extra fees (e.g., Annual Trip, Library Fine) to students.</div>
+
+      <div class="fm-grid-2">
+        <div class="fm-form-group">
+          <label class="fm-label">Title / Fee Name *</label>
+          <input type="text" id="ef-title" class="fm-input" placeholder="e.g. Annual Trip Fee">
+        </div>
+        <div class="fm-form-group">
+          <label class="fm-label">Amount (Rs.) *</label>
+          <input type="number" id="ef-amount" class="fm-input" min="1" placeholder="e.g. 500">
+        </div>
+      </div>
+
+      <div class="fm-grid-2">
+        <div class="fm-form-group">
+          <label class="fm-label">Due Date *</label>
+          <input type="date" id="ef-duedate" class="fm-input">
+        </div>
+        <div class="fm-form-group">
+          <label class="fm-label">Target Class *</label>
+          <select id="ef-class" class="fm-select" onchange="loadExtraFeeStudents()">
+            <option value="">Select Class...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fm-form-group">
+        <label class="fm-label">Message / Description (Optional)</label>
+        <textarea id="ef-desc" class="textarea-field" rows="2" placeholder="Details about this extra fee..."></textarea>
+      </div>
+
+      <!-- Student Selection List with Search -->
+      <div class="fm-form-group" id="ef-students-section" style="display:none; margin-top: 15px;">
+        <div style="display:flex; justify-content: space-between; align-items:flex-end; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div class="search-wrap" style="flex:1; min-width: 200px;">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="ef-search" class="fm-input" placeholder="Search student name..." oninput="filterExtraFeeStudents()" style="padding-left:34px; padding-top:7px; padding-bottom:7px;">
+          </div>
+          <div style="display:flex; gap: 8px;">
+            <button class="btn-secondary" style="padding: 6px 12px; font-size: 11px;" onclick="selectAllExtraFeeStudents(true)">Select All</button>
+            <button class="btn-secondary" style="padding: 6px 12px; font-size: 11px;" onclick="selectAllExtraFeeStudents(false)">Clear</button>
+          </div>
+        </div>
+        
+        <!-- List Container -->
+        <div id="ef-student-list" style="border: 1.5px solid var(--border); border-radius: 9px; padding: 10px; max-height: 280px; overflow-y: auto; background: var(--surface2); display: flex; flex-direction: column; gap: 6px;">
+        </div>
+      </div>
+
+      <div style="margin-top: 15px; text-align: right;">
+        <button class="btn-primary" id="ef-submit-btn" onclick="submitExtraFees()">Assign Extra Fees</button>
+      </div>
+    </div>
+
+    <!-- History Log Table -->
+    <div class="fm-card" style="margin-top: 16px;">
+      <div class="fm-card-title">&#128466; Recently Assigned Extra Dues</div>
+      <div class="fm-card-sub">Manage previously assigned extra fees and fines. (Showing last 100 entries)</div>
+      <div class="rpt-table-wrap">
+        <table class="rpt-table" style="min-width: 700px;">
+          <thead>
+            <tr>
+              <th>Date Assigned</th>
+              <th>Student</th>
+              <th>Title</th>
+              <th>Due Date</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ef-history-tbody">
+            <tr><td colspan="7" class="fm-empty">Loading history...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB 5: COLLECTION REPORT DASHBOARD -->
 <div id="tab5" style="display:none">
 
@@ -983,6 +1077,8 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
     </div>
   </div>
 </div>
+
+
  
   <!-- ── CSS for Tab 5 (inject once inside a <style> block anywhere in <head>) ── -->
   <style>
@@ -1911,8 +2007,89 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
   </div>
 </div>
 
-<div class="fm-toast" id="fm-toast"></div>
+<!-- Receipt History Modal -->
+<div class="modal-overlay" id="receipt-history-modal">
+  <div class="modal-box" style="max-width: 400px;">
+    <div class="modal-head">
+      <h3>Receipt History</h3>
+      <button class="modal-close" onclick="closeModal('receipt-history-modal')">X</button>
+    </div>
+    <p class="modal-sub">This month was paid in multiple installments. Select which receipt to print.</p>
+    <div id="rhm-list" style="max-height:300px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;"></div>
+  </div>
+</div>
 
+<!-- Edit Extra Due Modal -->
+<div class="modal-overlay" id="edit-extradue-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Edit Extra Due</h3>
+      <button class="modal-close" onclick="closeModal('edit-extradue-modal')">X</button>
+    </div>
+    <p class="modal-sub">Modify the details of this specific fine or fee.</p>
+    <input type="hidden" id="eed-id">
+    
+    <div class="fm-form-group">
+      <label class="fm-label">Title / Fee Name</label>
+      <input type="text" id="eed-title" class="fm-input">
+    </div>
+    <div class="fm-grid-2">
+      <div class="fm-form-group">
+        <label class="fm-label">Amount (Rs.)</label>
+        <input type="number" id="eed-amount" class="fm-input" min="1">
+      </div>
+      <div class="fm-form-group">
+        <label class="fm-label">Due Date</label>
+        <input type="date" id="eed-duedate" class="fm-input">
+      </div>
+    </div>
+    <div class="fm-form-group">
+      <label class="fm-label">Message / Description</label>
+      <textarea id="eed-desc" class="textarea-field" rows="2" placeholder="Optional details..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('edit-extradue-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="eed-save-btn" onclick="saveEditExtraDue()">Save Changes</button>
+    </div>
+  </div>
+</div>
+<!-- 👆 EDIT MODAL CLOSES HERE 👆 -->
+
+<!-- 👇 NEW OFFLINE PAYMENT MODAL STARTS HERE 👇 -->
+<div class="modal-overlay" id="mark-extradue-paid-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Receive Offline Payment</h3>
+      <button class="modal-close" onclick="closeModal('mark-extradue-paid-modal')">X</button>
+    </div>
+    <p class="modal-sub">Mark this extra due as paid if the parent submitted the fee via cash, cheque, or at the school desk.</p>
+      
+    <input type="hidden" id="offline-extradue-id">
+      
+    <div class="fm-form-group">
+      <label class="fm-label">Payment Mode</label>
+      <select id="offline-extradue-mode" class="fm-select">
+        <option value="cash">Cash</option>
+        <option value="cheque">Cheque</option>
+        <option value="pos">Card (POS)</option>
+        <option value="desk_upi">UPI (School QR Code)</option>
+      </select>
+    </div>
+
+    <div class="fm-form-group" style="margin-bottom: 0;">
+      <label class="fm-label">Reference / Remark (Optional)</label>
+      <input type="text" id="offline-extradue-remark" class="fm-input" placeholder="e.g. Cheque No. 123456">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('mark-extradue-paid-modal')">Cancel</button>
+      <button class="btn-confirm-primary" id="offline-extradue-save-btn" onclick="submitOfflineExtraDuePayment()">Confirm Payment</button>
+    </div>
+  </div>
+</div>
+
+<div class="fm-toast" id="fm-toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="js/config-v2.js"></script>
