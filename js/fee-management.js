@@ -2272,10 +2272,14 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
     actions += '<button class="mr-btn mr-btn-edit" onclick="event.stopPropagation();openMonthEditModal(\'' + sid + '\',' + monthIndex + ')">Edit</button>';
     actions += '<button class="mr-btn mr-btn-del"  onclick="event.stopPropagation();openMonthDeleteModal(\'' + sid + '\',' + monthIndex + ')">Del</button>';
     
-    // NEW: Check history for split payments
-    var historyArr = displayItems.length > 0 && displayItems[0].month.history ? displayItems[0].month.history : [];
-    if (historyArr.length > 1) {
-        actions += '<button class="mr-btn" style="background:#fefce8;color:#a16207;border-color:#fef08a" onclick="event.stopPropagation(); openReceiptHistoryModal(\'' + sid + '\',' + monthIndex + ', \'reg\')">&#128424; PDFs (' + historyArr.length + ')</button>';
+    // Count COLLECTION EVENTS for the month (a bulk payment across heads = 1 event;
+    // installments over time = separate events). One receipt per event.
+    var stuRef2 = feeStatusData.find(function(s) { return s.studentId === sid; });
+    var eventCount = stuRef2 ? buildMonthEvents(stuRef2, monthIndex, 'reg').events.length : 0;
+    if (eventCount > 1) {
+        actions += '<button class="mr-btn" style="background:#fefce8;color:#a16207;border-color:#fef08a" onclick="event.stopPropagation(); openReceiptHistoryModal(\'' + sid + '\',' + monthIndex + ', \'reg\')">&#128424; PDFs (' + eventCount + ')</button>';
+    } else if (eventCount === 1) {
+        actions += '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="event.stopPropagation();printMonthEventReceipt(\'' + sid + '\',' + monthIndex + ',\'reg\',0)">&#128424; PDF</button>';
     } else {
         actions += '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="event.stopPropagation();printMonthRowReceipt(\'' + sid + '\',' + monthIndex + ')">&#128424; PDF</button>';
     }
@@ -2428,9 +2432,13 @@ function buildTransportMonthRow(sid, m, routeName, session, routeId, nextMonthNa
     actions += '<button class="mr-btn mr-btn-edit" onclick="event.stopPropagation();openTransportEditModal(...)">Edit</button>';
     actions += '<button class="mr-btn mr-btn-del" onclick="event.stopPropagation();openTransportMonthDeleteModal(\'' + sid + '\',' + m.monthIndex + ')">Del</button>';
     
-    // NEW: Check history for split payments
-    if (m.history && m.history.length > 1) {
-         actions += '<button class="mr-btn" style="background:#fefce8;color:#a16207;border-color:#fef08a" onclick="event.stopPropagation(); openReceiptHistoryModal(\'' + sid + '\',' + m.monthIndex + ', \'trn\')">&#128424; PDFs (' + m.history.length + ')</button>';
+    // Count collection events (installments over time = separate PDFs).
+    var stuRefT = feeStatusData.find(function(s) { return s.studentId === sid; });
+    var evCountT = stuRefT ? buildMonthEvents(stuRefT, m.monthIndex, 'trn').events.length : 0;
+    if (evCountT > 1) {
+         actions += '<button class="mr-btn" style="background:#fefce8;color:#a16207;border-color:#fef08a" onclick="event.stopPropagation(); openReceiptHistoryModal(\'' + sid + '\',' + m.monthIndex + ', \'trn\')">&#128424; PDFs (' + evCountT + ')</button>';
+    } else if (evCountT === 1) {
+         actions += '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="event.stopPropagation();printMonthEventReceipt(\'' + sid + '\',' + m.monthIndex + ',\'trn\',0)">&#128424; PDF</button>';
     } else {
          actions += '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="event.stopPropagation();printTransportMonthReceipt(\'' + sid + '\',' + m.monthIndex + ')">&#128424; PDF</button>';
     }
@@ -3187,87 +3195,169 @@ function payArrearsModal(sid, type, targetMonthIndex) {
 // 2. Opens the mini-modal to select which split PDF to print
 function openReceiptHistoryModal(sid, monthIndex, type) {
   var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  var historyArr = [];
-  if (type === 'reg') {
-      stu.entries.forEach(function(e) {
-          var m = e.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-          if (m && m.history && m.history.length > 0) historyArr = m.history;
-      });
-  } else {
-      var m = stu.transport.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-      if (m && m.history && m.history.length > 0) historyArr = m.history;
-  }
-  
-  var html = historyArr.map(function(txn, idx) {
-      var d = new Date(txn.paidAt).toLocaleString('en-IN');
-      return '<div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #f1f5f9;align-items:center;">' +
-             '<div><b>Part ' + (idx + 1) + '</b><br><span style="font-size:10px;color:var(--text3)">' + d + '</span></div>' +
-             '<div style="font-family:monospace;font-weight:bold;font-size:14px;color:var(--brand)">Rs.' + txn.paidAmount.toLocaleString() + '</div>' +
-             '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="printHistoryReceipt(\'' + sid + '\',' + monthIndex + ',\'' + type + '\',' + idx + ')">&#128424; Print PDF</button>' +
+  if (!stu) { toast('Student data not loaded', 'error'); return; }
+
+  // One row per collection event (a bulk payment counts as one, installments count separately).
+  var events = buildMonthEvents(stu, monthIndex, type).events;
+  if (!events.length) { toast('No receipts found for this month', 'error'); return; }
+
+  var html = events.map(function(ev, idx) {
+      var d = new Date(ev.paidAt).toLocaleString('en-IN');
+      return '<div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid #f1f5f9;align-items:center;gap:8px;">' +
+             '<div style="flex:1;min-width:0"><b>Part ' + (idx + 1) + '</b><br><span style="font-size:10px;color:var(--text3)">' + d + '</span></div>' +
+             '<div style="font-family:monospace;font-weight:bold;font-size:14px;color:var(--brand)">Rs.' + Number(ev.paid || 0).toLocaleString() + '</div>' +
+             '<button class="mr-btn" style="background:#eff6ff;color:#3b82f6;border-color:#bfdbfe" onclick="printMonthEventReceipt(\'' + sid + '\',' + monthIndex + ',\'' + type + '\',' + idx + ')">&#128424; Print PDF</button>' +
              '</div>';
   }).join('');
   document.getElementById('rhm-list').innerHTML = html;
   openModal('receipt-history-modal');
 }
 
-// 3. Builds the specific isolated arrears receipt
-function printHistoryReceipt(sid, monthIndex, type, historyIdx) {
-   var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-   var txn, fhName = 'Fee', baseTotal = 0;
-   var targetHistoryList = [];
+// Compact a list of fee-head names: show up to 4, then "+N more".
+function _fmtHeadList(arr) {
+  if (!arr || !arr.length) return '';
+  if (arr.length <= 4) return arr.join(', ');
+  return arr.slice(0, 3).join(', ') + ' +' + (arr.length - 3) + ' more';
+}
 
-   if (type === 'reg') {
-      stu.entries.forEach(function(e) {
-          var m = e.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-          if (m && m.history && m.history.length > historyIdx) { 
-              txn = m.history[historyIdx]; 
-              fhName = e.feeHeadName; 
-              baseTotal = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
-              targetHistoryList = m.history;
-          }
+// Build the payment "collection events" for a month + the month's total fee.
+// One event = one collection: payments sharing a bulkGroupId, OR made at the exact
+// same time, count as a single event.
+function buildMonthEvents(stu, monthIndex, type) {
+  var txns = [];
+  var monthTotalFee = 0;
+  var headNames = [];
+
+  if (type === 'reg') {
+    (stu.entries || []).forEach(function(e) {
+      var m = (e.months || []).find(function(mo) { return mo.monthIndex === monthIndex; });
+      if (!m) return;
+      var fee = (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount != null ? m.baseAmount : (m.amount || 0)));
+      monthTotalFee += fee;
+      if (e.feeHeadName) headNames.push(e.feeHeadName);
+      var hist = (m.history && m.history.length)
+        ? m.history
+        : (m.paidAmount > 0 ? [{ paidAmount: m.paidAmount, waiverAmount: 0, lateFee: 0, paymentSource: m.paymentSource, paidAt: m.paidAt, bulkGroupId: m.bulkGroupId }] : []);
+      hist.forEach(function(t) { txns.push({ txn: t }); });
+    });
+  } else if (stu.transport && stu.transport.months) {
+    var mt = stu.transport.months.find(function(mo) { return mo.monthIndex === monthIndex; });
+    if (mt) {
+      monthTotalFee += (mt.effectiveDue != null ? mt.effectiveDue : (mt.baseAmount != null ? mt.baseAmount : (mt.amount || 0)));
+      headNames.push('Transport' + (stu.transport.routeName ? ' — ' + stu.transport.routeName : ''));
+      var thist = (mt.history && mt.history.length)
+        ? mt.history
+        : (mt.paidAmount > 0 ? [{ paidAmount: mt.paidAmount, waiverAmount: 0, lateFee: 0, paymentSource: mt.paymentSource, paidAt: mt.paidAt, bulkGroupId: mt.bulkGroupId }] : []);
+      thist.forEach(function(t) { txns.push({ txn: t }); });
+    }
+  }
+
+  var map = {}, order = [];
+  txns.forEach(function(row) {
+    var key = row.txn.bulkGroupId ? ('bg:' + row.txn.bulkGroupId) : ('at:' + new Date(row.txn.paidAt).getTime());
+    if (!map[key]) { map[key] = { key: key, bulkGroupId: row.txn.bulkGroupId || null, paidAt: row.txn.paidAt, paid: 0, waiver: 0, lateFee: 0, source: row.txn.paymentSource, remark: row.txn.remark }; order.push(key); }
+    var ev = map[key];
+    ev.paid    += (row.txn.paidAmount   || 0);
+    ev.waiver  += (row.txn.waiverAmount || 0);
+    ev.lateFee += (row.txn.lateFee      || 0);
+    if (new Date(row.txn.paidAt) < new Date(ev.paidAt)) ev.paidAt = row.txn.paidAt;
+    if (!ev.remark && row.txn.remark) ev.remark = row.txn.remark;
+  });
+  var events = order.map(function(k) { return map[k]; });
+  events.sort(function(a, b) { return new Date(a.paidAt) - new Date(b.paidAt); });
+  return { events: events, monthTotalFee: monthTotalFee, headNames: headNames };
+}
+
+// For a bulk payment, list every month it covered with that month's fee + amount paid.
+function buildBulkMonths(stu, bulkGroupId, type) {
+  var mm = {};
+  function add(mi, fee, paid, headName) {
+    if (!mm[mi]) mm[mi] = { monthIndex: mi, fee: 0, paid: 0, heads: [] };
+    mm[mi].fee += fee; mm[mi].paid += paid;
+    if (headName && mm[mi].heads.indexOf(headName) === -1) mm[mi].heads.push(headName);
+  }
+  if (type === 'reg') {
+    (stu.entries || []).forEach(function(e) {
+      (e.months || []).forEach(function(m) {
+        var paid = 0, hit = false;
+        if (m.history && m.history.length) {
+          m.history.forEach(function(t) { if (t.bulkGroupId === bulkGroupId) { hit = true; paid += (t.paidAmount || 0); } });
+        } else if (m.paidAmount > 0 && m.bulkGroupId === bulkGroupId) {
+          hit = true; paid += m.paidAmount;
+        }
+        if (hit) add(m.monthIndex, (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount || m.amount || 0)), paid, e.feeHeadName);
       });
-   } else {
-      if (stu.transport && stu.transport.months) {
-          var m = stu.transport.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-          if (m && m.history && m.history.length > historyIdx) { 
-              txn = m.history[historyIdx]; 
-              fhName = 'Transport — ' + stu.transport.routeName; 
-              baseTotal = m.baseAmount != null ? m.baseAmount : (m.amount || 0);
-              targetHistoryList = m.history;
-          }
+    });
+  } else if (stu.transport && stu.transport.months) {
+    stu.transport.months.forEach(function(m) {
+      var paid = 0, hit = false;
+      if (m.history && m.history.length) {
+        m.history.forEach(function(t) { if (t.bulkGroupId === bulkGroupId) { hit = true; paid += (t.paidAmount || 0); } });
+      } else if (m.paidAmount > 0 && m.bulkGroupId === bulkGroupId) {
+        hit = true; paid += m.paidAmount;
       }
-   }
-   
-   if (!txn) { toast('Receipt details not found', 'error'); return; }
+      if (hit) add(m.monthIndex, (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount || m.amount || 0)), paid, 'Transport' + (stu.transport.routeName ? ' — ' + stu.transport.routeName : ''));
+    });
+  }
+  var arr = Object.keys(mm).map(function(k) { return mm[k]; });
+  arr.sort(function(a, b) { return sessionOrderOf(a.monthIndex) - sessionOrderOf(b.monthIndex); });
+  return arr;
+}
 
-   // Time-travel math: Sum up exactly what was paid BEFORE this specific receipt
-   var cumulativePaidPrior = 0;
-   for(var i = 0; i < historyIdx; i++) {
-       cumulativePaidPrior += (targetHistoryList[i].paidAmount || 0) + (targetHistoryList[i].waiverAmount || 0);
-   }
+// Shared clean receipt renderer. Particulars are compact month lines.
+function renderMonthReceipt(src, items, grandTotal, paidThis, prevPaid, balance, receiptType, targetWin) {
+  printDetailedReceipt({
+    studentName: src.studentName || src.name || '-',
+    className:   src.className || (src.class && src.class.className) || '',
+    rollNo:      (src.rollNo && src.rollNo !== '-') ? src.rollNo : '',
+    fatherName:  (src.fatherName && src.fatherName !== '-') ? src.fatherName : '',
+    phone:       (src.phone && src.phone !== '-') ? src.phone : '',
+    session:     src.session || currentSession,
+    total: paidThis, totalBase: grandTotal, totalCarry: 0, totalCredit: prevPaid,
+    totalWaiver: 0, totalLateFee: 0, totalFeeDue: grandTotal, balance: balance,
+    paymentMode: src.paymentMode || (src.paymentSource === 'manual_online' ? 'Online — Desk' : (src.paymentSource === 'online' ? 'Online — App' : 'Cash — Reception')),
+    remark: src.remark || '', items: items, paidAt: new Date(src.paidAt || Date.now()),
+    receiptType: receiptType
+  }, targetWin);
+}
 
-   var adjBase = Math.max(0, baseTotal - cumulativePaidPrior);
-   var effDue = Math.max(0, adjBase - (txn.waiverAmount || 0)) + (txn.lateFee || 0);
-   var remainingAfterThisTxn = effDue - (txn.paidAmount || 0);
-   var balanceStatus = remainingAfterThisTxn > 0 ? -remainingAfterThisTxn : (remainingAfterThisTxn < 0 ? Math.abs(remainingAfterThisTxn) : 0);
+// Print ONE collection event at the month level. Bulk across months → multi-month
+// receipt (one line per month). Otherwise → single compact month line.
+function printMonthEventReceipt(sid, monthIndex, type, eventIdx, targetWin) {
+  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
+  if (!stu) { if (targetWin) { try { targetWin.close(); } catch (e) {} } toast('Student data not loaded', 'error'); return; }
 
-   var finalFhName = historyIdx > 0 ? fhName + ' (Arrears)' : fhName;
+  var info = buildMonthEvents(stu, monthIndex, type);
+  var events = info.events;
+  if (!events.length || eventIdx == null || eventIdx >= events.length) { if (targetWin) { try { targetWin.close(); } catch (e) {} } toast('Receipt details not found', 'error'); return; }
+  var ev = events[eventIdx];
+  var src = { name: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo, fatherName: stu.fatherName, phone: stu.phone, session: currentSession, remark: ev.remark, paidAt: ev.paidAt, paymentSource: ev.source };
 
-   var richItem = {
-       feeHead: finalFhName, month: MONTHS[monthIndex], base: baseTotal, 
-       waiver: txn.waiverAmount || 0, carry: 0, credit: cumulativePaidPrior, 
-       lateFee: txn.lateFee || 0, effectiveDue: effDue, paid: txn.paidAmount, 
-       isPaid: remainingAfterThisTxn <= 0, isPartial: remainingAfterThisTxn > 0
-   };
-   
-   printDetailedReceipt({
-       studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '',
-       session: currentSession, total: txn.paidAmount, totalBase: baseTotal, totalCarry: 0, totalCredit: cumulativePaidPrior,
-       totalWaiver: txn.waiverAmount || 0, totalLateFee: txn.lateFee || 0, totalFeeDue: effDue, balance: balanceStatus,
-       paymentMode: txn.paymentSource === 'manual_online' ? 'Online — Desk' : (txn.paymentSource === 'online' ? 'Online — App' : 'Cash — Reception'), 
-       remark: txn.remark || '', items: [richItem], paidAt: new Date(txn.paidAt),
-       receiptType: (historyIdx === 0 ? 'Fee Receipt — ' : 'Arrears Clearance Receipt — ') + MONTHS[monthIndex]
-   });
+  // Bulk covering multiple months → multi-month receipt, same for every month in the bulk.
+  if (ev.bulkGroupId) {
+    var bm = buildBulkMonths(stu, ev.bulkGroupId, type);
+    if (bm.length > 1) {
+      var items = bm.map(function(x) {
+        return { month: MONTHS[x.monthIndex], heads: _fmtHeadList(x.heads), base: x.fee, effectiveDue: x.fee };
+      });
+      var grand = bm.reduce(function(s, x) { return s + x.fee; }, 0);
+      var paid  = bm.reduce(function(s, x) { return s + x.paid; }, 0);
+      var rem   = grand - paid;
+      var names = bm.map(function(x) { return SHORT_MONTHS[x.monthIndex]; }).join(', ');
+      renderMonthReceipt(src, items, grand, paid, 0, (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), 'Multi-Month Fee Receipt — ' + names, targetWin);
+      return;
+    }
+  }
+
+  // Single month → one compact line.
+  var prevPaid = 0;
+  for (var i = 0; i < eventIdx; i++) { prevPaid += (events[i].paid || 0) + (events[i].waiver || 0); }
+  var grandTotal = info.monthTotalFee + (ev.lateFee || 0);
+  var paidThis   = ev.paid || 0;
+  var rem2       = grandTotal - (prevPaid + (ev.waiver || 0) + paidThis);
+  var multi      = events.length > 1;
+  var items2 = [{ month: MONTHS[monthIndex], heads: _fmtHeadList(info.headNames), base: grandTotal, effectiveDue: grandTotal }];
+  renderMonthReceipt(src, items2, grandTotal, paidThis, prevPaid, (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), (multi ? 'Installment Receipt — ' : 'Fee Receipt — ') + MONTHS[monthIndex], targetWin);
 }
 
 function calcLiveCheckout(sid, type, isManualEdit) {
@@ -4640,8 +4730,14 @@ function printMonthRowReceipt(sid, monthIndex) {
 
   if (!rawItems.length) { toast('No payment record found for this month', 'error'); return; }
 
-  var bulkGroupId = rawItems[0].month.bulkGroupId;
-  if (bulkGroupId) {
+  // Only treat this as a bulk (multi-month) receipt when EVERY paid head of this
+  // month belongs to the same bulk group. If heads were paid separately (mixed or
+  // null bulkGroupId), a single head's group would drop the other heads — so fall
+  // through to the full all-heads month receipt instead.
+  var firstBulkId = rawItems[0].month.bulkGroupId;
+  var allSameBulk = firstBulkId && rawItems.every(function(i) { return i.month.bulkGroupId === firstBulkId; });
+  if (allSameBulk) {
+    var bulkGroupId = firstBulkId;
     // Open immediately to bypass popup blocker
     var printWin = window.open('', '_blank', 'width=490,height=780');
     if (!printWin) { toast('Please allow popups to print', 'error'); return; }
@@ -4832,452 +4928,6 @@ function _printSingleTransportReceipt(stu, tMonth, monthIndex, printWin) {
   printDetailedReceipt({
     studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: session, total: paidAmount, totalBase: base, totalCarry: carry, totalCredit: credit, totalWaiver: waiver, totalLateFee: lateFee, totalFeeDue: effDue + lateFee, balance: paidAmount - (effDue + lateFee), paymentMode: payMode, remark: tMonth.remark || '', items: [richItem], paidAt: paidAt, receiptType: 'Transport Fee Receipt — ' + MONTHS[monthIndex]
   }, printWin);
-}
-
-
-// ── Helper to group rows exactly like the screen UI ──
-function groupReportRows(rows) {
-  var groups = [];
-  var bulkSeen = {};
-  rows.forEach(function(r) {
-    if (r.bulkGroupId) {
-      if (bulkSeen[r.bulkGroupId] !== undefined) { groups[bulkSeen[r.bulkGroupId]].push(r); } 
-      else { bulkSeen[r.bulkGroupId] = groups.length; groups.push([r]); }
-    } else { groups.push([r]); }
-  });
-  return groups;
-}
-
-function printMonthRowReceipt(sid, monthIndex) {
-  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  if (!stu) return;
-
-  var rawItems = [];
-  (stu.entries || []).forEach(function(entry) {
-    var m = entry.months.find(function(mo) { return mo.monthIndex === monthIndex; });
-    if (m && m.paymentId) rawItems.push({ entry: entry, month: m });
-  });
-
-  if (!rawItems.length) { toast('No payment record found for this month', 'error'); return; }
-
-  var bulkGroupId = rawItems[0].month.bulkGroupId;
-  if (bulkGroupId) {
-    // Open immediately to bypass blocker
-    var printWin = window.open('', '_blank', 'width=490,height=780');
-    if (!printWin) { toast('Please allow popups to print', 'error'); return; }
-    printWin.document.write('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#666;">Loading receipt...</div>');
-
-    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
-      .then(function(res) {
-        var groupPayments = res.data || [];
-        _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId, printWin);
-      })
-      .catch(function() {
-        printWin.close(); toast('Error loading bulk data', 'error');
-      });
-    return;
-  }
-  _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex, null);
-}
-
-function _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex, printWin) {
-  var paidAt  = rawItems[0].month.paidAt ? new Date(rawItems[0].month.paidAt) : new Date();
-  var remark  = rawItems[0].month.remark || '';
-  
-  var payMode = rawItems[0].month.paymentSource === 'online' ? 'Online \u2014 App' 
-              : rawItems[0].month.paymentSource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var receiptItems = [];
-  var totalBase = 0, totalCarry = 0, totalCredit = 0;
-  var totalWaiver = 0, totalLateFee = 0, totalDue = 0, totalPaid = 0;
-
-  rawItems.forEach(function(i) {
-    var m       = i.month;
-    var base    = m.baseAmount   != null ? m.baseAmount   : (m.amount || 0);
-    var adjBase = m.adjustedBase != null ? m.adjustedBase : base;
-    var effDue  = m.effectiveDue != null ? m.effectiveDue : adjBase;
-    var credit  = m.previousCredit || 0;
-    var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
-    var waiver  = m.waiverAmount   || 0;
-    var lateFee = m.lateFee        || 0;
-    var paidAmt = m.paidAmount     || 0;
-
-    totalBase    += base;
-    totalCarry   += carry;
-    totalCredit  += credit;
-    totalWaiver  += waiver;
-    totalLateFee += lateFee;
-    totalDue     += effDue + lateFee;
-    totalPaid    += paidAmt;
-
-    receiptItems.push({
-      feeHead:      i.entry.feeHeadName, month: MONTHS[monthIndex], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue + lateFee, paid: paidAmt, isPaid: m.isPaid && !m.isPartial, isPartial: m.isPartial
-    });
-  });
-
-  printDetailedReceipt({
-    studentName:  stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalDue, balance: totalPaid - totalDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Monthly Fee Receipt \u2014 ' + MONTHS[monthIndex]
-  }, printWin);
-}
-
-function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId, printWin) {
-  var monthGroups = {};
-  groupPayments.forEach(function(p) {
-    var mi = p.monthIndex;
-    if (!monthGroups[mi]) monthGroups[mi] = [];
-    monthGroups[mi].push(p);
-  });
-
-  var sortedMonthIndices = Object.keys(monthGroups).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
-
-  var receiptItems = [];
-  var totalBase = 0, totalCarry = 0, totalCredit = 0;
-  var totalWaiver = 0, totalLateFee = 0, totalDue = 0, totalPaid = 0;
-
-  var paidAt  = new Date(groupPayments[0].paidAt || Date.now());
-  var remark  = groupPayments[0].remark || '';
-  
-  var payMode = groupPayments[0].paymentSource === 'online' ? 'Online \u2014 App' 
-              : groupPayments[0].paymentSource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
-
-  var earliestMi = sortedMonthIndices[0];
-
-  sortedMonthIndices.forEach(function(mi) {
-    var isEarliest = (mi === earliestMi);
-    var payments = monthGroups[mi];
-    payments.forEach(function(p) {
-      var mData = null;
-      var fhName = 'Fee';
-
-      if (p.type === 'transport' && stuData && stuData.transport) {
-        fhName = 'Transport Fee';
-        mData = (stuData.transport.months || []).find(function(m) { return m.monthIndex === mi; });
-      } else if (p.feeHeadId && stuData) {
-        var entry = (stuData.entries || []).find(function(e) { return String(e.feeHeadId) === String(p.feeHeadId); });
-        if (entry) {
-          fhName = entry.feeHeadName;
-          mData = (entry.months || []).find(function(m) { return m.monthIndex === mi; });
-        }
-      }
-
-      var base    = mData && mData.baseAmount != null ? mData.baseAmount : (p.amount || 0);
-      var waiver  = mData ? (mData.waiverAmount || 0) : (p.waiverAmount || 0);
-      var lateFee = mData ? (mData.lateFee || 0) : (p.lateFee || 0);
-      var paidAmt = mData ? (mData.paidAmount || 0) : (p.paidAmount || 0);
-
-      var rawCredit = mData ? (mData.previousCredit || 0) : 0;
-      var rawCarry  = mData && mData.previousDue != null ? mData.previousDue : (mData ? (mData.carryDue || 0) : 0);
-      var credit = isEarliest ? rawCredit : 0;
-      var carry  = isEarliest ? rawCarry  : 0;
-
-      var adjBase = Math.max(0, base - waiver);
-      var lineEffDue = Math.max(0, adjBase - credit + carry + lateFee);
-
-      totalBase    += base;
-      totalCarry   += carry;
-      totalCredit  += credit;
-      totalWaiver  += waiver;
-      totalLateFee += lateFee;
-      totalPaid    += paidAmt;
-
-      receiptItems.push({
-        feeHead: fhName, month: MONTHS[mi], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: lineEffDue, paid: paidAmt, isPaid: mData ? (mData.isPaid && !mData.isPartial) : (p.isPaid && p.paymentStatus !== 'partial'), isPartial: mData ? mData.isPartial : (p.paymentStatus === 'partial')
-      });
-    });
-  });
-
-  var totalFeeDue = Math.max(0, totalBase - totalWaiver) - totalCredit + totalCarry + totalLateFee;
-
-  var monthNames = sortedMonthIndices.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalFeeDue, balance: totalPaid - totalFeeDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Multi-Month Fee Receipt \u2014 ' + monthNames
-  }, printWin);
-}
-
-function printTransportMonthReceipt(sid, monthIndex) {
-  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  if (!stu || !stu.transport) return;
-
-  var tMonths  = stu.transport.months || [];
-  var tMonth   = tMonths.find(function(m) { return m.monthIndex === monthIndex; });
-  if (!tMonth || !tMonth.paymentId) { toast('No payment record found', 'error'); return; }
-
-  var bulkGroupId = tMonth.bulkGroupId;
-  if (bulkGroupId) {
-    // Open immediately to bypass blocker
-    var printWin = window.open('', '_blank', 'width=490,height=780');
-    if (!printWin) { toast('Please allow popups to print', 'error'); return; }
-    printWin.document.write('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#666;">Loading receipt...</div>');
-
-    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
-      .then(function(res) {
-        var groupPayments = res.data || [];
-        _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId, printWin);
-      })
-      .catch(function() {
-         printWin.close(); toast('Error loading bulk data', 'error');
-      });
-    return;
-  }
-  _printSingleTransportReceipt(stu, tMonth, monthIndex, null);
-}
-
-function _printSingleTransportReceipt(stu, tMonth, monthIndex, printWin) {
-  var routeName   = (stu.transport && stu.transport.routeName) || 'Transport';
-  var session     = currentSession;
-  var paidAt      = tMonth.paidAt ? new Date(tMonth.paidAt) : new Date();
-  var paySource   = tMonth.paymentSource || 'cash';
-  
-  var payMode = paySource === 'online' ? 'Online \u2014 App' 
-              : paySource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var paidAmount  = tMonth.paidAmount || 0;
-  var base    = tMonth.baseAmount != null ? tMonth.baseAmount : paidAmount;
-  var waiver  = tMonth.waiverAmount  || 0;
-  var lateFee = tMonth.lateFee       || 0;
-  var credit  = tMonth.previousCredit || 0;
-  var adjBase = Math.max(0, base - waiver);
-  var effDue  = tMonth.effectiveDue != null ? tMonth.effectiveDue : adjBase;
-  var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
-
-  var richItem = {
-    feeHead: 'Transport Fee — ' + routeName, month: MONTHS[monthIndex], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue + lateFee, paid: paidAmount, isPaid: tMonth.isPaid && !tMonth.isPartial, isPartial: tMonth.isPartial || false
-  };
-
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: session, total: paidAmount, totalBase: base, totalCarry: carry, totalCredit: credit, totalWaiver: waiver, totalLateFee: lateFee, totalFeeDue: effDue + lateFee, balance: paidAmount - (effDue + lateFee), paymentMode: payMode, remark: tMonth.remark || '', items: [richItem], paidAt: paidAt, receiptType: 'Transport Fee Receipt — ' + MONTHS[monthIndex]
-  }, printWin);
-}
-
-function _buildAndPrintSingleMonthReceipt(stu, rawItems, monthIndex) {
-  var paidAt  = rawItems[0].month.paidAt ? new Date(rawItems[0].month.paidAt) : new Date();
-  var remark  = rawItems[0].month.remark || '';
-  
-  var payMode = rawItems[0].month.paymentSource === 'online' ? 'Online \u2014 App' 
-              : rawItems[0].month.paymentSource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var receiptItems = [];
-  var totalBase = 0, totalCarry = 0, totalCredit = 0;
-  var totalWaiver = 0, totalLateFee = 0, totalDue = 0, totalPaid = 0;
-
-  rawItems.forEach(function(i) {
-    var m       = i.month;
-    var base    = m.baseAmount   != null ? m.baseAmount   : (m.amount || 0);
-    var adjBase = m.adjustedBase != null ? m.adjustedBase : base;
-    var effDue  = m.effectiveDue != null ? m.effectiveDue : adjBase;
-    var credit  = m.previousCredit || 0;
-    var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
-    var waiver  = m.waiverAmount   || 0;
-    var lateFee = m.lateFee        || 0;
-    var paidAmt = m.paidAmount     || 0;
-
-    totalBase    += base;
-    totalCarry   += carry;
-    totalCredit  += credit;
-    totalWaiver  += waiver;
-    totalLateFee += lateFee;
-    totalDue     += effDue + lateFee;
-    totalPaid    += paidAmt;
-
-    receiptItems.push({
-      feeHead:      i.entry.feeHeadName, month: MONTHS[monthIndex], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue + lateFee, paid: paidAmt, isPaid: m.isPaid && !m.isPartial, isPartial: m.isPartial
-    });
-  });
-
-  printDetailedReceipt({
-    studentName:  stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalDue, balance: totalPaid - totalDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Monthly Fee Receipt \u2014 ' + MONTHS[monthIndex]
-  });
-}
-
-function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId) {
-  var monthGroups = {};
-  groupPayments.forEach(function(p) {
-    var mi = p.monthIndex;
-    if (!monthGroups[mi]) monthGroups[mi] = [];
-    monthGroups[mi].push(p);
-  });
-
-  var sortedMonthIndices = Object.keys(monthGroups).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
-
-  var receiptItems = [];
-  var totalBase = 0, totalCarry = 0, totalCredit = 0;
-  var totalWaiver = 0, totalLateFee = 0, totalDue = 0, totalPaid = 0;
-
-  var paidAt  = new Date(groupPayments[0].paidAt || Date.now());
-  var remark  = groupPayments[0].remark || '';
-  
-  var payMode = groupPayments[0].paymentSource === 'online' ? 'Online \u2014 App' 
-              : groupPayments[0].paymentSource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var stuData = feeStatusData.find(function(s) { return s.studentId === stu.studentId; });
-
-  var earliestMi = sortedMonthIndices[0];
-
-  sortedMonthIndices.forEach(function(mi) {
-    var isEarliest = (mi === earliestMi);
-    var payments = monthGroups[mi];
-    payments.forEach(function(p) {
-      var mData = null;
-      var fhName = 'Fee';
-
-      if (p.type === 'transport' && stuData && stuData.transport) {
-        fhName = 'Transport Fee';
-        mData = (stuData.transport.months || []).find(function(m) { return m.monthIndex === mi; });
-      } else if (p.feeHeadId && stuData) {
-        var entry = (stuData.entries || []).find(function(e) { return String(e.feeHeadId) === String(p.feeHeadId); });
-        if (entry) {
-          fhName = entry.feeHeadName;
-          mData = (entry.months || []).find(function(m) { return m.monthIndex === mi; });
-        }
-      }
-
-      var base    = mData && mData.baseAmount != null ? mData.baseAmount : (p.amount || 0);
-      var waiver  = mData ? (mData.waiverAmount || 0) : (p.waiverAmount || 0);
-      var lateFee = mData ? (mData.lateFee || 0) : (p.lateFee || 0);
-      var paidAmt = mData ? (mData.paidAmount || 0) : (p.paidAmount || 0);
-
-      // Carry/credit BETWEEN months inside this receipt is internal — counting it on
-      // every line double-counts the same rolling balance. Only the carry/credit
-      // flowing INTO the earliest covered month is genuinely incoming (0 at session start).
-      var rawCredit = mData ? (mData.previousCredit || 0) : 0;
-      var rawCarry  = mData && mData.previousDue != null ? mData.previousDue : (mData ? (mData.carryDue || 0) : 0);
-      var credit = isEarliest ? rawCredit : 0;
-      var carry  = isEarliest ? rawCarry  : 0;
-
-      var adjBase = Math.max(0, base - waiver);
-      var lineEffDue = Math.max(0, adjBase - credit + carry + lateFee);
-
-      totalBase    += base;
-      totalCarry   += carry;
-      totalCredit  += credit;
-      totalWaiver  += waiver;
-      totalLateFee += lateFee;
-      totalPaid    += paidAmt;
-
-      receiptItems.push({
-        feeHead: fhName, month: MONTHS[mi], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: lineEffDue, paid: paidAmt, isPaid: mData ? (mData.isPaid && !mData.isPartial) : (p.isPaid && p.paymentStatus !== 'partial'), isPartial: mData ? mData.isPartial : (p.paymentStatus === 'partial')
-      });
-    });
-  });
-
-  var totalFeeDue = Math.max(0, totalBase - totalWaiver) - totalCredit + totalCarry + totalLateFee;
-
-  var monthNames = sortedMonthIndices.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: currentSession, total: totalPaid, totalBase: totalBase, totalCarry: totalCarry, totalCredit: totalCredit, totalWaiver: totalWaiver, totalLateFee: totalLateFee, totalFeeDue: totalFeeDue, balance: totalPaid - totalFeeDue, paymentMode: payMode, remark: remark, items: receiptItems, paidAt: paidAt, receiptType: 'Multi-Month Fee Receipt \u2014 ' + monthNames
-  });
-}
-
-function printTransportRowReceipt(sid, monthIndex, paidAmount, paidAtStr, remark, routeName, session, paymentSource) {
-  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  if (!stu) return;
-
-  var paidAt   = paidAtStr ? new Date(paidAtStr) : new Date();
-  
-  var payMode = paymentSource === 'online' ? 'Online \u2014 App' 
-              : paymentSource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var tMonths  = (stu.transport && stu.transport.months) || [];
-  var tMonth   = tMonths.find(function(m) { return m.monthIndex === monthIndex; });
-
-  var base     = tMonth ? (tMonth.baseAmount != null ? tMonth.baseAmount : paidAmount) : paidAmount;
-  var waiver   = (tMonth && tMonth.waiverAmount) || 0;
-  var lateFee  = (tMonth && tMonth.lateFee)      || 0;
-  var carry    = 0;
-  var credit   = (tMonth && tMonth.previousCredit) || 0;
-
-  if (tMonth) {
-    var adjBase = tMonth.adjustedBase != null ? tMonth.adjustedBase : Math.max(0, base - waiver);
-    var effDue  = tMonth.effectiveDue != null ? tMonth.effectiveDue : adjBase;
-    carry       = Math.max(0, Math.round(effDue - adjBase));
-  }
-
-  var adjBase2   = Math.max(0, base - waiver);
-  var effDue2    = adjBase2 - credit + carry + lateFee;
-  var isPaid     = !!(tMonth && tMonth.isPaid && !tMonth.isPartial);
-  var isPartial  = !!(tMonth && tMonth.isPartial);
-
-  var richItem = {
-    feeHead: 'Transport Fee \u2014 ' + routeName, month: MONTHS[monthIndex], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue2, paid: paidAmount, isPaid: isPaid, isPartial: isPartial
-  };
-
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: session, total: paidAmount, totalBase: base, totalCarry: carry, totalCredit: credit, totalWaiver: waiver, totalLateFee: lateFee, totalFeeDue: effDue2, balance: paidAmount - effDue2, paymentMode: payMode, remark: remark, items: [richItem], paidAt: paidAt, receiptType: 'Transport Fee Receipt \u2014 ' + MONTHS[monthIndex]
-  });
-}
-
-// Transport PDF — checks bulkGroupId first, just like regular fee printMonthRowReceipt()
-function printTransportMonthReceipt(sid, monthIndex) {
-  var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
-  if (!stu || !stu.transport) return;
-
-  var tMonths  = stu.transport.months || [];
-  var tMonth   = tMonths.find(function(m) { return m.monthIndex === monthIndex; });
-  if (!tMonth || !tMonth.paymentId) { toast('No payment record found', 'error'); return; }
-
-  var bulkGroupId = tMonth.bulkGroupId;
-  if (bulkGroupId) {
-    var printWin = window.open('', '_blank', 'width=490,height=780');
-    if (!printWin) { toast('Please allow popups to print', 'error'); return; }
-    printWin.document.write('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#666;">Loading receipt...</div>');
-
-    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
-      .then(function(res) {
-        var groupPayments = res.data || [];
-        _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId, printWin);
-      })
-      .catch(function() {
-         printWin.close(); toast('Error loading bulk data', 'error');
-      });
-    return;
-  }
-  _printSingleTransportReceipt(stu, tMonth, monthIndex);
-}
-
-function _printSingleTransportReceipt(stu, tMonth, monthIndex, printWin) { // Add printWin
-  // ... Keep everything exactly the same until the bottom ...
-  // AT THE VERY BOTTOM of the function:
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: session, total: paidAmount, totalBase: base, totalCarry: carry, totalCredit: credit, totalWaiver: waiver, totalLateFee: lateFee, totalFeeDue: effDue + lateFee, balance: paidAmount - (effDue + lateFee), paymentMode: payMode, remark: tMonth.remark || '', items: [richItem], paidAt: paidAt, receiptType: 'Transport Fee Receipt — ' + MONTHS[monthIndex]
-  }, printWin); // Pass printWin
-}
-
-function _printSingleTransportReceipt(stu, tMonth, monthIndex) {
-  var routeName   = (stu.transport && stu.transport.routeName) || 'Transport';
-  var session     = currentSession;
-  var paidAt      = tMonth.paidAt ? new Date(tMonth.paidAt) : new Date();
-  var paySource   = tMonth.paymentSource || 'cash';
-  
-  var payMode = paySource === 'online' ? 'Online \u2014 App' 
-              : paySource === 'manual_online' ? 'Online \u2014 Desk' 
-              : 'Cash \u2014 Reception';
-
-  var paidAmount  = tMonth.paidAmount || 0;
-  var base    = tMonth.baseAmount != null ? tMonth.baseAmount : paidAmount;
-  var waiver  = tMonth.waiverAmount  || 0;
-  var lateFee = tMonth.lateFee       || 0;
-  var credit  = tMonth.previousCredit || 0;
-  var adjBase = Math.max(0, base - waiver);
-  var effDue  = tMonth.effectiveDue != null ? tMonth.effectiveDue : adjBase;
-  var carry   = Math.max(0, Math.round(effDue + credit - adjBase));
-
-  var richItem = {
-    feeHead: 'Transport Fee — ' + routeName, month: MONTHS[monthIndex], base: base, waiver: waiver, carry: carry, credit: credit, lateFee: lateFee, effectiveDue: effDue + lateFee, paid: paidAmount, isPaid: tMonth.isPaid && !tMonth.isPartial, isPartial: tMonth.isPartial || false
-  };
-
-  printDetailedReceipt({
-    studentName: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo || '', fatherName: stu.fatherName || '', phone: stu.phone || '', session: session, total: paidAmount, totalBase: base, totalCarry: carry, totalCredit: credit, totalWaiver: waiver, totalLateFee: lateFee, totalFeeDue: effDue + lateFee, balance: paidAmount - (effDue + lateFee), paymentMode: payMode, remark: tMonth.remark || '', items: [richItem], paidAt: paidAt, receiptType: 'Transport Fee Receipt — ' + MONTHS[monthIndex]
-  });
 }
 
 var toastTimer;
@@ -7854,22 +7504,42 @@ var previouslyPaid = (data.items || []).reduce(function(s, i) { return s + (i.cr
   // PERFECT FIX: Prioritize Fee Head + Month for the Particulars list
   var monthOrder = [];
   var monthSums  = {};
+  var monthHeads = {};   // particularName -> compact head-names sub-line
+  var _headsArr  = {};   // particularName -> [head names] gathered from per-head items
   (data.items || []).forEach(function(item) {
     var particularName = '';
-    if (item.feeHead && item.month) particularName = item.feeHead + ' — ' + item.month;
-    else particularName = item.feeHead || item.label || item.month || 'Fee';
+    var headForSub = null;
+    if (item.heads !== undefined) {                 // already a month line with a heads sub-line
+      particularName = item.month || item.feeHead || 'Fee';
+      monthHeads[particularName] = item.heads;
+    } else if (item.feeHead && item.month) {        // per-head item → group by month, head to sub-line
+      particularName = item.month;
+      headForSub = item.feeHead;
+    } else {
+      particularName = item.feeHead || item.label || item.month || 'Fee';
+    }
 
     var amt = (item.effectiveDue != null && item.effectiveDue > 0)
       ? item.effectiveDue
       : (item.base != null && item.base > 0 ? item.base : (item.amount != null ? item.amount : (item.paid || 0)));
     if (monthSums[particularName] == null) { monthSums[particularName] = 0; monthOrder.push(particularName); }
     monthSums[particularName] += amt;
+    if (headForSub) {
+      if (!_headsArr[particularName]) _headsArr[particularName] = [];
+      if (_headsArr[particularName].indexOf(headForSub) === -1) _headsArr[particularName].push(headForSub);
+    }
   });
-  
+  // Turn gathered per-head names into the compact "+N more" sub-line.
+  Object.keys(_headsArr).forEach(function(k) { if (monthHeads[k] == null) monthHeads[k] = _fmtHeadList(_headsArr[k]); });
+
   var itemRowsHtml = monthOrder.map(function(name, idx) {
+    var sub = monthHeads[name];
+    var headHtml = (sub && String(sub).length)
+      ? ' <span style="font-weight:400;color:#64748b;font-size:11px">\u2014 ' + sh(sub) + '</span>'
+      : '';
     return '<tr>' +
       '<td class="c-sn">' + (idx + 1) + '</td>' +
-      '<td class="c-pt"><span class="rpt-lbl">' + sh(name) + '</span></td>' +
+      '<td class="c-pt"><span class="rpt-lbl" style="font-size:15px">' + sh(name) + '</span>' + headHtml + '</td>' +
       '<td class="c-amt">\u20b9' + Number(monthSums[name]).toLocaleString('en-IN') + '</td>' +
     '</tr>';
   }).join('');
@@ -7881,15 +7551,26 @@ if ((data.totalLateFee || 0) > 0) rows += '<tr><td class="t-lbl">Fine / Late Fee
 if ((data.totalWaiver || 0) > 0) rows += '<tr><td class="t-lbl">Waiver</td><td class="t-val">\u2212\u20b9' + Number(data.totalWaiver).toLocaleString('en-IN') + '</td></tr>';
 // ── Fix 2: include 'Installment' so Tab-5 receipts show "Previously Paid" not "Advance Credit Applied"
 // ── Fix 3: only ONE credit row (totalCredit), previouslyPaid row removed — they are always the same value
-var creditLabel = (data.receiptType && (data.receiptType.includes('Arrears') || data.receiptType.includes('Installment')))
-  ? 'Previously Paid'
-  : 'Advance Credit Applied';
-if ((data.totalCredit || 0) > 0) rows += '<tr><td class="t-lbl">' + creditLabel + '</td><td class="t-val">\u2212\u20b9' + Number(data.totalCredit).toLocaleString('en-IN') + '</td></tr>';
-rows += '<tr class="t-grand"><td class="t-lbl">Grand Total</td><td class="t-val">\u20b9' + Number(data.totalFeeDue != null ? data.totalFeeDue : data.total).toLocaleString('en-IN') + '</td></tr>';
-rows += '<tr class="t-paid"><td class="t-lbl">Paid Amount</td><td class="t-val">\u20b9' + Number(data.total || 0).toLocaleString('en-IN') + '</td></tr>';
+var isInstallmentReceipt = (data.receiptType && (data.receiptType.includes('Arrears') || data.receiptType.includes('Installment')));
+var grandTotalVal = Number(data.totalFeeDue != null ? data.totalFeeDue : data.total).toLocaleString('en-IN');
+if (isInstallmentReceipt) {
+  // Clear running ledger: full fee → already paid → what's still owed → this payment.
+  rows += '<tr class="t-grand"><td class="t-lbl">Grand Total</td><td class="t-val">\u20b9' + grandTotalVal + '</td></tr>';
+  if ((data.totalCredit || 0) > 0) {
+    rows += '<tr><td class="t-lbl">Previously Paid</td><td class="t-val">\u2212\u20b9' + Number(data.totalCredit).toLocaleString('en-IN') + '</td></tr>';
+    var amtDueNow = Math.max(0, (data.totalFeeDue != null ? data.totalFeeDue : data.total) - (data.totalCredit || 0));
+    rows += '<tr><td class="t-lbl">Amount Due</td><td class="t-val">\u20b9' + Number(amtDueNow).toLocaleString('en-IN') + '</td></tr>';
+  }
+  rows += '<tr class="t-paid"><td class="t-lbl">Paid Now</td><td class="t-val">\u20b9' + Number(data.total || 0).toLocaleString('en-IN') + '</td></tr>';
+} else {
+  if ((data.totalCredit || 0) > 0) rows += '<tr><td class="t-lbl">Advance Credit Applied</td><td class="t-val">\u2212\u20b9' + Number(data.totalCredit).toLocaleString('en-IN') + '</td></tr>';
+  rows += '<tr class="t-grand"><td class="t-lbl">Grand Total</td><td class="t-val">\u20b9' + grandTotalVal + '</td></tr>';
+  rows += '<tr class="t-paid"><td class="t-lbl">Paid Amount</td><td class="t-val">\u20b9' + Number(data.total || 0).toLocaleString('en-IN') + '</td></tr>';
+}
   var balBanner = '';
   if (balance != null && balance > 0) balBanner = '<div class="bal-adv">Advance \u2014 \u20b9' + Number(balance).toLocaleString('en-IN') + ' carried forward</div>';
   else if (balance != null && balance < 0) balBanner = '<div class="bal-due">Balance Due \u2014 \u20b9' + Number(Math.abs(balance)).toLocaleString('en-IN') + '</div>';
+  else if (isInstallmentReceipt && (data.totalCredit || 0) > 0) balBanner = '<div class="bal-adv">\u2713 Fully Paid</div>';
 
   function chip(l, v) { return '<span class="pc"><i>' + l + '</i> ' + sh(v) + '</span>'; }
   var partics = chip('Student', data.studentName || '-') + chip('Class', data.className || '-') + (data.rollNo ? chip('Roll', data.rollNo) : '') + (data.fatherName ? chip('Father', data.fatherName) : '') + chip('Session', data.session || '-') + chip('Mode', data.paymentMode || 'Cash');
@@ -7899,21 +7580,21 @@ rows += '<tr class="t-paid"><td class="t-lbl">Paid Amount</td><td class="t-val">
   if (SCHOOL_PHONE)   headerExtra += '<div class="sch-sub">' + sh(SCHOOL_PHONE) + '</div>';
 
   var css = [
-    '*{box-sizing:border-box;margin:0;padding:0} body{font-family:"Segoe UI",Arial,sans-serif;background:#e9edf2;padding:14px;color:#1e293b} .rcpt{max-width:430px;margin:0 auto;background:#fff;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden}',
-    '.head{display:flex;justify-content:space-between;align-items:flex-start;padding:11px 15px 9px;border-bottom:2px solid #0f172a} .sch-name{font-family:Georgia,"Times New Roman",serif;font-size:19px;font-weight:700;color:#0f172a} .sch-sub{font-size:9px;color:#64748b;margin-top:1px}',
-    '.rcpt-label{font-size:9px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#4f46e5;margin-top:2px} .hd-r{text-align:right;font-size:9px;color:#64748b;line-height:1.5} .hd-r b{color:#0f172a;font-weight:800;font-size:10px}',
-    '.parts{padding:8px 15px;border-bottom:1px solid #e2e8f0;display:flex;flex-wrap:wrap;gap:4px 12px} .pc{font-size:11px;color:#0f172a;font-weight:700;white-space:nowrap} .pc i{color:#94a3b8;font-style:normal;font-weight:600;font-size:10px}',
-    '.body{padding:8px 15px 3px} table.fee{width:100%;border-collapse:collapse} table.fee thead th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#475569;font-weight:800;padding:4px 6px;border-bottom:1.5px solid #0f172a}',
-    '.c-sn{width:24px;color:#94a3b8;font-size:10px;font-weight:700} .c-amt{text-align:right;width:80px;font-family:"JetBrains Mono",monospace;font-weight:800;font-size:12px;color:#0f172a}',
-    'table.fee tbody td{padding:5px 6px;border-bottom:1px solid #f1f5f9;vertical-align:top} .rpt-lbl{font-size:12px;font-weight:700;color:#1e293b} .rmon{font-size:10px;color:#64748b;font-weight:600}',
-    '.totals{display:flex;justify-content:flex-end;padding:2px 15px 9px} table.tot{width:62%;border-collapse:collapse} table.tot td{padding:2px 6px;font-size:11px} .t-lbl{color:#475569;font-weight:600}',
-    '.t-val{text-align:right;font-family:"JetBrains Mono",monospace;font-weight:800;color:#1e293b} .t-grand td{border-top:1.5px solid #0f172a;font-size:13px;font-weight:900;padding-top:5px;color:#0f172a} .t-grand .t-val{color:#0f172a}',
-    '.t-paid .t-lbl{color:#4f46e5;font-weight:800}.t-paid .t-val{color:#4f46e5;font-size:13px} .bal-due{text-align:center;font-size:12px;font-weight:900;color:#fff;background:#dc2626;padding:6px}',
-    '.bal-adv{text-align:center;font-size:11px;font-weight:800;color:#065f46;background:#d1fae5;padding:5px} .words{padding:6px 15px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:10px;color:#475569}',
-    '.words b{color:#0f172a} .remark{padding:5px 15px;font-size:10px;color:#475569}.remark b{color:#0f172a} .foot{display:flex;justify-content:space-between;align-items:flex-end;padding:11px 15px 12px}',
-    '.recd{font-size:10px;font-weight:800;color:#059669} .sig{text-align:center}.sig-line{width:115px;border-top:1px solid #94a3b8;margin-bottom:3px} .sig-lbl{font-size:9px;color:#64748b;font-weight:700}',
-    '.pabtn{display:flex;justify-content:center;gap:9px;padding:0 15px 15px} .pabtn button{border-radius:6px;padding:8px 20px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;border:none}',
-    '.btn-pr{background:#4f46e5;color:#fff} .btn-cl{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1!important} @media print{body{padding:0;background:#fff}.rcpt{border:none;border-radius:0;max-width:100%}.pabtn{display:none!important}}'
+    '*{box-sizing:border-box;margin:0;padding:0} body{font-family:"Segoe UI",Arial,sans-serif;background:#eef1f6;padding:10px;color:#1e293b} .rcpt{max-width:384px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-top:3px solid #4f46e5;border-radius:10px;overflow:hidden;box-shadow:0 6px 22px rgba(15,23,42,.12)}',
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 14px 7px;border-bottom:1px solid #eef2f7} .sch-name{font-family:Georgia,"Times New Roman",serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.05} .sch-sub{font-size:9px;color:#64748b;margin-top:1px}',
+    '.rcpt-label{font-size:8.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#4f46e5;margin-top:3px} .hd-r{text-align:right;font-size:9px;color:#94a3b8;line-height:1.45} .hd-r b{color:#0f172a;font-weight:800;font-size:10px}',
+    '.parts{padding:6px 14px;background:#f8fafc;border-bottom:1px solid #eef2f7;display:flex;flex-wrap:wrap;gap:2px 12px} .pc{font-size:10.5px;color:#0f172a;font-weight:700;white-space:nowrap} .pc i{color:#94a3b8;font-style:normal;font-weight:600;font-size:9.5px;margin-right:1px}',
+    '.body{padding:6px 14px 0} table.fee{width:100%;border-collapse:collapse} table.fee thead th{text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;font-weight:800;padding:0 6px 4px;border-bottom:1.5px solid #0f172a}',
+    '.c-sn{width:20px;color:#cbd5e1;font-size:10px;font-weight:700} .c-amt{text-align:right;width:76px;font-family:"JetBrains Mono",monospace;font-weight:800;font-size:12px;color:#0f172a}',
+    'table.fee tbody td{padding:3px 6px;border-bottom:1px solid #f4f6f9;vertical-align:top} .rpt-lbl{font-weight:700;color:#0f172a} .rmon{font-size:10px;color:#64748b;font-weight:600}',
+    '.totals{display:flex;justify-content:flex-end;padding:2px 14px 6px} table.tot{width:62%;border-collapse:collapse} table.tot td{padding:1px 6px;font-size:10.5px} .t-lbl{color:#64748b;font-weight:600}',
+    '.t-val{text-align:right;font-family:"JetBrains Mono",monospace;font-weight:800;color:#1e293b} .t-grand td{border-top:1.5px solid #0f172a;font-size:12.5px;font-weight:900;padding-top:3px;color:#0f172a} .t-grand .t-val{color:#0f172a}',
+    '.t-paid .t-lbl{color:#4f46e5;font-weight:800}.t-paid .t-val{color:#4f46e5;font-size:12.5px} .bal-due{text-align:center;font-size:11.5px;font-weight:900;color:#fff;background:#dc2626;padding:4px;letter-spacing:.02em}',
+    '.bal-adv{text-align:center;font-size:11px;font-weight:800;color:#065f46;background:#d1fae5;padding:4px} .words{padding:4px 14px;background:#f8fafc;border-top:1px solid #eef2f7;border-bottom:1px solid #eef2f7;font-size:9.5px;color:#64748b}',
+    '.words b{color:#0f172a} .remark{padding:3px 14px;font-size:9.5px;color:#64748b}.remark b{color:#0f172a} .foot{display:flex;justify-content:space-between;align-items:flex-end;padding:7px 14px 9px}',
+    '.recd{font-size:10px;font-weight:800;color:#059669} .sig{text-align:center}.sig-line{width:110px;border-top:1px solid #cbd5e1;margin-bottom:3px} .sig-lbl{font-size:8.5px;color:#94a3b8;font-weight:700}',
+    '.pabtn{display:flex;justify-content:center;gap:8px;padding:0 14px 12px} .pabtn button{border-radius:7px;padding:7px 20px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;border:none}',
+    '.btn-pr{background:#4f46e5;color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)} .btn-cl{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1!important} @media print{body{padding:0;background:#fff}.rcpt{border:none;border-radius:0;max-width:100%;box-shadow:none}.pabtn{display:none!important}}'
   ].join('');
 
   var receiptLabel = (data.receiptType && data.receiptType.toLowerCase().includes('transport')) ? 'Transport Receipt' : 'Fee Receipt';
@@ -7952,167 +7633,71 @@ function rptReprintReceipt(paymentId) {
   var printWin = window.open('', '_blank', 'width=490,height=780');
   if (!printWin) { toast('Please allow popups to print', 'error'); return; }
 
-  var payMode = r.paymentSource === 'cash' ? 'Cash — Reception'
-              : r.paymentSource === 'manual_online' ? 'Online — Desk'
-              : 'Online — App';
+  var type = r.type;
 
-  // ── Bulk group: fetch all payments in the group and build a multi-month receipt ──
+  // ── Bulk covering multiple months → one multi-month receipt (same for every month in the bulk) ──
   if (r.bulkGroupId) {
-    var groupRows = rptAllRows.filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
-
-    var monthGroups = {};
-    groupRows.forEach(function(row) {
-      var mi = row.monthIndex;
-      if (!monthGroups[mi]) monthGroups[mi] = [];
-      monthGroups[mi].push(row);
+    var bulkRows = (rptAllRows || []).filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
+    var mm = {};
+    bulkRows.forEach(function(x) {
+      if (!mm[x.monthIndex]) mm[x.monthIndex] = { fee: 0, paid: 0, heads: {}, headNames: [] };
+      var hid = String(x.feeHeadId || x.routeId || 't');
+      var hname = x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee');
+      if (!mm[x.monthIndex].heads[hid]) { mm[x.monthIndex].heads[hid] = 1; mm[x.monthIndex].fee += (x.amount || 0); mm[x.monthIndex].headNames.push(hname); }
+      mm[x.monthIndex].paid += (x.paidAmount || 0);
     });
-
-    var sortedMonthIndices = Object.keys(monthGroups).map(Number).sort(function(a, b) {
-      return sessionOrderOf(a) - sessionOrderOf(b);
-    });
-
-    var receiptItems = [];
-    var totalPaid = 0, totalBase = 0, totalWaiver = 0, totalLateFee = 0;
-    var paidAt = new Date(groupRows[0].paidAt || Date.now());
-    var remark = groupRows[0].remark || '';
-    var earliestMi = sortedMonthIndices[0];
-
-    sortedMonthIndices.forEach(function(mi) {
-      var isEarliest = (mi === earliestMi);
-      var payments = monthGroups[mi];
-      payments.forEach(function(p) {
-        var fhName = p.type === 'transport'
-          ? ('Transport Fee — ' + (p.routeName || ''))
-          : (p.feeHeadName || 'Fee');
-
-        var base = p.amount || 0;
-        var waiver = p.waiverAmount || 0;
-        var lateFee = p.lateFee || 0;
-        var paidAmt = p.paidAmount || 0;
-
-        var carry  = isEarliest ? (p.carryDueAtPayment       || 0) : 0;
-        var credit = isEarliest ? (p.previousCreditAtPayment  || 0) : 0;
-
-        var adjBase = Math.max(0, base - waiver);
-        var lineEffDue = Math.max(0, adjBase - credit + carry + lateFee);
-
-        totalBase    += base;
-        totalWaiver  += waiver;
-        totalLateFee += lateFee;
-        totalPaid    += paidAmt;
-
-        receiptItems.push({
-          feeHead: fhName, month: MONTHS[mi], base: base,
-          waiver: waiver, carry: carry, credit: credit,
-          lateFee: lateFee, effectiveDue: lineEffDue, paid: paidAmt,
-          isPaid: paidAmt >= lineEffDue, isPartial: paidAmt > 0 && paidAmt < lineEffDue
-        });
+    var mis = Object.keys(mm).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
+    if (mis.length > 1) {
+      var items = mis.map(function(mi) {
+        return { month: MONTHS[mi], heads: _fmtHeadList(mm[mi].headNames), base: mm[mi].fee, effectiveDue: mm[mi].fee };
       });
-    });
-
-    var totalFeeDue = Math.max(0, totalBase - totalWaiver) + totalLateFee;
-    var monthNames  = sortedMonthIndices.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-
-    printDetailedReceipt({
-      studentName: r.studentName, className: r.className || '',
-      rollNo: r.rollNo !== '-' ? r.rollNo : '',
-      fatherName: r.fatherName !== '-' ? r.fatherName : '',
-      phone: r.phone !== '-' ? r.phone : '',
-      session: r.session || currentSession,
-      total: totalPaid, totalBase: totalBase, totalCarry: 0,
-      totalCredit: 0, totalWaiver: totalWaiver, totalLateFee: totalLateFee,
-      totalFeeDue: totalFeeDue, balance: totalPaid - totalFeeDue,
-      paymentMode: payMode, remark: remark, items: receiptItems,
-      paidAt: paidAt,
-      receiptType: 'Multi-Month Fee Receipt — ' + monthNames
-    }, printWin);
-
-    return;
+      var grand = mis.reduce(function(s, mi) { return s + mm[mi].fee; }, 0);
+      var paid  = mis.reduce(function(s, mi) { return s + mm[mi].paid; }, 0);
+      var rem   = grand - paid;
+      var names = mis.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
+      renderMonthReceipt(r, items, grand, paid, 0, (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
+      return;
+    }
   }
 
-  // ── Single or split (installment) payment ──
-  var fhName = r.type === 'transport'
-    ? ('Transport Fee — ' + (r.routeName || ''))
-    : (r.feeHeadName || 'Fee');
+  // ── Single month (compact by month) ──
+  var monthRows = (rptAllRows || []).filter(function(x) {
+    return String(x.studentId) === String(r.studentId) && x.monthIndex === r.monthIndex && x.type === type;
+  });
+  if (!monthRows.length) monthRows = [r];
 
-  var base        = r.amount || 0;
-  var waiver      = r.waiverAmount || 0;
-  var lateFee     = r.lateFee || 0;
-  var paidAmt     = r.paidAmount || 0;
+  // Month total fee = each fee head counted once.
+  var heads = {}, monthFee = 0, headNames = [];
+  monthRows.forEach(function(x) {
+    var hid = String(x.feeHeadId || x.routeId || 't');
+    if (!heads[hid]) {
+      heads[hid] = 1; monthFee += (x.amount || 0);
+      headNames.push(x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee'));
+    }
+  });
 
-  // Carry/credit flowing INTO the very first payment of this month from a prior month.
-  var carry  = r.carryDueAtPayment       || 0;
-  var credit = r.previousCreditAtPayment || 0;
+  // Group this month's rows into collection events.
+  var em = {}, eo = [];
+  monthRows.forEach(function(x) {
+    var key = x.bulkGroupId ? ('bg:' + x.bulkGroupId) : ('at:' + new Date(x.paidAt).getTime());
+    if (!em[key]) { em[key] = { key: key, paidAt: x.paidAt, paid: 0 }; eo.push(key); }
+    em[key].paid += (x.paidAmount || 0);
+    if (new Date(x.paidAt) < new Date(em[key].paidAt)) em[key].paidAt = x.paidAt;
+  });
+  var events = eo.map(function(k) { return em[k]; });
+  events.sort(function(a, b) { return new Date(a.paidAt) - new Date(b.paidAt); });
 
-  // ── KEY FIX: For Part 2, Part 3, etc. of a split payment ──
-  // cumulativePriorPaid = sum of all earlier installments for THIS month.
-  // We use it as "credit" so the PDF shows "Previously Paid: ₹X" and
-  // the effective due is correctly reduced.
-  var historyIndex        = r.historyIndex;         // null for legacy, 0 for Part 1, 1 for Part 2…
-  var cumulativePriorPaid = r.cumulativePriorPaid || 0;
+  var rowKey = r.bulkGroupId ? ('bg:' + r.bulkGroupId) : ('at:' + new Date(r.paidAt).getTime());
+  var idx = 0; for (var i = 0; i < events.length; i++) { if (events[i].key === rowKey) { idx = i; break; } }
+  var prevPaid = 0; for (var j = 0; j < idx; j++) prevPaid += events[j].paid;
+  var thisPaid = events[idx] ? events[idx].paid : (r.paidAmount || 0);
+  var rem2 = monthFee - (prevPaid + thisPaid);
+  var multi = events.length > 1;
 
-  var isSplitPayment   = historyIndex != null && historyIndex > 0;
-  var totalHistoryCount = r.totalHistoryCount || 1;
-
-  if (isSplitPayment) {
-    // For Part 2+:
-    // - The "base" visible to this receipt is what remained AFTER prior installments.
-    // - We model prior installments as "credit" so printDetailedReceipt shows them
-    //   in the "Previously Paid" row.
-    // - carry from prior months only applies to Part 1 (first installment).
-    carry  = 0;   // cross-month carry already absorbed in Part 1
-    credit = cumulativePriorPaid;
-  }
-
-  var adjBase  = Math.max(0, base - waiver);
-  var effDue   = Math.max(0, adjBase - credit + carry + lateFee);
-  var balance  = paidAmt - effDue;
-
-  // Receipt type label
-  var partLabel = '';
-  if (totalHistoryCount > 1 && historyIndex != null) {
-    partLabel = ' (Part ' + (historyIndex + 1) + ' of ' + totalHistoryCount + ')';
-  }
-  var receiptTypeBase = r.type === 'transport'
-    ? 'Transport Fee Receipt — '
-    : (isSplitPayment ? 'Installment Receipt — ' : 'Fee Receipt — ');
-  var receiptType = receiptTypeBase + MONTHS[r.monthIndex] + partLabel;
-
-  var richItem = {
-    feeHead:      isSplitPayment ? (fhName + ' (Installment)') : fhName,
-    month:        MONTHS[r.monthIndex],
-    base:         base,
-    waiver:       waiver,
-    carry:        carry,
-    credit:       credit,
-    lateFee:      lateFee,
-    effectiveDue: effDue,
-    paid:         paidAmt,
-    isPaid:       paidAmt >= effDue,
-    isPartial:    paidAmt > 0 && paidAmt < effDue
-  };
-
-  printDetailedReceipt({
-    studentName: r.studentName,
-    className:   r.className  || '',
-    rollNo:      r.rollNo !== '-'     ? r.rollNo     : '',
-    fatherName:  r.fatherName !== '-' ? r.fatherName : '',
-    phone:       r.phone !== '-'      ? r.phone      : '',
-    session:     r.session || currentSession,
-    total:       paidAmt,
-    totalBase:   base,
-    totalCarry:  carry,
-    totalCredit: credit,
-    totalWaiver: waiver,
-    totalLateFee: lateFee,
-    totalFeeDue: effDue,
-    balance:     balance,
-    paymentMode: payMode,
-    remark:      r.remark || '',
-    items:       [richItem],
-    paidAt:      new Date(r.paidAt),
-    receiptType: receiptType
-  }, printWin);
+  var srcPaidAt = events[idx] ? events[idx].paidAt : r.paidAt;
+  var src = { studentName: r.studentName, className: r.className, rollNo: r.rollNo, fatherName: r.fatherName, phone: r.phone, session: r.session, remark: r.remark, paidAt: srcPaidAt, paymentSource: r.paymentSource };
+  var items2 = [{ month: MONTHS[r.monthIndex], heads: _fmtHeadList(headNames), base: monthFee, effectiveDue: monthFee }];
+  renderMonthReceipt(src, items2, monthFee, thisPaid, prevPaid, (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), (multi ? 'Installment Receipt \u2014 ' : 'Fee Receipt \u2014 ') + MONTHS[r.monthIndex], printWin);
 }
 
 // ═══════════════════════════════════════════════════════════════
