@@ -7797,7 +7797,7 @@ function submitExtraFees() {
 
   apiPost(API_BASE_URL + '/fee/extra-dues', payload, true)
     .then(function() {
-      toast('Extra fees assigned successfully!');
+      toast('Other dues assigned successfully!');
       document.getElementById('ef-title').value = '';
       document.getElementById('ef-amount').value = '';
       document.getElementById('ef-desc').value = '';
@@ -7820,7 +7820,7 @@ function loadExtraDuesHistory() {
       var notices = res.data || [];
       
       if (notices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--slate-500); padding: 20px;">No extra dues assigned yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--slate-500); padding: 20px;">No other dues assigned yet.</td></tr>';
         return;
       }
 
@@ -7932,7 +7932,7 @@ function saveEditExtraDue() {
   // <-- ADDED description to the payload
   apiPut(API_BASE_URL + '/fee/extra-dues/' + id, { title: title, amount: amount, dueDate: dueDate, description: desc }, true)
     .then(function() {
-      toast('Extra Due updated successfully');
+      toast('Other Due updated successfully');
       closeModal('edit-extradue-modal');
       loadExtraDuesHistory(); 
     })
@@ -7944,7 +7944,7 @@ function deleteExtraDue(id) {
   if(!confirm('Are you sure you want to delete this unpaid fee?')) return;
   apiDelete(API_BASE_URL + '/fee/extra-dues/' + id, true)
     .then(function() {
-      toast('Extra Due deleted');
+      toast('Other Due deleted');
       loadExtraDuesHistory(); // Refresh Table
     })
     .catch(function(e) { toast(e.message, 'error'); });
