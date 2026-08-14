@@ -3227,6 +3227,7 @@ function buildMonthEvents(stu, monthIndex, type) {
   var txns = [];
   var monthTotalFee = 0;
   var headNames = [];
+  var mBase = 0, mWaiver = 0, mLate = 0, mPrevDue = 0, mPrevCredit = 0;
 
   if (type === 'reg') {
     (stu.entries || []).forEach(function(e) {
@@ -3234,6 +3235,9 @@ function buildMonthEvents(stu, monthIndex, type) {
       if (!m) return;
       var fee = (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount != null ? m.baseAmount : (m.amount || 0)));
       monthTotalFee += fee;
+      mBase += (m.baseAmount != null ? m.baseAmount : (m.amount || 0));
+      mWaiver += (m.waiverAmount || 0); mLate += (m.lateFee || 0);
+      mPrevDue += (m.previousDue || 0); mPrevCredit += (m.previousCredit || 0);
       if (e.feeHeadName) headNames.push(e.feeHeadName);
       var hist = (m.history && m.history.length)
         ? m.history
@@ -3244,6 +3248,9 @@ function buildMonthEvents(stu, monthIndex, type) {
     var mt = stu.transport.months.find(function(mo) { return mo.monthIndex === monthIndex; });
     if (mt) {
       monthTotalFee += (mt.effectiveDue != null ? mt.effectiveDue : (mt.baseAmount != null ? mt.baseAmount : (mt.amount || 0)));
+      mBase += (mt.baseAmount != null ? mt.baseAmount : (mt.amount || 0));
+      mWaiver += (mt.waiverAmount || 0); mLate += (mt.lateFee || 0);
+      mPrevDue += (mt.previousDue || 0); mPrevCredit += (mt.previousCredit || 0);
       headNames.push('Transport' + (stu.transport.routeName ? ' — ' + stu.transport.routeName : ''));
       var thist = (mt.history && mt.history.length)
         ? mt.history
@@ -3265,16 +3272,26 @@ function buildMonthEvents(stu, monthIndex, type) {
   });
   var events = order.map(function(k) { return map[k]; });
   events.sort(function(a, b) { return new Date(a.paidAt) - new Date(b.paidAt); });
-  return { events: events, monthTotalFee: monthTotalFee, headNames: headNames };
+  return { events: events, monthTotalFee: monthTotalFee, headNames: headNames,
+           base: mBase, waiver: mWaiver, late: mLate, prevDue: mPrevDue, prevCredit: mPrevCredit };
 }
 
 // For a bulk payment, list every month it covered with that month's fee + amount paid.
 function buildBulkMonths(stu, bulkGroupId, type) {
   var mm = {};
-  function add(mi, fee, paid, headName) {
-    if (!mm[mi]) mm[mi] = { monthIndex: mi, fee: 0, paid: 0, heads: [] };
-    mm[mi].fee += fee; mm[mi].paid += paid;
-    if (headName && mm[mi].heads.indexOf(headName) === -1) mm[mi].heads.push(headName);
+  function add(mi, o) {
+    if (!mm[mi]) mm[mi] = { monthIndex: mi, fee: 0, paid: 0, heads: [], base: 0, waiver: 0, late: 0, prevDue: 0, prevCredit: 0 };
+    var x = mm[mi];
+    x.fee += o.fee; x.paid += o.paid; x.base += o.base; x.waiver += o.waiver; x.late += o.late; x.prevDue += o.prevDue; x.prevCredit += o.prevCredit;
+    if (o.headName && x.heads.indexOf(o.headName) === -1) x.heads.push(o.headName);
+  }
+  function money(m) {
+    return {
+      fee: (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount || m.amount || 0)),
+      base: (m.baseAmount != null ? m.baseAmount : (m.amount || 0)),
+      waiver: m.waiverAmount || 0, late: m.lateFee || 0,
+      prevDue: m.previousDue || 0, prevCredit: m.previousCredit || 0
+    };
   }
   if (type === 'reg') {
     (stu.entries || []).forEach(function(e) {
@@ -3285,7 +3302,7 @@ function buildBulkMonths(stu, bulkGroupId, type) {
         } else if (m.paidAmount > 0 && m.bulkGroupId === bulkGroupId) {
           hit = true; paid += m.paidAmount;
         }
-        if (hit) add(m.monthIndex, (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount || m.amount || 0)), paid, e.feeHeadName);
+        if (hit) { var mo = money(m); mo.paid = paid; mo.headName = e.feeHeadName; add(m.monthIndex, mo); }
       });
     });
   } else if (stu.transport && stu.transport.months) {
@@ -3296,7 +3313,7 @@ function buildBulkMonths(stu, bulkGroupId, type) {
       } else if (m.paidAmount > 0 && m.bulkGroupId === bulkGroupId) {
         hit = true; paid += m.paidAmount;
       }
-      if (hit) add(m.monthIndex, (m.effectiveDue != null ? m.effectiveDue : (m.baseAmount || m.amount || 0)), paid, 'Transport' + (stu.transport.routeName ? ' — ' + stu.transport.routeName : ''));
+      if (hit) { var mo = money(m); mo.paid = paid; mo.headName = 'Transport' + (stu.transport.routeName ? ' — ' + stu.transport.routeName : ''); add(m.monthIndex, mo); }
     });
   }
   var arr = Object.keys(mm).map(function(k) { return mm[k]; });
@@ -3304,8 +3321,8 @@ function buildBulkMonths(stu, bulkGroupId, type) {
   return arr;
 }
 
-// Shared clean receipt renderer. Particulars are compact month lines.
-function renderMonthReceipt(src, items, grandTotal, paidThis, prevPaid, balance, receiptType, targetWin) {
+// Shared clean receipt renderer. `money` carries the itemized breakdown.
+function renderMonthReceipt(src, items, money, receiptType, targetWin) {
   printDetailedReceipt({
     studentName: src.studentName || src.name || '-',
     className:   src.className || (src.class && src.class.className) || '',
@@ -3313,8 +3330,15 @@ function renderMonthReceipt(src, items, grandTotal, paidThis, prevPaid, balance,
     fatherName:  (src.fatherName && src.fatherName !== '-') ? src.fatherName : '',
     phone:       (src.phone && src.phone !== '-') ? src.phone : '',
     session:     src.session || currentSession,
-    total: paidThis, totalBase: grandTotal, totalCarry: 0, totalCredit: prevPaid,
-    totalWaiver: 0, totalLateFee: 0, totalFeeDue: grandTotal, balance: balance,
+    total: money.paidThis,
+    totalBase: (money.base != null ? money.base : money.grandTotal),
+    totalCarry: 0,
+    totalCredit: money.prevPaid || 0,
+    totalWaiver: money.waiver || 0,
+    totalLateFee: money.late || 0,
+    totalPrevDue: money.prevDue || 0,
+    totalFeeDue: money.grandTotal,
+    balance: money.balance,
     paymentMode: src.paymentMode || (src.paymentSource === 'manual_online' ? 'Online — Desk' : (src.paymentSource === 'online' ? 'Online — App' : 'Cash — Reception')),
     remark: src.remark || '', items: items, paidAt: new Date(src.paidAt || Date.now()),
     receiptType: receiptType
@@ -3338,26 +3362,31 @@ function printMonthEventReceipt(sid, monthIndex, type, eventIdx, targetWin) {
     var bm = buildBulkMonths(stu, ev.bulkGroupId, type);
     if (bm.length > 1) {
       var items = bm.map(function(x) {
-        return { month: MONTHS[x.monthIndex], heads: _fmtHeadList(x.heads), base: x.fee, effectiveDue: x.fee };
+        return { month: MONTHS[x.monthIndex], heads: _fmtHeadList(x.heads), gross: x.base };
       });
-      var grand = bm.reduce(function(s, x) { return s + x.fee; }, 0);
+      var tBase = bm.reduce(function(s, x) { return s + x.base; }, 0);
+      var tWaiv = bm.reduce(function(s, x) { return s + x.waiver; }, 0);
+      var tLate = bm.reduce(function(s, x) { return s + x.late; }, 0);
+      var tPrev = bm.reduce(function(s, x) { return s + x.prevDue; }, 0);
+      var tCred = bm.reduce(function(s, x) { return s + x.prevCredit; }, 0);
+      var grand = bm.reduce(function(s, x) { return s + x.fee; }, 0) + tLate;
       var paid  = bm.reduce(function(s, x) { return s + x.paid; }, 0);
       var rem   = grand - paid;
       var names = bm.map(function(x) { return SHORT_MONTHS[x.monthIndex]; }).join(', ');
-      renderMonthReceipt(src, items, grand, paid, 0, (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), 'Multi-Month Fee Receipt — ' + names, targetWin);
+      renderMonthReceipt(src, items, { grandTotal: grand, paidThis: paid, prevPaid: tCred, balance: (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), base: tBase, waiver: tWaiv, late: tLate, prevDue: tPrev }, 'Multi-Month Fee Receipt — ' + names, targetWin);
       return;
     }
   }
 
-  // Single month → one compact line.
+  // Single month → one compact line (gross), with waiver/late itemized.
   var prevPaid = 0;
   for (var i = 0; i < eventIdx; i++) { prevPaid += (events[i].paid || 0) + (events[i].waiver || 0); }
-  var grandTotal = info.monthTotalFee + (ev.lateFee || 0);
+  var grandTotal = info.monthTotalFee + (info.late || 0);
   var paidThis   = ev.paid || 0;
-  var rem2       = grandTotal - (prevPaid + (ev.waiver || 0) + paidThis);
+  var rem2       = grandTotal - (prevPaid + paidThis);
   var multi      = events.length > 1;
-  var items2 = [{ month: MONTHS[monthIndex], heads: _fmtHeadList(info.headNames), base: grandTotal, effectiveDue: grandTotal }];
-  renderMonthReceipt(src, items2, grandTotal, paidThis, prevPaid, (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), (multi ? 'Installment Receipt — ' : 'Fee Receipt — ') + MONTHS[monthIndex], targetWin);
+  var items2 = [{ month: MONTHS[monthIndex], heads: _fmtHeadList(info.headNames), gross: info.base }];
+  renderMonthReceipt(src, items2, { grandTotal: grandTotal, paidThis: paidThis, prevPaid: (multi ? prevPaid : info.prevCredit), balance: (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), base: info.base, waiver: info.waiver, late: info.late, prevDue: info.prevDue }, (multi ? 'Installment Receipt — ' : 'Fee Receipt — ') + MONTHS[monthIndex], targetWin);
 }
 
 function calcLiveCheckout(sid, type, isManualEdit) {
@@ -7519,9 +7548,11 @@ var previouslyPaid = (data.items || []).reduce(function(s, i) { return s + (i.cr
       particularName = item.feeHead || item.label || item.month || 'Fee';
     }
 
-    var amt = (item.effectiveDue != null && item.effectiveDue > 0)
-      ? item.effectiveDue
-      : (item.base != null && item.base > 0 ? item.base : (item.amount != null ? item.amount : (item.paid || 0)));
+    var amt = (item.gross != null)
+      ? item.gross
+      : ((item.effectiveDue != null && item.effectiveDue > 0)
+        ? item.effectiveDue
+        : (item.base != null && item.base > 0 ? item.base : (item.amount != null ? item.amount : (item.paid || 0))));
     if (monthSums[particularName] == null) { monthSums[particularName] = 0; monthOrder.push(particularName); }
     monthSums[particularName] += amt;
     if (headForSub) {
@@ -7544,16 +7575,20 @@ var previouslyPaid = (data.items || []).reduce(function(s, i) { return s + (i.cr
     '</tr>';
   }).join('');
 
+  var isInstallmentReceipt = (data.receiptType && (data.receiptType.includes('Arrears') || data.receiptType.includes('Installment')));
+  var grandTotalVal = Number(data.totalFeeDue != null ? data.totalFeeDue : data.total).toLocaleString('en-IN');
+  var prevDueShown = (data.totalPrevDue != null) ? data.totalPrevDue : prevDue;
+  var hasAdj = (prevDueShown > 0) || ((data.totalLateFee || 0) > 0) || ((data.totalWaiver || 0) > 0) || (!isInstallmentReceipt && (data.totalCredit || 0) > 0);
+
   var rows = '';
-// ── Fix 1: single prevDue row, no duplicate ──
-if (prevDue > 0) rows += '<tr><td class="t-lbl">Previous Month Due</td><td class="t-val">+\u20b9' + Number(prevDue).toLocaleString('en-IN') + '</td></tr>';
-if ((data.totalLateFee || 0) > 0) rows += '<tr><td class="t-lbl">Fine / Late Fee</td><td class="t-val">+\u20b9' + Number(data.totalLateFee).toLocaleString('en-IN') + '</td></tr>';
-if ((data.totalWaiver || 0) > 0) rows += '<tr><td class="t-lbl">Waiver</td><td class="t-val">\u2212\u20b9' + Number(data.totalWaiver).toLocaleString('en-IN') + '</td></tr>';
-// ── Fix 2: include 'Installment' so Tab-5 receipts show "Previously Paid" not "Advance Credit Applied"
-// ── Fix 3: only ONE credit row (totalCredit), previouslyPaid row removed — they are always the same value
-var isInstallmentReceipt = (data.receiptType && (data.receiptType.includes('Arrears') || data.receiptType.includes('Installment')));
-var grandTotalVal = Number(data.totalFeeDue != null ? data.totalFeeDue : data.total).toLocaleString('en-IN');
-if (isInstallmentReceipt) {
+  // Show the gross "Current Fee" subtotal whenever adjustments follow, so the line
+  // items visibly add up before waiver / late fee / carry are applied.
+  if (hasAdj && currentFee > 0) rows += '<tr><td class="t-lbl">Current Fee</td><td class="t-val">\u20b9' + Number(currentFee).toLocaleString('en-IN') + '</td></tr>';
+  if (prevDueShown > 0) rows += '<tr><td class="t-lbl">Previous Month Due</td><td class="t-val">+\u20b9' + Number(prevDueShown).toLocaleString('en-IN') + '</td></tr>';
+  if ((data.totalLateFee || 0) > 0) rows += '<tr><td class="t-lbl">Fine / Late Fee</td><td class="t-val">+\u20b9' + Number(data.totalLateFee).toLocaleString('en-IN') + '</td></tr>';
+  if ((data.totalWaiver || 0) > 0) rows += '<tr><td class="t-lbl">Waiver</td><td class="t-val">\u2212\u20b9' + Number(data.totalWaiver).toLocaleString('en-IN') + '</td></tr>';
+
+  if (isInstallmentReceipt) {
   // Clear running ledger: full fee → already paid → what's still owed → this payment.
   rows += '<tr class="t-grand"><td class="t-lbl">Grand Total</td><td class="t-val">\u20b9' + grandTotalVal + '</td></tr>';
   if ((data.totalCredit || 0) > 0) {
@@ -7640,22 +7675,26 @@ function rptReprintReceipt(paymentId) {
     var bulkRows = (rptAllRows || []).filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
     var mm = {};
     bulkRows.forEach(function(x) {
-      if (!mm[x.monthIndex]) mm[x.monthIndex] = { fee: 0, paid: 0, heads: {}, headNames: [] };
+      if (!mm[x.monthIndex]) mm[x.monthIndex] = { base: 0, paid: 0, waiver: 0, late: 0, heads: {}, headNames: [] };
       var hid = String(x.feeHeadId || x.routeId || 't');
       var hname = x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee');
-      if (!mm[x.monthIndex].heads[hid]) { mm[x.monthIndex].heads[hid] = 1; mm[x.monthIndex].fee += (x.amount || 0); mm[x.monthIndex].headNames.push(hname); }
-      mm[x.monthIndex].paid += (x.paidAmount || 0);
+      var mo = mm[x.monthIndex];
+      if (!mo.heads[hid]) { mo.heads[hid] = 1; mo.base += (x.amount || 0); mo.headNames.push(hname); }
+      mo.paid += (x.paidAmount || 0); mo.waiver += (x.waiverAmount || 0); mo.late += (x.lateFee || 0);
     });
     var mis = Object.keys(mm).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
     if (mis.length > 1) {
       var items = mis.map(function(mi) {
-        return { month: MONTHS[mi], heads: _fmtHeadList(mm[mi].headNames), base: mm[mi].fee, effectiveDue: mm[mi].fee };
+        return { month: MONTHS[mi], heads: _fmtHeadList(mm[mi].headNames), gross: mm[mi].base };
       });
-      var grand = mis.reduce(function(s, mi) { return s + mm[mi].fee; }, 0);
+      var tBase = mis.reduce(function(s, mi) { return s + mm[mi].base; }, 0);
+      var tWaiv = mis.reduce(function(s, mi) { return s + mm[mi].waiver; }, 0);
+      var tLate = mis.reduce(function(s, mi) { return s + mm[mi].late; }, 0);
       var paid  = mis.reduce(function(s, mi) { return s + mm[mi].paid; }, 0);
+      var grand = tBase - tWaiv + tLate;
       var rem   = grand - paid;
       var names = mis.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-      renderMonthReceipt(r, items, grand, paid, 0, (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
+      renderMonthReceipt(r, items, { grandTotal: grand, paidThis: paid, prevPaid: 0, balance: (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), base: tBase, waiver: tWaiv, late: tLate, prevDue: 0 }, 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
       return;
     }
   }
@@ -7666,15 +7705,19 @@ function rptReprintReceipt(paymentId) {
   });
   if (!monthRows.length) monthRows = [r];
 
-  // Month total fee = each fee head counted once.
-  var heads = {}, monthFee = 0, headNames = [];
+  // Month gross fee = each fee head's base counted once; waiver/late/carry summed.
+  var heads = {}, grossBase = 0, headNames = [], sWaiver = 0, sLate = 0, sCarryDue = 0, sPrevCredit = 0;
   monthRows.forEach(function(x) {
     var hid = String(x.feeHeadId || x.routeId || 't');
     if (!heads[hid]) {
-      heads[hid] = 1; monthFee += (x.amount || 0);
+      heads[hid] = 1; grossBase += (x.amount || 0);
+      sCarryDue += (x.carryDueAtPayment || 0); sPrevCredit += (x.previousCreditAtPayment || 0);
       headNames.push(x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee'));
     }
+    sWaiver += (x.waiverAmount || 0); sLate += (x.lateFee || 0);
   });
+  // Grand total = this month's own net + carried debt − carried advance.
+  var monthGrand = (grossBase - sWaiver) + sLate + sCarryDue - sPrevCredit;
 
   // Group this month's rows into collection events.
   var em = {}, eo = [];
@@ -7691,13 +7734,15 @@ function rptReprintReceipt(paymentId) {
   var idx = 0; for (var i = 0; i < events.length; i++) { if (events[i].key === rowKey) { idx = i; break; } }
   var prevPaid = 0; for (var j = 0; j < idx; j++) prevPaid += events[j].paid;
   var thisPaid = events[idx] ? events[idx].paid : (r.paidAmount || 0);
-  var rem2 = monthFee - (prevPaid + thisPaid);
+  var rem2 = monthGrand - (prevPaid + thisPaid);
   var multi = events.length > 1;
+  // Credit line: prior installments (multi) OR advance credit carried in (single collection).
+  var creditForReceipt = multi ? prevPaid : sPrevCredit;
 
   var srcPaidAt = events[idx] ? events[idx].paidAt : r.paidAt;
   var src = { studentName: r.studentName, className: r.className, rollNo: r.rollNo, fatherName: r.fatherName, phone: r.phone, session: r.session, remark: r.remark, paidAt: srcPaidAt, paymentSource: r.paymentSource };
-  var items2 = [{ month: MONTHS[r.monthIndex], heads: _fmtHeadList(headNames), base: monthFee, effectiveDue: monthFee }];
-  renderMonthReceipt(src, items2, monthFee, thisPaid, prevPaid, (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), (multi ? 'Installment Receipt \u2014 ' : 'Fee Receipt \u2014 ') + MONTHS[r.monthIndex], printWin);
+  var items2 = [{ month: MONTHS[r.monthIndex], heads: _fmtHeadList(headNames), gross: grossBase }];
+  renderMonthReceipt(src, items2, { grandTotal: monthGrand, paidThis: thisPaid, prevPaid: creditForReceipt, balance: (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), base: grossBase, waiver: sWaiver, late: sLate, prevDue: sCarryDue }, (multi ? 'Installment Receipt \u2014 ' : 'Fee Receipt \u2014 ') + MONTHS[r.monthIndex], printWin);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -7797,7 +7842,7 @@ function submitExtraFees() {
 
   apiPost(API_BASE_URL + '/fee/extra-dues', payload, true)
     .then(function() {
-      toast('Other dues assigned successfully!');
+      toast('Extra fees assigned successfully!');
       document.getElementById('ef-title').value = '';
       document.getElementById('ef-amount').value = '';
       document.getElementById('ef-desc').value = '';
@@ -7820,7 +7865,7 @@ function loadExtraDuesHistory() {
       var notices = res.data || [];
       
       if (notices.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--slate-500); padding: 20px;">No other dues assigned yet.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--slate-500); padding: 20px;">No extra dues assigned yet.</td></tr>';
         return;
       }
 
@@ -7932,7 +7977,7 @@ function saveEditExtraDue() {
   // <-- ADDED description to the payload
   apiPut(API_BASE_URL + '/fee/extra-dues/' + id, { title: title, amount: amount, dueDate: dueDate, description: desc }, true)
     .then(function() {
-      toast('Other Due updated successfully');
+      toast('Extra Due updated successfully');
       closeModal('edit-extradue-modal');
       loadExtraDuesHistory(); 
     })
@@ -7944,7 +7989,7 @@ function deleteExtraDue(id) {
   if(!confirm('Are you sure you want to delete this unpaid fee?')) return;
   apiDelete(API_BASE_URL + '/fee/extra-dues/' + id, true)
     .then(function() {
-      toast('Other Due deleted');
+      toast('Extra Due deleted');
       loadExtraDuesHistory(); // Refresh Table
     })
     .catch(function(e) { toast(e.message, 'error'); });
