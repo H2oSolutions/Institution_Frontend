@@ -2564,7 +2564,7 @@ function saveTransportEditPayment() {
   // Delete old record then re-create with new values
   apiDelete(API_FEE_PAY + '/' + ctx.pid, true)
     .then(function() {
-      return apiPost(API_FEE_PAY, {
+      return apiPost(API_FEE_PAY, { allowAdvance: true,
         studentId:    ctx.sid,
         feeHeadId:    null,
         routeId:      ctx.routeId,
@@ -2737,13 +2737,27 @@ function confirmMonthPayment() {
 
   var adjDue = Math.max(0, d.totalDue - waiver);
   var paidTowardFee = Math.max(0, paidAmt - lateFeeV);
+
+  // ── GUARD: same protection for the single-month payment path ──
+  if (paidTowardFee > adjDue) {
+    var exM = paidTowardFee - adjDue;
+    var mMsg = 'You are collecting Rs.' + exM.toLocaleString('en-IN') +
+               ' MORE than the Rs.' + adjDue.toLocaleString('en-IN') + ' due.\n\n';
+    if (waiver > 0) {
+      mMsg += '\u26a0 A waiver of Rs.' + waiver.toLocaleString('en-IN') +
+              ' was applied, so the payable amount is lower.\n' +
+              'Collecting the full fee anyway is usually a mistake.\n\n';
+    }
+    mMsg += 'Rs.' + exM.toLocaleString('en-IN') + ' will be stored as ADVANCE CREDIT.\n\nContinue?';
+    if (!confirm(mMsg)) return;
+  }
   if (paidTowardFee < adjDue) { payments = payments.filter(function(p) { return p.amount > 0; }); } 
   else { payments = payments.filter(function(p) { return p.paidAmount > 0 || (p.waiverAmount || 0) > 0; }); }
 
   var btn = document.getElementById('mpm-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, { studentId: d.sid, session: d.session, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true, studentId: d.sid, session: d.session, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
     .then(function() {
       closeModal('month-pay-modal');
       var stu = feeStatusData.find(function(s) { return s.studentId === d.sid; });
@@ -2841,7 +2855,7 @@ function confirmMonthEdit() {
       if (remaining > 0 && payments.length > 0) {
         payments[payments.length - 1].paidAmount += remaining;
       }
-      return apiPost(API_FEE_PAY_BULK, {
+      return apiPost(API_FEE_PAY_BULK, { allowAdvance: true,
         studentId: d.sid, session: d.session,
         payments: payments, remark: remark || null
       }, true);
@@ -3610,7 +3624,7 @@ function submitLiveCheckout(sid, type) {
   var btn = document.getElementById(pfx + '-confirm-btn-' + sid);
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true,
     studentId: sid, session: currentSession,
     payments: payments, remark: remark || null, markedBy: getMarkedBy()
   }, true)
@@ -3771,7 +3785,7 @@ function confirmPayment() {
   var btn = document.getElementById('pay-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY, {
+  apiPost(API_FEE_PAY, { allowAdvance: true,
     studentId:    d.studentId,
     feeHeadId:    d.feeHeadId,
     monthIndex:   d.monthIndex,
@@ -4063,10 +4077,27 @@ function confirmBulkPayment() {
 
   if (remaining > 0 && payments.length > 0) payments[payments.length - 1].paidAmount += remaining;
 
+  // ── GUARD: collecting MORE than is due silently becomes advance credit. ──
+  // This is how full-waiver months ended up with the full fee still collected.
+  var totalDueNow = adjAmounts.reduce(function(s, v) { return s + v; }, 0);
+  var payingNow   = customAmt || totalDueNow;
+  var excessNow   = payingNow - totalDueNow;
+  if (excessNow > 0) {
+    var wMsg = 'You are collecting Rs.' + excessNow.toLocaleString('en-IN') +
+               ' MORE than the Rs.' + totalDueNow.toLocaleString('en-IN') + ' due.\n\n';
+    if (waiver > 0) {
+      wMsg += '\u26a0 A waiver of Rs.' + waiver.toLocaleString('en-IN') +
+              ' was applied, so the payable amount is lower.\n' +
+              'Collecting the full fee anyway is usually a mistake.\n\n';
+    }
+    wMsg += 'Rs.' + excessNow.toLocaleString('en-IN') + ' will be stored as ADVANCE CREDIT.\n\nContinue?';
+    if (!confirm(wMsg)) return;
+  }
+
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true,studentId: sid, session: session, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
@@ -4158,7 +4189,7 @@ function confirmRegBulkPayment() {
   var btn = document.getElementById('bulk-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {studentId: sid, session: session, payments: payments, remark: remark || null, markedBy: getMarkedBy()}, true)
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true,studentId: sid, session: session, payments: payments, remark: remark || null, markedBy: getMarkedBy()}, true)
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
@@ -4327,7 +4358,7 @@ function submitPreviousDues(sid, type) {
   var btn = document.getElementById(pfx + '-confirm-btn-' + sid);
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, {
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true,
     studentId: sid, session: currentSession,
     payments: payments, remark: remark || null, markedBy: getMarkedBy()
   }, true)
@@ -4501,7 +4532,7 @@ function confirmPayRemaining() {
   var btn = document.getElementById('prm-confirm-btn');
   setLoading(btn, true);
 
-  apiPost(API_FEE_PAY_BULK, { studentId: ctx.sid, session: currentSession, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
+  apiPost(API_FEE_PAY_BULK, { allowAdvance: true, studentId: ctx.sid, session: currentSession, payments: payments, remark: remark || null, markedBy: getMarkedBy() }, true)
     .then(function() {
       var stu = feeStatusData.find(function(s) { return s.studentId === ctx.sid; });
       var collected = payments.reduce(function(s, p) { return s + (p.paidAmount || 0); }, 0);
