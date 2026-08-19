@@ -2257,6 +2257,9 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
 
   var hasPartialPaymentAndShortfall = displayItems.some(function(i) { return (i.month.paidAmount || 0) > 0; }) && actualShortfall > 0;
   var isUnpaidAndCarriedForward = totalPaidAmt === 0 && isFullyRecovered;
+  // This month's shortfall was already COLLECTED through a later month's carry.
+  // Showing "Pay Due" here would collect the same money a second time.
+  var carryAlreadyCollected = displayItems.some(function(i) { return i.month.isCarryCollected === true; });
 
   var actions = '';
   if (canPay && isFutureRow) {
@@ -2264,7 +2267,7 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
   }
 
   // NEW: Force the Pay Due button to appear if there is a shortfall
-  if (actualShortfall > 0 && (hasPartialPaymentAndShortfall || isUnpaidAndCarriedForward)) {
+  if (actualShortfall > 0 && !carryAlreadyCollected && (hasPartialPaymentAndShortfall || isUnpaidAndCarriedForward)) {
     actions += '<button class="mr-btn mr-btn-pay" style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border-color:#b91c1c" onclick="event.stopPropagation(); payArrearsModal(\'' + sid + '\', \'reg\', ' + monthIndex + ')">Pay Due</button>';
   }
 
@@ -2424,7 +2427,7 @@ function buildTransportMonthRow(sid, m, routeName, session, routeId, nextMonthNa
   }
 
   // NEW: Force the Pay Due button to appear if there is a shortfall
-  if (actualShortfall > 0 && (hasPartialPaymentAndShortfall || isUnpaidAndCarriedForward)) {
+  if (actualShortfall > 0 && (hasPartialPaymentAndShortfall || isUnpaidAndCarriedForward) && m.isCarryCollected !== true) {
     actions += '<button class="mr-btn mr-btn-pay" style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border-color:#b91c1c" onclick="event.stopPropagation(); payArrearsModal(\'' + sid + '\', \'trn\', ' + m.monthIndex + ')">Pay Due</button>';
   }
 
@@ -6846,7 +6849,10 @@ function foRenderBreakdown(containerId, data, title, color) {
   var el = document.getElementById(containerId);
   if (!el || !data) return;
 
-  var pct = data.expected > 0 ? Math.round((data.collected / data.expected) * 100) : 0;
+  // % against what's actually collectible (expected minus waived), so a fully
+  // settled head reads 100% instead of appearing short by the waived amount.
+  var collectible = Math.max(0, (data.expected || 0) - (data.waiver || 0));
+  var pct = collectible > 0 ? Math.round((data.collected / collectible) * 100) : (data.collected > 0 ? 100 : 0);
 
   el.innerHTML =
     '<div class="fo-breakdown-card">' +
