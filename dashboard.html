@@ -499,6 +499,14 @@
                                 </div>
                                 <div class="pf-pill-price">₹1499<small style="font-size:0.65rem;font-weight:600;opacity:0.6">/yr</small></div>
                             </div>
+                            <div class="pf-pill" id="pf-pill-exam" onclick="event.stopPropagation();goToExamManagement()" style="cursor:pointer">
+                                <div class="pf-pill-icon">📝</div>
+                                <div class="pf-pill-text">
+                                    <span class="pf-pill-name">Exam Management</span>
+                                    <span class="pf-pill-sub">Admit cards &amp; exam tools</span>
+                                </div>
+                                <div class="pf-pill-price">Open →</div>
+                            </div>
                         </div>
                         <div class="premium-card-bottom">
                             <!-- <small>Activate within 2 hours of payment · No hidden charges</small> -->
@@ -564,6 +572,13 @@
                 <div class="pm-feat-name">I-Card Management</div>
                 <div class="pm-feat-desc">10 premium templates, custom fields, physical printing & delivery to your institution.</div>
                 <div class="pm-feat-price">₹1499 <span>/ year</span></div>
+            </div>
+            <div class="pm-feat" onclick="goToExamManagement()">
+                <div class="pm-feat-tag">New</div>
+                <div class="pm-feat-icon">📝</div>
+                <div class="pm-feat-name">Exam Management</div>
+                <div class="pm-feat-desc">Generate examination admit cards — class-wise, 2 per page. More exam tools coming soon.</div>
+                <div class="pm-feat-price">₹799 <span>/ year</span></div>
             </div>
         </div>
         <div class="pm-bundle" onclick="goToFeature('bundle')">
@@ -711,6 +726,8 @@ function updatePremiumCard(state, sub) {
         ctaBtn.innerHTML      = 'Manage Features <span class="arrow">→</span>';
         if (sub.plan==='fee'  ||sub.plan==='bundle'){pillFee.style.borderColor='rgba(16,185,129,0.5)';pillFee.style.background='rgba(16,185,129,0.07)';}
         if (sub.plan==='icard'||sub.plan==='bundle'){pillIcard.style.borderColor='rgba(16,185,129,0.5)';pillIcard.style.background='rgba(16,185,129,0.07)';}
+        var pillExam = document.getElementById('pf-pill-exam');
+        if (pillExam && sub.features && sub.features.examManagement === true){pillExam.style.borderColor='rgba(16,185,129,0.5)';pillExam.style.background='rgba(16,185,129,0.07)';}
         // ── Show Payment Setup card only if fee or bundle is active ──
         if (sub.plan === 'fee' || sub.plan === 'bundle') {
             hasFeeSubscription = true;
@@ -853,6 +870,19 @@ function goToPart3()          { window.location.href='part3-credentials.html'; }
 function goToPromotion()      { window.location.href='promotion.html'; }
 function goToDataManagement() { window.location.href='data-management.html'; }
 function goToPaymentSetup()   { window.location.href='payment-setup.html'; }
+async function goToExamManagement() {
+    closePremiumModal();
+    try {
+        const token = localStorage.getItem('token') || localStorage.getItem('institutionToken');
+        const res  = await fetch(`${API_BASE_URL}/subscription/status`, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        const sub  = data?.data;
+        const ok   = sub && sub.isActive && !sub.isExpired && sub.features && sub.features.examManagement === true;
+        if (ok) { window.location.href = 'exam-management.html'; }
+        // Paid plan for Exam Management isn't live yet — until it is, just inform.
+        else { alert('Exam Management is a premium feature. It will be available to purchase soon.'); }
+    } catch (err) { alert('Could not verify your subscription. Please try again.'); }
+}
 
 // ══════════════════════════════════════════════════════════
 //  UI HELPERS
@@ -871,7 +901,7 @@ document.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&e.key==='3'){e.preventDefault();goToPart3();}
 });
 
-Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,openPremiumModal,closePremiumModal,goToFeature,logout});
+Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout});
 console.log('✅ Dashboard loaded');
 </script>
 </body>

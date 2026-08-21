@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Exam Management — Hello School</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070a14;--surface:#0f1623;--panel:#131d30;--rim:#1c2b42;--gold:#d4a843;--gold2:#f0c96a;--silver:#7a90b0;--text:#dce8f5;--muted:#48607a;--teal:#14b8a6;--danger:#ef4444;--success:#22c55e;--r:14px;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+.hdr{position:sticky;top:0;z-index:200;background:rgba(7,10,20,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--rim);padding:16px 40px;display:flex;align-items:center;gap:14px;}
+.hdr-back{background:rgba(255,255,255,.06);border:1px solid var(--rim);color:var(--silver);border-radius:20px;padding:7px 15px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
+.hdr-back:hover{border-color:var(--gold);color:var(--text);}
+.hdr-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:#000;box-shadow:0 4px 14px rgba(212,168,67,.35);}
+.hdr-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--text);}
+.hdr-badge{margin-left:auto;background:linear-gradient(135deg,rgba(212,168,67,.12),rgba(240,201,106,.06));border:1px solid rgba(212,168,67,.3);padding:5px 14px;border-radius:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;}
+.main{max-width:960px;margin:28px auto 100px;padding:0 24px;position:relative;z-index:1;}
+.card{background:var(--surface);border:1px solid var(--rim);border-radius:var(--r);padding:26px 28px;margin-bottom:20px;animation:fadeUp .3s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.card-title{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:4px;display:flex;align-items:center;gap:9px;}
+.card-sub{font-size:13px;color:var(--silver);margin-bottom:20px;line-height:1.5;}
+label{display:block;font-size:12px;color:var(--silver);margin-bottom:5px;font-weight:500;letter-spacing:.3px;}
+input[type=text],input[type=tel],input[type=email],select{width:100%;background:var(--panel);border:1.5px solid var(--rim);border-radius:10px;padding:11px 15px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;outline:none;}
+input:focus,select:focus{border-color:var(--gold);}
+select option{background:var(--panel);}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.fg{margin-bottom:16px;}
+.section-label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:6px 0 14px;display:flex;align-items:center;gap:10px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--rim);}
+.btn{border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;box-shadow:0 4px 14px rgba(212,168,67,.3);}
+.btn-gold:hover{filter:brightness(1.06);}
+.btn-gold:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+.btn-ghost{background:rgba(255,255,255,.05);border:1px solid var(--rim);color:var(--silver);}
+.btn-ghost:hover{border-color:var(--gold);color:var(--text);}
+.info-bar{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:11px 15px;font-size:13px;color:#93c5fd;margin-bottom:18px;display:flex;gap:8px;line-height:1.5;}
+.logo-row{display:flex;align-items:center;gap:16px;}
+.logo-prev{width:64px;height:64px;border-radius:10px;object-fit:contain;background:var(--panel);border:1.5px solid var(--rim);flex-shrink:0;}
+.logo-ph{width:64px;height:64px;border-radius:10px;background:var(--panel);border:1.5px dashed var(--rim);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;flex-shrink:0;}
+.upload-box{border:1.5px dashed var(--rim);border-radius:10px;padding:12px 16px;cursor:pointer;transition:.2s;position:relative;font-size:13px;color:var(--silver);}
+.upload-box:hover{border-color:var(--gold);}
+.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.upload-box b{color:var(--gold);}
+.select-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.pill{background:var(--panel);border:1px solid var(--rim);border-radius:20px;padding:6px 13px;font-size:12px;color:var(--silver);cursor:pointer;transition:.2s;font-weight:600;}
+.pill:hover{border-color:var(--gold);color:var(--text);}
+.count-chip{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--gold);}
+.stu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;max-height:440px;overflow-y:auto;padding:2px;}
+.stu-card{display:flex;align-items:center;gap:11px;background:var(--panel);border:1.5px solid var(--rim);border-radius:11px;padding:9px 11px;cursor:pointer;transition:.15s;}
+.stu-card:hover{border-color:var(--silver);}
+.stu-card.on{border-color:var(--gold);background:rgba(212,168,67,.07);}
+.stu-photo{width:40px;height:40px;border-radius:8px;object-fit:cover;background:var(--rim);flex-shrink:0;}
+.stu-photo-ph{width:40px;height:40px;border-radius:8px;background:var(--rim);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--muted);flex-shrink:0;}
+.stu-meta{min-width:0;flex:1;}
+.stu-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stu-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stu-chk{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;}
+.stu-card.on .stu-chk{background:var(--gold);border-color:var(--gold);color:#000;}
+.empty{text-align:center;color:var(--muted);padding:40px 10px;font-size:13px;}
+.foot-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(4,7,14,.72);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.overlay.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--rim);border-radius:16px;max-width:460px;width:100%;padding:28px;animation:fadeUp .25s ease;}
+.modal h3{font-family:'Playfair Display',serif;font-size:21px;margin-bottom:8px;}
+.modal p{font-size:13.5px;color:var(--silver);line-height:1.6;margin-bottom:14px;}
+.miss-list{list-style:none;margin:0 0 16px;}
+.miss-list li{font-size:13px;color:var(--text);padding:7px 12px;background:var(--panel);border:1px solid var(--rim);border-radius:9px;margin-bottom:7px;display:flex;gap:9px;align-items:center;}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
+/* Progress */
+.prog-wrap{margin-top:4px;}
+.prog-bar{height:8px;background:var(--rim);border-radius:6px;overflow:hidden;margin-top:10px;}
+.prog-fill{height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--success));transition:width .2s;}
+.spin{width:15px;height:15px;border:2px solid var(--rim);border-top-color:var(--gold);border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel);border:1px solid var(--rim);color:var(--text);padding:12px 20px;border-radius:11px;font-size:13px;z-index:600;transition:transform .3s;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.err{border-color:rgba(239,68,68,.5);color:#fca5a5;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <button class="hdr-back" onclick="goDashboard()">← Back</button>
+  <div class="hdr-mark">E</div>
+  <div class="hdr-title">Exam Management</div>
+  <div class="hdr-badge">Admit Cards</div>
+</div>
+
+<div class="main">
+
+  <!-- SCHOOL HEADER -->
+  <div class="card">
+    <div class="card-title">🏫 School Header</div>
+    <div class="card-sub">This appears on every admit card. Pre-filled from your profile — edit anything and it's saved on this device for next time.</div>
+    <div class="grid2">
+      <div class="fg"><label>School Name</label><input type="text" id="sch-name" placeholder="School name"></div>
+      <div class="fg"><label>Address (one line)</label><input type="text" id="sch-addr" placeholder="City, District, State"></div>
+      <div class="fg"><label>Phone</label><input type="tel" id="sch-phone" placeholder="Phone number(s)"></div>
+      <div class="fg"><label>Email</label><input type="email" id="sch-email" placeholder="Email"></div>
+    </div>
+    <div class="section-label">Logo</div>
+    <div class="logo-row">
+      <img id="logo-prev" class="logo-prev" style="display:none" alt="logo">
+      <div id="logo-ph" class="logo-ph">No logo</div>
+      <div style="flex:1">
+        <div class="upload-box">Click to upload a logo &nbsp;·&nbsp; <b>PNG/JPG</b>
+          <input type="file" id="logo-file" accept="image/*" onchange="onLogoPick(event)">
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px" id="logo-hint">Optional. If empty, the card prints without a logo.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SELECT CLASS -->
+  <div class="card">
+    <div class="card-title">🎓 Select Class</div>
+    <div class="card-sub">Pick a specific class or load all classes. (Images are loaded in batches to prevent freezing for large schools.)</div>
+    <div class="grid2">
+      <div class="fg"><label>Class</label>
+        <select id="class-sel"><option value="">Select a class…</option></select>
+      </div>
+      <div class="fg" style="display:flex;align-items:flex-end">
+        <button class="btn btn-gold" style="width:100%" id="load-btn" onclick="loadStudents()">Load Students</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STUDENTS -->
+  <div class="card" id="stu-panel" style="display:none">
+    <div class="card-title">👥 Students <span id="stu-cls" style="font-size:13px;color:var(--silver);font-weight:400"></span></div>
+    <div class="select-bar">
+      <span class="pill" onclick="selectAll(true)">Select all</span>
+      <span class="pill" onclick="selectAll(false)">Clear</span>
+      <span class="count-chip" id="sel-count">0 selected</span>
+    </div>
+    <div class="stu-grid" id="stu-grid"></div>
+    <div class="foot-actions">
+      <button class="btn btn-gold" id="gen-btn" onclick="onGenerate()">🖨️ Generate Admit Cards</button>
+      <span style="font-size:12px;color:var(--muted);align-self:center">2 cards per page · half page each · single card prints on a half page too</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- MISSING DATA MODAL -->
+<div class="overlay" id="miss-overlay">
+  <div class="modal">
+    <h3>Before you print…</h3>
+    <p>Some details come from other parts of the app. Here's what's missing for the students you selected — the admit card will use <b>placeholders / blank spaces</b> for these, everything else prints normally:</p>
+    <ul class="miss-list" id="miss-list"></ul>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeMiss()">Cancel</button>
+      <button class="btn btn-gold" onclick="proceedGenerate()">Continue anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS MODAL -->
+<div class="overlay" id="prog-overlay">
+  <div class="modal">
+    <h3><span class="spin"></span> &nbsp;Preparing admit cards</h3>
+    <p id="prog-text">Loading images…</p>
+    <div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- YOUR SEPARATE JS FILES -->
+<script src="js/config-v2.js"></script>
+<script src="js/api.js"></script>
+<script src="js/exam-management.js"></script>
+</body>
+</html>

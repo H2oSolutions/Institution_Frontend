@@ -142,13 +142,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);m
   <div class="hero-eyebrow">Hello School Premium</div>
   <div class="hero-title">Unlock the <em>full power</em><br>of <strong>Hello School</strong></div>
   <div class="hero-sub">One-time annual subscription. No hidden charges. Trusted by 500+ institutions across India.</div>
-  <div class="hero-note">&#128274; Secure payment via Razorpay &middot; All plans include 1 year validity</div>
+  <div class="hero-note">&#128274; Secure payment via Easebuzz &middot; All plans include 1 year validity</div>
 </div>
 
 <!-- TRUST BAR -->
 <div class="trust-bar">
   <div class="trust-item"><span>&#127963;</span> 500+ schools trust Hello School</div>
-  <div class="trust-item"><span>&#128274;</span> 100% secure Razorpay checkout</div>
+  <div class="trust-item"><span>&#128274;</span> 100% secure checkout</div>
   <div class="trust-item"><span>&#128222;</span> Dedicated support included</div>
   <div class="trust-item"><span>&#9855;</span> Instant activation on payment</div>
 </div>
@@ -287,10 +287,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);m
       </div>
 
       <button class="btn-pay" id="payBtn" onclick="initiatePayment()">
-        <div class="spinner" id="paySpinner"></div>
-        <span id="payBtnText">Pay Securely via</span>
-        <span class="rzp-logo">Razorpay</span>
-      </button>
+  <div class="spinner" id="paySpinner"></div>
+  <span id="payBtnText">Pay Securely via</span>
+  <span class="rzp-logo">Easebuzz</span>
+</button>
       <div class="pay-security">&#128274; 256-bit SSL encryption &middot; Your data is safe</div>
     </div>
   </div>
@@ -366,7 +366,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--ink);m
 
 <div class="toast" id="toast"></div>
 
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://ebz-static.s3.ap-south-1.amazonaws.com/easecheckout/easebuzz-checkout.js"></script>
 <script src="js/config-v2.js"></script>
 <script>
 
@@ -439,7 +439,7 @@ function validate() {
   return true;
 }
 
-// ── Step 1: Create Razorpay order via backend ─────────────────────────────────
+// ── Step 1: Create Easebuzz order via backend ─────────────────────────────────
 async function initiatePayment() {
   if (!selectedPlan) { showToast('Please select a plan first', 'err'); return; }
   if (!validate()) return;
@@ -466,11 +466,10 @@ async function initiatePayment() {
     var data = await res.json();
     if (!data.success) throw new Error(data.message || 'Failed to create order');
 
-    openRazorpay({
-      orderId:  data.data.orderId,
-      amount:   data.data.amount,
-      currency: data.data.currency || 'INR',
-      key:      data.data.key
+    // Trigger Easebuzz Checkout
+    openEasebuzz({
+      orderId:    data.data.orderId, // This is your txnid
+      access_key: data.data.access_key
     });
 
   } catch(err) {
@@ -480,58 +479,51 @@ async function initiatePayment() {
   }
 }
 
-// ── Step 2: Open Razorpay checkout modal ──────────────────────────────────────
-function openRazorpay(opts) {
-  var rzp = new Razorpay({
-    key:         opts.key,
-    amount:      opts.amount,
-    currency:    opts.currency,
-    name:        'Hello School',
-    description: selectedPlan.name + ' - Annual Subscription',
-    order_id:    opts.orderId,
-    prefill: {
-      name:    document.getElementById('pi_contact').value.trim(),
-      email:   document.getElementById('pi_email').value.trim(),
-      contact: document.getElementById('pi_mobile').value.trim()
-    },
-    notes: {
-      plan:        selectedPlan.id,
-      institution: document.getElementById('pi_name').value.trim()
-    },
-    theme: { color: '#0d1117' },
-    handler: function(response) {
-      // Payment success — now verify on backend
-      verifyPayment(
-        response.razorpay_payment_id,
-        response.razorpay_order_id,
-        response.razorpay_signature
-      );
-    },
-    modal: {
-      ondismiss: function(){ setLoading(false); }
+// ── Step 2: Open Easebuzz checkout modal ──────────────────────────────────────
+function openEasebuzz(opts) {
+  // Initialize Easebuzz (Change "test" to "prod" when going live)
+  var easebuzzCheckout = new EasebuzzCheckout(opts.access_key, "test");
+  
+  var options = {
+    access_key: opts.access_key,
+    theme: "#0d1117", // Matches your dark theme
+    onResponse: function (response) {
+      if (response.status === 'success') {
+        setLoading(true); // Keep spinner going during verification
+        verifyPayment(response);
+      } else {
+        showToast('Payment failed or cancelled', 'err');
+        setLoading(false);
+      }
     }
-  });
-  rzp.open();
-  setLoading(false);
+  };
+  
+  easebuzzCheckout.initiatePayment(options);
 }
 
 // ── Step 3: Verify payment signature on backend ───────────────────────────────
-async function verifyPayment(paymentId, orderId, signature) {
+async function verifyPayment(response) {
   try {
     var res = await fetch(API_BASE + '/subscription/verify', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
       body:    JSON.stringify({
-        razorpayPaymentId: paymentId,
-        razorpayOrderId:   orderId,
-        razorpaySignature: signature
+        txnid:        response.txnid,
+        easepayid:    response.easepayid,
+        status:       response.status,
+        easebuzzHash: response.hash,
+        amount:       response.amount,
+        email:        response.email,
+        firstname:    response.firstname,
+        productinfo:  response.productinfo
       })
     });
 
     var data = await res.json();
     if (!data.success) throw new Error(data.message || 'Verification failed');
 
-    onPaymentSuccess(paymentId);
+    // Proceed to success overlay using the txnid
+    onPaymentSuccess(response.txnid);
 
   } catch(err) {
     console.error('verify error:', err);
