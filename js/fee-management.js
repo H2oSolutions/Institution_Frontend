@@ -2738,6 +2738,13 @@ function confirmMonthPayment() {
   var adjDue = Math.max(0, d.totalDue - waiver);
   var paidTowardFee = Math.max(0, paidAmt - lateFeeV);
 
+  // ── GUARD: waiver bigger than the payable amount is almost always a typo ──
+  if (waiver > d.totalDue) {
+    if (!confirm('Waiver Rs.' + waiver.toLocaleString('en-IN') +
+        ' is more than the Rs.' + Number(d.totalDue).toLocaleString('en-IN') + ' payable.' +
+        '\n\nOnly Rs.' + Number(d.totalDue).toLocaleString('en-IN') + ' will be waived; the rest has no effect.\n\nContinue?')) return;
+  }
+
   // ── GUARD: same protection for the single-month payment path ──
   if (paidTowardFee > adjDue) {
     var exM = paidTowardFee - adjDue;
@@ -3115,6 +3122,23 @@ function clearRegBulkSelection() {
 }
 
 // --- THE LIVE MATH ENGINE ---
+// A month's effectiveDue ALREADY contains the carry rolled forward from the
+// month before it. Summing consecutive selected months therefore counts the
+// SAME carry twice (Jul Rs.20 + Aug Rs.20 = Rs.40 when only Rs.20 is owed).
+// Fix: drop a month's carry-in when the month immediately before it is also
+// selected, because that carry is already covered by that month's own line.
+function bulkSelectionTotal(keys, mapRef) {
+  var m = mapRef || bulkMap;
+  var items = keys.map(function (k) { return m[k]; }).filter(Boolean);
+  var picked = {};
+  items.forEach(function (d) { picked[sessionOrderOf(d.monthIndex)] = true; });
+  return items.reduce(function (sum, d) {
+    var amt = d.amount || 0;
+    if (picked[sessionOrderOf(d.monthIndex) - 1] === true) amt -= (d.carryDue || 0);
+    return sum + Math.max(0, amt);
+  }, 0);
+}
+
 function updateBulkBar() {
   var bar = document.getElementById('bulk-bar');
   if (bar) bar.style.display = 'none';
@@ -3835,7 +3859,7 @@ function confirmPayment() {
 function openBulkPayModal() {
   currentBulkMode = 'transport';
   var keys = Object.keys(bulkMap); if (!keys.length) return;
-  var total = keys.reduce(function(s, k) { return s + (bulkMap[k].amount || 0); }, 0);
+  var total = bulkSelectionTotal(keys);
   var modal = document.getElementById('bulk-pay-modal');
   modal.querySelector('h3').textContent = 'Bulk Transport Payment';
   modal.querySelector('.modal-sub').textContent = 'Review selected transport months. Adjust amount for lump-sum or partial, distributed oldest-first.';
@@ -4005,7 +4029,7 @@ function updateBulkAmtPreview(val) {
     total = rk.reduce(function(s, k) { return s + regBulkMap[k].totalDue; }, 0);
   } else {
     var tk = Object.keys(bulkMap);
-    total = tk.reduce(function(s, k) { return s + (bulkMap[k].amount || 0); }, 0);
+    total = bulkSelectionTotal(tk);
   }
   var adjBase = Math.max(0, total - waiver);
   var v   = parseInt(val) || 0;
@@ -4077,6 +4101,16 @@ function confirmBulkPayment() {
 
   if (remaining > 0 && payments.length > 0) payments[payments.length - 1].paidAmount += remaining;
 
+  // ── GUARD: a waiver larger than what is actually payable is a typo. ──
+  // The waiver now clears own fee first, then carried-forward dues; anything
+  // beyond that has no effect, so warn rather than silently swallow it.
+  var payableNow = adjAmounts.reduce(function(s2, v) { return s2 + v; }, 0);
+  if (waiver > payableNow) {
+    if (!confirm('Waiver Rs.' + waiver.toLocaleString('en-IN') +
+        ' is more than the Rs.' + payableNow.toLocaleString('en-IN') + ' payable.' +
+        '\n\nOnly Rs.' + payableNow.toLocaleString('en-IN') + ' will be waived; the rest has no effect.\n\nContinue?')) return;
+  }
+
   // ── GUARD: collecting MORE than is due silently becomes advance credit. ──
   // This is how full-waiver months ended up with the full fee still collected.
   var totalDueNow = adjAmounts.reduce(function(s, v) { return s + v; }, 0);
@@ -4108,7 +4142,7 @@ function confirmBulkPayment() {
         byMonthB[mn] += p.paidAmount || 0;
       });
       var items = monthOrderB.map(function(mn) { return { month: mn, amount: byMonthB[mn] }; });
-      var totalDueForBulk = sortedKeys.reduce(function(s, k2) { return s + (bulkMap[k2].amount || 0); }, 0);
+      var totalDueForBulk = bulkSelectionTotal(sortedKeys);
       closeModal('bulk-pay-modal');
       showReceipt({
         studentName: (stu && stu.name) || '', className: (stu && stu.class && stu.class.className) || '',
@@ -7712,11 +7746,16 @@ function rptReprintReceipt(paymentId) {
     var bulkRows = (rptAllRows || []).filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
     var mm = {};
     bulkRows.forEach(function(x) {
-      if (!mm[x.monthIndex]) mm[x.monthIndex] = { base: 0, paid: 0, waiver: 0, late: 0, heads: {}, headNames: [] };
+      if (!mm[x.monthIndex]) mm[x.monthIndex] = { base: 0, paid: 0, waiver: 0, late: 0, heads: {}, headNames: [], carry: 0, credit: 0 };
       var hid = String(x.feeHeadId || x.routeId || 't');
       var hname = x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee');
       var mo = mm[x.monthIndex];
-      if (!mo.heads[hid]) { mo.heads[hid] = 1; mo.base += (x.amount || 0); mo.headNames.push(hname); }
+      if (!mo.heads[hid]) {
+        mo.heads[hid] = 1; mo.base += (x.amount || 0); mo.headNames.push(hname);
+        // carry snapshot taken when this payment was recorded
+        mo.carry  += (x.carryDueAtPayment       || 0);
+        mo.credit += (x.previousCreditAtPayment || 0);
+      }
       mo.paid += (x.paidAmount || 0); mo.waiver += (x.waiverAmount || 0); mo.late += (x.lateFee || 0);
     });
     var mis = Object.keys(mm).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
@@ -7728,10 +7767,14 @@ function rptReprintReceipt(paymentId) {
       var tWaiv = mis.reduce(function(s, mi) { return s + mm[mi].waiver; }, 0);
       var tLate = mis.reduce(function(s, mi) { return s + mm[mi].late; }, 0);
       var paid  = mis.reduce(function(s, mi) { return s + mm[mi].paid; }, 0);
-      var grand = tBase - tWaiv + tLate;
+      // Only the FIRST month's carry-in is a real extra due; later months carry
+      // the SAME amount forward, so summing them all would double-count it.
+      var tCarry  = (mm[mis[0]] && mm[mis[0]].carry)  || 0;
+      var tCredit = (mm[mis[0]] && mm[mis[0]].credit) || 0;
+      var grand = tBase - tWaiv + tLate + tCarry - tCredit;
       var rem   = grand - paid;
       var names = mis.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-      renderMonthReceipt(r, items, { grandTotal: grand, paidThis: paid, prevPaid: 0, balance: (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), base: tBase, waiver: tWaiv, late: tLate, prevDue: 0 }, 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
+      renderMonthReceipt(r, items, { grandTotal: grand, paidThis: paid, prevPaid: tCredit, balance: (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), base: tBase, waiver: tWaiv, late: tLate, prevDue: tCarry }, 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
       return;
     }
   }
