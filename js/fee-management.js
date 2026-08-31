@@ -2139,6 +2139,9 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
   var totalDue = displayItems.reduce(function(s, i) { return s + calcRemaining(i.month); }, 0);
   var totalPaidAmt = displayItems.reduce(function(s, i) { return s + (i.month.paidAmount || 0); }, 0);
   var baseTotal    = displayItems.reduce(function(s, i) {
+    // A carry-only row is money rolled over from an earlier month, not a fee
+    // charged this month. Counting it here inflated the month's base.
+    if (i.month.isCarryOnly) return s;
     return s + (i.month.baseAmount != null ? i.month.baseAmount : (i.month.amount || 0));
   }, 0);
   var hasPayment = displayItems.some(function(i) { return !!i.month.paymentId; });
@@ -2157,10 +2160,19 @@ function buildMonthRow(sid, monthIndex, items, nextMonthName, idx, sortedMonths,
                 : isFullyRecovered ? (i.month.paidAmount || 0)
                 : i.month.isCarryOnly ? calcRemaining(i.month)
                 : base;
+
+    // Carried-forward money belongs to the MONTH, not to a fee head. Showing it
+    // as "Exam Fee (prev. carry) Rs.490" reads like an exam fee is due, which it
+    // isn't. Render it as its own clearly-labelled chip instead.
+    if (i.month.isCarryOnly) {
+      return '<span class="mr-fh-chip" style="background:#fef2f2;border-color:#fecaca">' +
+        '<span style="color:#b91c1c;font-weight:900">Previous Dues</span>' +
+        ' <b>Rs.' + Number(dispAmt).toLocaleString('en-IN') + '</b>' +
+        '</span>';
+    }
+
     var partialTag = (i.month.isPartial && !i.month.isRecovered)
       ? ' <span style="color:#ea580c;font-size:9px;font-weight:900">(partial)</span>'
-      : i.month.isCarryOnly
-      ? ' <span style="color:#b91c1c;font-size:9px;font-weight:900">(prev. carry)</span>'
       : '';
     return '<span class="mr-fh-chip">' +
       '<span class="color-dot ' + i.entry.color + '" style="width:8px;height:8px"></span>' +
@@ -2851,7 +2863,10 @@ function confirmMonthEdit() {
       var remaining = newTotal;
       var payments  = d.items.map(function(item) {
     var base    = item.month.baseAmount != null ? item.month.baseAmount : (item.month.amount || 0);
-    var sendAmt = base > 0 ? base : (item.month.effectiveDue || 1);
+    // A carry-only month has no fee of its own: its base is genuinely 0.
+    // Sending effectiveDue here would store the CARRIED amount as a fee and
+    // double-count it on the next recalculation.
+    var sendAmt = base > 0 ? base : 0;
     var alloc   = Math.min(remaining, sendAmt);
     remaining -= alloc;
     return {
@@ -4247,6 +4262,15 @@ function confirmRegBulkPayment() {
 }
 
 // ── PAY REMAINING BALANCE — settle leftover when partial months hide the Pay button ──
+// The true base fee for a month. A carry-only row (money rolled over from an
+// earlier month) has NO fee of its own, so its base is 0 - not 1.
+// Never use `|| 1` here: 0 is falsy in JS, so it would silently invent a Rs.1
+// fee that computeCarryChain then treats as real forever.
+function carryBaseOf(m) {
+  var b = (m.baseAmount != null) ? m.baseAmount : m.amount;
+  return Number(b) || 0;
+}
+
 function gatherTrueRemaining(sid, type) {
   var stu = feeStatusData.find(function(s) { return s.studentId === sid; });
   if (!stu) return [];
@@ -4269,7 +4293,7 @@ function gatherTrueRemaining(sid, type) {
         if (rem > 0) items.push({
           type: 'regular', feeHeadId: entry.feeHeadId, routeId: null,
           label: entry.feeHeadName, monthIndex: m.monthIndex,
-          base: (m.baseAmount != null ? m.baseAmount : m.amount) || 1, due: rem,
+          base: carryBaseOf(m), due: rem,
           paidAmount: (m.paidAmount || 0), hasPayment: !!m.paymentId,
           previousDue:    m.previousDue    || 0,
           previousCredit: m.previousCredit || 0
@@ -4282,7 +4306,7 @@ function gatherTrueRemaining(sid, type) {
       if (rem > 0) items.push({
         type: 'transport', feeHeadId: null, routeId: stu.transport.routeId,
         label: 'Transport \u2014 ' + stu.transport.routeName, monthIndex: m.monthIndex,
-        base: (m.baseAmount != null ? m.baseAmount : m.amount) || 1, due: rem,
+        base: carryBaseOf(m), due: rem,
         paidAmount: (m.paidAmount || 0), hasPayment: !!m.paymentId,
         previousDue:    m.previousDue    || 0,
         previousCredit: m.previousCredit || 0
