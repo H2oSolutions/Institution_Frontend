@@ -3414,7 +3414,8 @@ function printMonthEventReceipt(sid, monthIndex, type, eventIdx, targetWin) {
   var src = { name: stu.name, className: (stu.class && stu.class.className) || '', rollNo: stu.rollNo, fatherName: stu.fatherName, phone: stu.phone, session: currentSession, remark: ev.remark, paidAt: ev.paidAt, paymentSource: ev.source };
 
   // Bulk covering multiple months → multi-month receipt, same for every month in the bulk.
-  if (ev.bulkGroupId) {
+  // FIX: Bypass bulk receipt generation if this month was paid in multiple installments (events.length > 1)
+  if (ev.bulkGroupId && events.length === 1) {
     var bm = buildBulkMonths(stu, ev.bulkGroupId, type);
     if (bm.length > 1) {
       var items = bm.map(function(x) {
@@ -7756,97 +7757,85 @@ var previouslyPaid = (data.items || []).reduce(function(s, i) { return s + (i.cr
   w.document.write(html); 
   w.document.close();
 }
+
 function rptReprintReceipt(paymentId) {
   var r = RPT_ROW_REG[paymentId];
   if (!r) { toast('Receipt data not available', 'error'); return; }
 
   var printWin = window.open('', '_blank', 'width=490,height=780');
   if (!printWin) { toast('Please allow popups to print', 'error'); return; }
+  printWin.document.write('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#666;">Loading receipt...</div>');
 
   var type = r.type;
+  var session = r.session || currentSession;
 
-  // ── Bulk covering multiple months → one multi-month receipt (same for every month in the bulk) ──
-  if (r.bulkGroupId) {
-    var bulkRows = (rptAllRows || []).filter(function(x) { return x.bulkGroupId === r.bulkGroupId; });
-    var mm = {};
-    bulkRows.forEach(function(x) {
-      if (!mm[x.monthIndex]) mm[x.monthIndex] = { base: 0, paid: 0, waiver: 0, late: 0, heads: {}, headNames: [], carry: 0, credit: 0 };
-      var hid = String(x.feeHeadId || x.routeId || 't');
-      var hname = x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee');
-      var mo = mm[x.monthIndex];
-      if (!mo.heads[hid]) {
-        mo.heads[hid] = 1; mo.base += (x.amount || 0); mo.headNames.push(hname);
-        // carry snapshot taken when this payment was recorded
-        mo.carry  += (x.carryDueAtPayment       || 0);
-        mo.credit += (x.previousCreditAtPayment || 0);
-      }
-      mo.paid += (x.paidAmount || 0); mo.waiver += (x.waiverAmount || 0); mo.late += (x.lateFee || 0);
-    });
-    var mis = Object.keys(mm).map(Number).sort(function(a, b) { return sessionOrderOf(a) - sessionOrderOf(b); });
-    if (mis.length > 1) {
-      var items = mis.map(function(mi) {
-        return { month: MONTHS[mi], heads: _fmtHeadList(mm[mi].headNames), gross: mm[mi].base };
-      });
-      var tBase = mis.reduce(function(s, mi) { return s + mm[mi].base; }, 0);
-      var tWaiv = mis.reduce(function(s, mi) { return s + mm[mi].waiver; }, 0);
-      var tLate = mis.reduce(function(s, mi) { return s + mm[mi].late; }, 0);
-      var paid  = mis.reduce(function(s, mi) { return s + mm[mi].paid; }, 0);
-      // Only the FIRST month's carry-in is a real extra due; later months carry
-      // the SAME amount forward, so summing them all would double-count it.
-      var tCarry  = (mm[mis[0]] && mm[mis[0]].carry)  || 0;
-      var tCredit = (mm[mis[0]] && mm[mis[0]].credit) || 0;
-      var grand = tBase - tWaiv + tLate + tCarry - tCredit;
-      var rem   = grand - paid;
-      var names = mis.map(function(mi) { return SHORT_MONTHS[mi]; }).join(', ');
-      renderMonthReceipt(r, items, { grandTotal: grand, paidThis: paid, prevPaid: tCredit, balance: (rem > 0 ? -rem : (rem < 0 ? Math.abs(rem) : 0)), base: tBase, waiver: tWaiv, late: tLate, prevDue: tCarry }, 'Multi-Month Fee Receipt \u2014 ' + names, printWin);
-      return;
-    }
+  // 1. Check if we already have the full student ledger in Tab 4's cache
+  var existing = feeStatusData.find(function(s) { return String(s.studentId) === String(r.studentId); });
+  
+  var fetchPromise;
+  if (existing) {
+      fetchPromise = Promise.resolve({ data: [existing] });
+  } else {
+      // 2. Fetch full history for this student so previous dues/installments calculate correctly!
+      fetchPromise = apiGet(API_FEE_STATUS + '?session=' + encodeURIComponent(session) + '&studentId=' + encodeURIComponent(r.studentId), true);
   }
 
-  // ── Single month (compact by month) ──
-  var monthRows = (rptAllRows || []).filter(function(x) {
-    return String(x.studentId) === String(r.studentId) && x.monthIndex === r.monthIndex && x.type === type;
+  fetchPromise.then(function(res) {
+      var stus = res.data || [];
+      var stu = stus.find(function(s) { return String(s.studentId) === String(r.studentId); });
+      if (!stu) throw new Error('Student data not found');
+
+      // Cache it for next time
+      if (!existing) feeStatusData.push(stu);
+
+      if (r.bulkGroupId) {
+          // Bulk payment -> Multi-month receipt
+          apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(r.bulkGroupId), true)
+            .then(function(groupRes) {
+                var groupPayments = groupRes.data || [];
+                _buildAndPrintGroupReceipt(stu, groupPayments, r.bulkGroupId, printWin);
+            })
+            .catch(function(e) {
+                printWin.close(); toast('Error loading bulk data', 'error');
+            });
+      } else {
+          // Single month -> Let Tab 4's logic handle the exact math (Installment vs Full)
+          var info = buildMonthEvents(stu, r.monthIndex, type);
+          var events = info.events;
+          
+          // Find the exact event using timestamp or amount
+          var targetTime = new Date(r.paidAt).getTime();
+          var eventIdx = events.findIndex(function(ev) { 
+              return new Date(ev.paidAt).getTime() === targetTime; 
+          });
+          
+          if (eventIdx === -1) {
+              eventIdx = events.findIndex(function(ev) { return ev.paid === r.paidAmount; });
+          }
+          
+          if (eventIdx > -1) {
+              printMonthEventReceipt(stu.studentId, r.monthIndex, type, eventIdx, printWin);
+          } else {
+              // Absolute fallback
+              if (type === 'transport') {
+                 var tMonths = stu.transport.months || [];
+                 var tMonth = tMonths.find(function(m) { return m.monthIndex === r.monthIndex; });
+                 if (tMonth) _printSingleTransportReceipt(stu, tMonth, r.monthIndex, printWin);
+                 else { printWin.close(); toast('Receipt details not found', 'error'); }
+             } else {
+                 var rawItems = [];
+                 (stu.entries || []).forEach(function(entry) {
+                   var m = entry.months.find(function(mo) { return mo.monthIndex === r.monthIndex; });
+                   if (m && m.paymentId) rawItems.push({ entry: entry, month: m });
+                 });
+                 if (rawItems.length) _buildAndPrintSingleMonthReceipt(stu, rawItems, r.monthIndex, printWin);
+                 else { printWin.close(); toast('Receipt details not found', 'error'); }
+             }
+          }
+      }
+  }).catch(function(e) {
+      printWin.close(); toast(e.message || 'Failed to load student data', 'error');
   });
-  if (!monthRows.length) monthRows = [r];
-
-  // Month gross fee = each fee head's base counted once; waiver/late/carry summed.
-  var heads = {}, grossBase = 0, headNames = [], sWaiver = 0, sLate = 0, sCarryDue = 0, sPrevCredit = 0;
-  monthRows.forEach(function(x) {
-    var hid = String(x.feeHeadId || x.routeId || 't');
-    if (!heads[hid]) {
-      heads[hid] = 1; grossBase += (x.amount || 0);
-      sCarryDue += (x.carryDueAtPayment || 0); sPrevCredit += (x.previousCreditAtPayment || 0);
-      headNames.push(x.type === 'transport' ? ('Transport' + (x.routeName ? ' — ' + x.routeName : '')) : (x.feeHeadName || 'Fee'));
-    }
-    sWaiver += (x.waiverAmount || 0); sLate += (x.lateFee || 0);
-  });
-  // Grand total = this month's own net + carried debt − carried advance.
-  var monthGrand = (grossBase - sWaiver) + sLate + sCarryDue - sPrevCredit;
-
-  // Group this month's rows into collection events.
-  var em = {}, eo = [];
-  monthRows.forEach(function(x) {
-    var key = x.bulkGroupId ? ('bg:' + x.bulkGroupId) : ('at:' + new Date(x.paidAt).getTime());
-    if (!em[key]) { em[key] = { key: key, paidAt: x.paidAt, paid: 0 }; eo.push(key); }
-    em[key].paid += (x.paidAmount || 0);
-    if (new Date(x.paidAt) < new Date(em[key].paidAt)) em[key].paidAt = x.paidAt;
-  });
-  var events = eo.map(function(k) { return em[k]; });
-  events.sort(function(a, b) { return new Date(a.paidAt) - new Date(b.paidAt); });
-
-  var rowKey = r.bulkGroupId ? ('bg:' + r.bulkGroupId) : ('at:' + new Date(r.paidAt).getTime());
-  var idx = 0; for (var i = 0; i < events.length; i++) { if (events[i].key === rowKey) { idx = i; break; } }
-  var prevPaid = 0; for (var j = 0; j < idx; j++) prevPaid += events[j].paid;
-  var thisPaid = events[idx] ? events[idx].paid : (r.paidAmount || 0);
-  var rem2 = monthGrand - (prevPaid + thisPaid);
-  var multi = events.length > 1;
-  // Credit line: prior installments (multi) OR advance credit carried in (single collection).
-  var creditForReceipt = multi ? prevPaid : sPrevCredit;
-
-  var srcPaidAt = events[idx] ? events[idx].paidAt : r.paidAt;
-  var src = { studentName: r.studentName, className: r.className, rollNo: r.rollNo, fatherName: r.fatherName, phone: r.phone, session: r.session, remark: r.remark, paidAt: srcPaidAt, paymentSource: r.paymentSource };
-  var items2 = [{ month: MONTHS[r.monthIndex], heads: _fmtHeadList(headNames), gross: grossBase }];
-  renderMonthReceipt(src, items2, { grandTotal: monthGrand, paidThis: thisPaid, prevPaid: creditForReceipt, balance: (rem2 > 0 ? -rem2 : (rem2 < 0 ? Math.abs(rem2) : 0)), base: grossBase, waiver: sWaiver, late: sLate, prevDue: sCarryDue }, (multi ? 'Installment Receipt \u2014 ' : 'Fee Receipt \u2014 ') + MONTHS[r.monthIndex], printWin);
 }
 
 // ═══════════════════════════════════════════════════════════════
