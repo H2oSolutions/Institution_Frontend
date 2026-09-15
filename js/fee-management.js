@@ -6668,155 +6668,145 @@ async function exportCollectionExcel() {
   function mkFont(opts) { return Object.assign({ name: 'Arial' }, opts); }
   function mkFill(argb) { return { type: 'pattern', pattern: 'solid', fgColor: { argb: argb } }; }
 
-  // Function to create a styled sheet
-  function addReportSheet(sheetName, isTransport) {
-    var ws = workbook.addWorksheet(sheetName);
-    var filteredData = isTransport ? rptFilteredTrn : rptFilteredReg;
-    
-    if (!filteredData.length) return ws;
+  var ws = workbook.addWorksheet('Collection Report');
+  
+  // Define unified columns for both Regular and Transport
+  ws.columns = [
+    { width: 6 },  // A: #
+    { width: 18 }, // B: Date & Time
+    { width: 25 }, // C: Student Name
+    { width: 12 }, // D: Roll No
+    { width: 15 }, // E: Class
+    { width: 25 }, // F: Father's Name
+    { width: 15 }, // G: Contact
+    { width: 15 }, // H: Fee Type
+    { width: 30 }, // I: Particulars (Head/Route)
+    { width: 16 }, // J: Bus No. (Transport only)
+    { width: 22 }, // K: Driver (Transport only)
+    { width: 22 }, // L: Months
+    { width: 15 }, // M: Amount
+    { width: 15 }, // N: Mode
+    { width: 20 }, // O: Received By
+    { width: 25 }  // P: Remark
+  ];
 
-    var columns = [
-      { width: 6 },  // #
-      { width: 18 }, // Time
-      { width: 25 }, // Student Name
-      { width: 12 }, // Roll No
-      { width: 15 }, // Class
-      { width: 25 }, // Father's Name
-      { width: 15 }, // Contact
-      { width: 30 }, // Fee Head / Route
-      { width: 22 }, // Month
-      { width: 15 }, // Amount
-      { width: 15 }, // Mode
-      { width: 20 }, // Received By
-      { width: 25 }  // Remark
-    ];
-    
-    // Inject Bus and Driver columns if it's transport
-    if (isTransport) {
-        columns.splice(8, 0, { width: 16 }); // Bus No
-        columns.splice(9, 0, { width: 22 }); // Driver
-    }
-    ws.columns = columns;
+  // Header 1: Title
+  ws.mergeCells('A1:P1');
+  var c1 = ws.getCell('A1');
+  c1.value = 'Fee Collection Report';
+  c1.font = mkFont({ bold: true, size: 14, color: { argb: 'FFFFFFFF' } });
+  c1.fill = mkFill('FF4F46E5');
+  c1.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 30;
 
-    // Header Blocks
-    ws.mergeCells('A1:' + (isTransport ? 'O1' : 'M1'));
-    var c1 = ws.getCell('A1');
-    c1.value = 'Fee Collection Report — ' + sheetName;
-    c1.font = mkFont({ bold: true, size: 14, color: { argb: 'FFFFFFFF' } });
-    c1.fill = mkFill(isTransport ? 'FFEA580C' : 'FF4F46E5');
-    c1.alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(1).height = 30;
+  // Header 2: Meta Info
+  ws.mergeCells('A2:P2');
+  var c2 = ws.getCell('A2');
+  c2.value = 'Date Range: ' + dateLabel + ' | Session: ' + currentSession + ' | Generated: ' + new Date().toLocaleString('en-IN');
+  c2.font = mkFont({ size: 10, color: { argb: 'FF475569' } });
+  c2.fill = mkFill('FFF8FAFC');
+  c2.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 20;
 
-    ws.mergeCells('A2:' + (isTransport ? 'O2' : 'M2'));
-    var c2 = ws.getCell('A2');
-    c2.value = 'Date Range: ' + dateLabel + ' | Session: ' + currentSession + ' | Generated: ' + new Date().toLocaleString('en-IN');
-    c2.font = mkFont({ size: 10, color: { argb: 'FF475569' } });
-    c2.fill = mkFill('FFF8FAFC');
-    c2.alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(2).height = 20;
+  // Header 3: Columns
+  var headers = ['#', 'Date & Time', 'Student Name', 'Roll No', 'Class', 'Father\'s Name', 'Contact', 'Fee Type', 'Particulars', 'Bus No.', 'Driver', 'Months', 'Amount (Rs.)', 'Mode', 'Received By', 'Remark'];
+  ws.getRow(3).values = headers;
+  ws.getRow(3).height = 22;
+  headers.forEach(function(h, i) {
+    var c = ws.getCell(3, i + 1);
+    c.font = mkFont({ bold: true, size: 10, color: { argb: 'FFFFFFFF' } });
+    c.fill = mkFill('FF7C3AED');
+    c.alignment = { vertical: 'middle' };
+  });
 
-    var headers = isTransport 
-        ? ['#', 'Date & Time', 'Student Name', 'Roll No', 'Class', 'Father\'s Name', 'Contact', 'Route', 'Bus No.', 'Driver', 'Months', 'Amount (Rs.)', 'Mode', 'Received By', 'Remark']
-        : ['#', 'Date & Time', 'Student Name', 'Roll No', 'Class', 'Father\'s Name', 'Contact', 'Fee Head', 'Months', 'Amount (Rs.)', 'Mode', 'Received By', 'Remark'];
-    
-    ws.getRow(3).values = headers;
-    ws.getRow(3).height = 22;
-    headers.forEach(function(h, i) {
-      var c = ws.getCell(3, i + 1);
-      c.font = mkFont({ bold: true, size: 10, color: { argb: 'FFFFFFFF' } });
-      c.fill = mkFill(isTransport ? 'FFF97316' : 'FF7C3AED');
-      c.alignment = { vertical: 'middle' };
-    });
+  var totalCollected = 0;
+  var runningIdx = 1;
 
-    var groups = groupReportRows(filteredData);
-    var totalCollected = 0;
-
-    // Build the grouped rows
-    groups.forEach(function(grp, i) {
-      var first = grp[0];
-      var uniqueMonths = [];
-      grp.forEach(function(r) { if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName); });
-      var monthHtml = uniqueMonths.join(', ');
+  // Helper to populate groups of data sequentially
+  function appendGroups(filteredData, isTransport) {
+      if (!filteredData.length) return;
+      var groups = groupReportRows(filteredData);
       
-      var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
-      totalCollected += totalAmt;
+      groups.forEach(function(grp) {
+        var first = grp[0];
+        var uniqueMonths = [];
+        grp.forEach(function(r) { if (uniqueMonths.indexOf(r.monthName) === -1) uniqueMonths.push(r.monthName); });
+        var monthHtml = uniqueMonths.join(', ');
+        
+        var totalAmt = grp.reduce(function(s, r) { return s + (r.paidAmount || 0); }, 0);
+        totalCollected += totalAmt;
 
-      var feeHeadText;
-      if (isTransport) {
-          feeHeadText = first.routeName + (uniqueMonths.length > 1 ? ' (BULK)' : '');
-      } else {
-          var seenFHs = {};
-          var uniqueFHList = [];
-          grp.forEach(function(r) {
-              if (!seenFHs[r.feeHeadName]) {
-                  seenFHs[r.feeHeadName] = true;
-                  uniqueFHList.push(r.feeHeadName);
-              }
-          });
-          feeHeadText = uniqueFHList.join(', ') + (uniqueMonths.length > 1 ? ' (BULK)' : '');
-      }
+        var feeHeadText;
+        if (isTransport) {
+            feeHeadText = first.routeName + (uniqueMonths.length > 1 ? ' (BULK)' : '');
+        } else {
+            var seenFHs = {};
+            var uniqueFHList = [];
+            grp.forEach(function(r) {
+                if (!seenFHs[r.feeHeadName]) {
+                    seenFHs[r.feeHeadName] = true;
+                    uniqueFHList.push(r.feeHeadName);
+                }
+            });
+            feeHeadText = uniqueFHList.join(', ') + (uniqueMonths.length > 1 ? ' (BULK)' : '');
+        }
 
-      var modeText = first.paymentSource === 'cash' ? 'Cash' : (first.paymentSource === 'manual_online' ? 'Desk Online' : 'App Online');
+        var modeText = first.paymentSource === 'cash' ? 'Cash' : (first.paymentSource === 'manual_online' ? 'Desk Online' : 'App Online');
 
-      var rowData = isTransport 
-          ? [
-              i + 1,
-              first.paidDate + ' ' + first.paidTime,
-              first.studentName,
-              first.rollNo !== '-' ? first.rollNo : '',
-              first.className,
-              first.fatherName,
-              first.phone !== '-' ? first.phone : '',
-              feeHeadText,
-              first.busNumber !== '-' ? first.busNumber : '',
-              first.driverName !== '-' ? first.driverName : '',
-              monthHtml,
-              totalAmt,
-              modeText,
-              first.receivedBy,
-              first.remark || ''
-          ]
-          : [
-              i + 1,
-              first.paidDate + ' ' + first.paidTime,
-              first.studentName,
-              first.rollNo !== '-' ? first.rollNo : '',
-              first.className,
-              first.fatherName,
-              first.phone !== '-' ? first.phone : '',
-              feeHeadText,
-              monthHtml,
-              totalAmt,
-              modeText,
-              first.receivedBy,
-              first.remark || ''
-          ];
+        var rowData = [
+            runningIdx++,
+            first.paidDate + ' ' + first.paidTime,
+            first.studentName,
+            first.rollNo !== '-' ? first.rollNo : '',
+            first.className,
+            first.fatherName,
+            first.phone !== '-' ? first.phone : '',
+            isTransport ? 'Transport' : 'Regular',
+            feeHeadText,
+            isTransport && first.busNumber !== '-' ? first.busNumber : '',
+            isTransport && first.driverName !== '-' ? first.driverName : '',
+            monthHtml,
+            totalAmt,
+            modeText,
+            first.receivedBy,
+            first.remark || ''
+        ];
 
-      var row = ws.addRow(rowData);
-      var amtColIdx = isTransport ? 12 : 10;
-      row.getCell(amtColIdx).font = mkFont({ bold: true });
-    });
-
-    // Final Total Row
-    var totRowData = isTransport ? Array(15).fill('') : Array(13).fill('');
-    totRowData[isTransport ? 10 : 8] = 'TOTAL';
-    totRowData[isTransport ? 11 : 9] = totalCollected;
-    var totRow = ws.addRow(totRowData);
-    totRow.height = 24;
-    var finalAmtColIdx = isTransport ? 12 : 10;
-    
-    totRow.getCell(finalAmtColIdx - 1).font = mkFont({ bold: true, size: 11 });
-    totRow.getCell(finalAmtColIdx - 1).alignment = { horizontal: 'right', vertical: 'middle' };
-    totRow.getCell(finalAmtColIdx).font = mkFont({ bold: true, size: 12, color: { argb: isTransport ? 'FFEA580C' : 'FF4F46E5' } });
-    
-    return ws;
+        var row = ws.addRow(rowData);
+        
+        // Emphasize amount column with distinct colors
+        row.getCell(13).font = mkFont({ bold: true, color: { argb: isTransport ? 'FFEA580C' : 'FF4F46E5' } });
+        
+        // Add subtle zebra striping
+        if (row.number % 2 === 0) {
+           for(var j=1; j<=16; j++) {
+               row.getCell(j).fill = mkFill('FFF8FAFC');
+           }
+        }
+      });
   }
 
-  // Create sheets
-  if (rptFilteredReg.length) addReportSheet('Regular Fees', false);
-  if (rptFilteredTrn.length) addReportSheet('Transport Fees', true);
+  // Inject both datasets into the same worksheet
+  appendGroups(rptFilteredReg, false);
+  appendGroups(rptFilteredTrn, true);
 
-  // Trigger Download
+  // Final Grand Total Row
+  var totRowData = Array(16).fill('');
+  totRowData[11] = 'GRAND TOTAL';
+  totRowData[12] = totalCollected;
+  var totRow = ws.addRow(totRowData);
+  totRow.height = 24;
+  
+  totRow.getCell(12).font = mkFont({ bold: true, size: 11 });
+  totRow.getCell(12).alignment = { horizontal: 'right', vertical: 'middle' };
+  totRow.getCell(13).font = mkFont({ bold: true, size: 12, color: { argb: 'FF059669' } });
+  
+  // Highlight Total Row Background
+  for(var j=1; j<=16; j++) {
+      totRow.getCell(j).fill = mkFill('FFF0FDF4');
+  }
+
+  // Trigger browser download
   var buffer = await workbook.xlsx.writeBuffer();
   var blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   var url = URL.createObjectURL(blob);
