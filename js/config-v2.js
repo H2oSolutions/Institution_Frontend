@@ -1,8 +1,8 @@
 // config-v2.js - API Configuration with Level-Designation Mapping Endpoint
 
-   const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
+  const API_BASE_URL = 'https://institution-backend-kkw8.onrender.com/api';
 
-  //  const API_BASE_URL = 'http://localhost:5000/api';                   // Turn this on for the local development environment and turn off the above line
+   //  const API_BASE_URL = 'http://localhost:5000/api';                   // Turn this on for the local development environment and turn off the above line
 
 const API_ENDPOINTS = {
     // ===== INSTITUTION ===== 
@@ -82,6 +82,14 @@ const API_ENDPOINTS = {
     // ===== EXAMS =====
     EXAMS: `${API_BASE_URL}/exams`,
     EXAMS_BY_CLASS: `${API_BASE_URL}/exams/by-class`,
+    
+    // ===== EXAMS & MARKS =====
+    EXAM_SETUP: `${API_BASE_URL}/marks/setup`,
+    MARKS_GRID: `${API_BASE_URL}/marks/grid`,
+    MARKS_BULK: `${API_BASE_URL}/marks/bulk`,
+    REPORT_CARDS: `${API_BASE_URL}/marks/report-cards`,
+
+    EXAM_SETUP_ACTION: `${API_BASE_URL}/marks/setup`, // Base URL for PUT/DELETE with ID
 
     // ===== TIMETABLE =====
     TIMETABLE: `${API_BASE_URL}/timetable`,

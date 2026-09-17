@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Exam Management — Hello School</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- SheetJS for Excel Upload/Download -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#070a14;--surface:#0f1623;--panel:#131d30;--rim:#1c2b42;--gold:#d4a843;--gold2:#f0c96a;--silver:#7a90b0;--text:#dce8f5;--muted:#48607a;--teal:#14b8a6;--danger:#ef4444;--success:#22c55e;--r:14px;}
+:root{--bg:#070a14;--surface:#0f1623;--panel:#131d30;--rim:#1c2b42;--gold:#d4a843;--gold2:#f0c96a;--silver:#7a90b0;--text:#dce8f5;--muted:#48607a;--teal:#14b8a6;--danger:#ef4444;--success:#22c55e;--warn:#eab308;--r:14px;}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
 .hdr{position:sticky;top:0;z-index:200;background:rgba(7,10,20,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--rim);padding:16px 40px;display:flex;align-items:center;gap:14px;}
@@ -15,26 +17,81 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .hdr-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:#000;box-shadow:0 4px 14px rgba(212,168,67,.35);}
 .hdr-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--text);}
 .hdr-badge{margin-left:auto;background:linear-gradient(135deg,rgba(212,168,67,.12),rgba(240,201,106,.06));border:1px solid rgba(212,168,67,.3);padding:5px 14px;border-radius:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold);letter-spacing:.8px;text-transform:uppercase;}
-.main{max-width:960px;margin:28px auto 100px;padding:0 24px;position:relative;z-index:1;}
+.main{max-width:1000px;margin:28px auto 100px;padding:0 24px;position:relative;z-index:1;}
 .card{background:var(--surface);border:1px solid var(--rim);border-radius:var(--r);padding:26px 28px;margin-bottom:20px;animation:fadeUp .3s ease;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 .card-title{font-family:'Playfair Display',serif;font-size:20px;margin-bottom:4px;display:flex;align-items:center;gap:9px;}
 .card-sub{font-size:13px;color:var(--silver);margin-bottom:20px;line-height:1.5;}
-label{display:block;font-size:12px;color:var(--silver);margin-bottom:5px;font-weight:500;letter-spacing:.3px;}
-input[type=text],input[type=tel],input[type=email],select{width:100%;background:var(--panel);border:1.5px solid var(--rim);border-radius:10px;padding:11px 15px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;outline:none;}
+label{display:block;font-size:12px;color:var(--silver);margin-bottom:5px;font-weight:500;}
+input[type=text],input[type=tel],input[type=email],input[type=number],select{width:100%;background:var(--panel);border:1.5px solid var(--rim);border-radius:10px;padding:11px 15px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;outline:none;}
 input:focus,select:focus{border-color:var(--gold);}
-select option{background:var(--panel);}
+input:disabled{opacity:0.5;cursor:not-allowed;}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .fg{margin-bottom:16px;}
-.section-label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin:6px 0 14px;display:flex;align-items:center;gap:10px;}
-.section-label::after{content:'';flex:1;height:1px;background:var(--rim);}
 .btn{border:none;border-radius:10px;padding:12px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.2s;}
 .btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#000;box-shadow:0 4px 14px rgba(212,168,67,.3);}
 .btn-gold:hover{filter:brightness(1.06);}
-.btn-gold:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+.btn-gold:disabled{opacity:.45;cursor:not-allowed;}
 .btn-ghost{background:rgba(255,255,255,.05);border:1px solid var(--rim);color:var(--silver);}
 .btn-ghost:hover{border-color:var(--gold);color:var(--text);}
-.info-bar{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:11px 15px;font-size:13px;color:#93c5fd;margin-bottom:18px;display:flex;gap:8px;line-height:1.5;}
+.foot-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
+
+/* Main Tabs */
+.tabs-nav { display: flex; gap: 10px; margin-bottom: 24px; border-bottom: 1.5px solid var(--rim); padding-bottom: 12px; overflow-x: auto; scrollbar-width: none;}
+.tabs-nav::-webkit-scrollbar { display: none; }
+.tab-btn { background: transparent; border: 1px solid transparent; color: var(--silver); font-size: 14px; font-weight: 600; cursor: pointer; padding: 10px 20px; border-radius: 10px; transition: .2s; white-space: nowrap; }
+.tab-btn:hover { color: var(--text); background: rgba(255,255,255,.05); border-color: var(--rim); }
+.tab-btn.active { color: #000; background: linear-gradient(135deg, var(--gold), var(--gold2)); box-shadow: 0 4px 14px rgba(212,168,67,.3); border-color: transparent; }
+.tab-content { display: none; animation: fadeUp .3s ease; }
+.tab-content.active { display: block; }
+
+/* Sub Tabs */
+.sub-tabs-nav { display: flex; gap: 8px; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 6px; border-radius: 12px; border: 1px solid var(--rim); overflow-x: auto;}
+.sub-tab-btn { flex: 1; background: transparent; border: none; color: var(--silver); font-size: 13px; font-weight: 600; padding: 12px 15px; border-radius: 8px; cursor: pointer; transition: .2s; white-space: nowrap; font-family: 'DM Sans', sans-serif;}
+.sub-tab-btn:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.sub-tab-btn.active { background: var(--panel); color: var(--gold); box-shadow: 0 2px 8px rgba(0,0,0,0.2); border: 1px solid var(--rim); }
+.sub-content { display: none; animation: fadeUp .3s ease; }
+.sub-content.active { display: block; }
+
+/* Grid Styles & Highlighting */
+.marks-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+.marks-table th, .marks-table td { padding: 10px; border: 1px solid var(--rim); text-align: left; }
+.marks-table th { background: var(--panel); color: var(--gold); position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 0 var(--rim); }
+.m-input { width: 70px; background: var(--panel); border: 1.5px solid var(--rim); color: var(--text); padding: 8px; border-radius: 6px; text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 14px; transition: .2s; }
+.m-input:focus { border-color: var(--gold); outline: none; box-shadow: 0 0 0 2px rgba(212,168,67,0.2); }
+.m-input.err { border-color: var(--danger); box-shadow: 0 0 5px rgba(239,68,68,0.5); }
+.m-input.fail { color: var(--danger); font-weight: bold; background: rgba(239,68,68,0.05); }
+
+/* Tabulation Styles */
+.tabu-table th, .tabu-table td { text-align: center; white-space: nowrap; }
+.tabu-table td { border-color: rgba(255,255,255,0.05); }
+.cell-missing { background: rgba(234, 179, 8, 0.1) !important; color: var(--warn); font-weight: bold; }
+.cell-fail { background: rgba(239, 68, 68, 0.1) !important; color: #f87171; font-weight: bold; }
+
+.s-input { width: 110px; background: var(--panel); border: 1.5px solid var(--rim); color: var(--text); padding: 8px; border-radius: 6px; font-size: 13px; }
+.excel-upload-wrap { position: relative; overflow: hidden; display: inline-block; }
+.excel-upload-wrap input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
+.chk-label { display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--rim); border-radius:6px; cursor:pointer; font-size:13px; transition:.2s; }
+.chk-label:hover { border-color:var(--gold); background:rgba(212,168,67,0.05); }
+.chk-label input { width:16px; height:16px; cursor:pointer; accent-color:var(--gold); }
+
+/* Analytics Modal Styles */
+.modal-overlay { position: fixed; inset: 0; background: rgba(7,10,20,0.85); backdrop-filter: blur(5px); z-index: 999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease; }
+.modal-content { background: var(--surface); border: 1px solid var(--rim); border-radius: var(--r); width: 90%; max-width: 600px; padding: 24px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); position: relative; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--rim); padding-bottom: 15px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.stat-card { background: var(--panel); border: 1px solid var(--rim); border-radius: 10px; padding: 15px; margin-bottom: 15px; }
+.stat-card h4 { color: var(--silver); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.rank-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--rim); font-size: 14px; align-items: center;}
+.rank-row:last-child { border-bottom: none; }
+.rank-1 { color: #facc15; font-weight: bold; font-size: 15px;}
+.rank-2 { color: #cbd5e1; font-weight: bold; font-size: 15px;}
+.rank-3 { color: #d97706; font-weight: bold; font-size: 15px;}
+
+/* Globals */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel);border:1px solid var(--rim);color:var(--text);padding:12px 20px;border-radius:11px;font-size:13px;z-index:600;transition:transform .3s;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.err{border-color:rgba(239,68,68,.5);color:#fca5a5;}
 .logo-row{display:flex;align-items:center;gap:16px;}
 .logo-prev{width:64px;height:64px;border-radius:10px;object-fit:contain;background:var(--panel);border:1.5px solid var(--rim);flex-shrink:0;}
 .logo-ph{width:64px;height:64px;border-radius:10px;background:var(--panel);border:1.5px dashed var(--rim);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;flex-shrink:0;}
@@ -57,26 +114,6 @@ select option{background:var(--panel);}
 .stu-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .stu-chk{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;}
 .stu-card.on .stu-chk{background:var(--gold);border-color:var(--gold);color:#000;}
-.empty{text-align:center;color:var(--muted);padding:40px 10px;font-size:13px;}
-.foot-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
-/* Modal */
-.overlay{position:fixed;inset:0;background:rgba(4,7,14,.72);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
-.overlay.show{display:flex;}
-.modal{background:var(--surface);border:1px solid var(--rim);border-radius:16px;max-width:460px;width:100%;padding:28px;animation:fadeUp .25s ease;}
-.modal h3{font-family:'Playfair Display',serif;font-size:21px;margin-bottom:8px;}
-.modal p{font-size:13.5px;color:var(--silver);line-height:1.6;margin-bottom:14px;}
-.miss-list{list-style:none;margin:0 0 16px;}
-.miss-list li{font-size:13px;color:var(--text);padding:7px 12px;background:var(--panel);border:1px solid var(--rim);border-radius:9px;margin-bottom:7px;display:flex;gap:9px;align-items:center;}
-.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;}
-/* Progress */
-.prog-wrap{margin-top:4px;}
-.prog-bar{height:8px;background:var(--rim);border-radius:6px;overflow:hidden;margin-top:10px;}
-.prog-fill{height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--success));transition:width .2s;}
-.spin{width:15px;height:15px;border:2px solid var(--rim);border-top-color:var(--gold);border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px;}
-@keyframes sp{to{transform:rotate(360deg)}}
-.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel);border:1px solid var(--rim);color:var(--text);padding:12px 20px;border-radius:11px;font-size:13px;z-index:600;transition:transform .3s;box-shadow:0 10px 30px rgba(0,0,0,.4);}
-.toast.show{transform:translateX(-50%) translateY(0);}
-.toast.err{border-color:rgba(239,68,68,.5);color:#fca5a5;}
 </style>
 </head>
 <body>
@@ -84,90 +121,250 @@ select option{background:var(--panel);}
   <button class="hdr-back" onclick="goDashboard()">← Back</button>
   <div class="hdr-mark">E</div>
   <div class="hdr-title">Exam Management</div>
-  <div class="hdr-badge">Admit Cards</div>
+  <div class="hdr-badge">Premium</div>
 </div>
 
 <div class="main">
+  <!-- MAIN TABS -->
+  <div class="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab('tab-admit', this)">Admit Cards</button>
+    <button class="tab-btn" onclick="switchTab('tab-report', this)">Exam & Report Cards</button>
+  </div>
 
-  <!-- SCHOOL HEADER -->
-  <div class="card">
-    <div class="card-title">🏫 School Header</div>
-    <div class="card-sub">This appears on every admit card. Pre-filled from your profile — edit anything and it's saved on this device for next time.</div>
-    <div class="grid2">
-      <div class="fg"><label>School Name</label><input type="text" id="sch-name" placeholder="School name"></div>
-      <div class="fg"><label>Address (one line)</label><input type="text" id="sch-addr" placeholder="City, District, State"></div>
-      <div class="fg"><label>Phone</label><input type="tel" id="sch-phone" placeholder="Phone number(s)"></div>
-      <div class="fg"><label>Email</label><input type="email" id="sch-email" placeholder="Email"></div>
-    </div>
-    <div class="section-label">Logo</div>
-    <div class="logo-row">
-      <img id="logo-prev" class="logo-prev" style="display:none" alt="logo">
-      <div id="logo-ph" class="logo-ph">No logo</div>
-      <div style="flex:1">
-        <div class="upload-box">Click to upload a logo &nbsp;·&nbsp; <b>PNG/JPG</b>
-          <input type="file" id="logo-file" accept="image/*" onchange="onLogoPick(event)">
+  <!-- TAB 1: ADMIT CARDS -->
+  <div id="tab-admit" class="tab-content active">
+    <div class="card">
+      <div class="card-title">🏫 School Header</div>
+      <div class="card-sub">This appears on every admit card and report card.</div>
+      <div class="grid2">
+        <div class="fg"><label>School Name</label><input type="text" id="sch-name"></div>
+        <div class="fg"><label>Address (one line)</label><input type="text" id="sch-addr"></div>
+        <div class="fg"><label>Phone</label><input type="tel" id="sch-phone"></div>
+        <div class="fg"><label>Email</label><input type="email" id="sch-email"></div>
+      </div>
+      <div class="section-label" style="font-size:12px;color:var(--silver);font-weight:500;margin-bottom:5px;">Logo</div>
+      <div class="logo-row">
+        <img id="logo-prev" class="logo-prev" style="display:none" alt="logo">
+        <div id="logo-ph" class="logo-ph">No logo</div>
+        <div style="flex:1">
+          <div class="upload-box">Click to upload a logo &nbsp;·&nbsp; <b>PNG/JPG</b>
+            <input type="file" id="logo-file" accept="image/*" onchange="onLogoPick(event)">
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Used on every card.</div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px" id="logo-hint">Optional. If empty, the card prints without a logo.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🎓 Select Class</div>
+      <div class="grid2">
+        <div class="fg"><label>Class</label><select id="class-sel"><option value="">Select...</option></select></div>
+        <div class="fg" style="display:flex;align-items:flex-end"><button class="btn btn-gold" style="width:100%" id="load-btn" onclick="loadStudents()">Load Students</button></div>
+      </div>
+    </div>
+    <div class="card" id="stu-panel" style="display:none">
+      <div class="select-bar">
+        <span class="pill" onclick="selectAll(true)">Select all</span>
+        <span class="pill" onclick="selectAll(false)">Clear</span>
+        <span class="count-chip" id="sel-count">0 selected</span>
+      </div>
+      <div class="stu-grid" id="stu-grid"></div>
+      <div class="foot-actions">
+        <button class="btn btn-gold" id="gen-btn" onclick="onGenerate()">🖨️ Generate Admit Cards</button>
       </div>
     </div>
   </div>
 
-  <!-- SELECT CLASS -->
-  <div class="card">
-    <div class="card-title">🎓 Select Class</div>
-    <div class="card-sub">Pick a specific class or load all classes. (Images are loaded in batches to prevent freezing for large schools.)</div>
-    <div class="grid2">
-      <div class="fg"><label>Class</label>
-        <select id="class-sel"><option value="">Select a class…</option></select>
+  <!-- TAB 2: EXAM & REPORT CARDS WORKFLOW -->
+  <div id="tab-report" class="tab-content">
+    
+    <!-- SUB TABS NAVIGATION -->
+    <div class="sub-tabs-nav">
+      <button class="sub-tab-btn active" onclick="switchSubTab('sub-setup', this)">⚙️ 1. Exam Setup</button>
+      <button class="sub-tab-btn" onclick="switchSubTab('sub-marks', this)">📝 2. Marks Entry</button>
+      <button class="sub-tab-btn" onclick="switchSubTab('sub-tabulation', this)">📊 3. Tabulation</button>
+      <button class="sub-tab-btn" onclick="switchSubTab('sub-print', this)">🖨️ 4. Print Report Cards</button>
+    </div>
+
+    <!-- SUB-TAB 1: EXAM SETUP -->
+    <div id="sub-setup" class="sub-content active">
+      <div class="card">
+        <div class="card-title">⚙️ Step 1: Create Exam Structure</div>
+        <div class="card-sub">Define terms and columns (e.g., "Term 1" -> PT1 (10), Notebook (5), Half Yearly (80)).</div>
+        
+        <div class="grid2">
+          <div class="fg"><label>Class</label><select id="s-class-sel" onchange="loadExistingSetups()"><option value="">Select...</option></select></div>
+          <div class="fg"><label>Term Name (e.g., "Term-1(100 Marks)")</label><input type="text" id="s-term-name" placeholder="Term-1(100 Marks)"></div>
+        </div>
+        
+        <!-- COPY FEATURE UI -->
+        <div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed var(--rim);">
+          <label style="color:var(--silver); font-weight:600; margin-bottom:10px;">Duplicate Structure from Another Class (Optional)</label>
+          <div class="grid2">
+            <div class="fg" style="margin:0;">
+                <select id="copy-class-sel" onchange="loadCopySetups()"><option value="" disabled selected hidden>1. Select a Class...</option></select>
+            </div>
+            <div class="fg" style="margin:0;">
+                <select id="copy-term-sel" onchange="applyCopySetup()"><option value="" disabled selected hidden>2. Select a Term to Copy...</option></select>
+            </div>
+          </div>
+        </div>
+
+        <div id="s-cols-container" style="background:var(--panel); padding:16px; border-radius:10px; border:1px solid var(--rim); margin-bottom:16px;">
+          <label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>
+          <!-- Rows injected here -->
+        </div>
+        <button class="btn btn-ghost" onclick="addSetupColumn()" style="margin-bottom: 20px;">+ Add Assessment Column</button>
+        <div class="foot-actions" style="border-top:1px solid var(--rim); padding-top:16px;">
+          <button class="btn btn-gold" id="btn-save-setup" onclick="saveExamSetup()">💾 Save Structure</button>
+        </div>
+        
+        <div id="existing-setups-card" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--rim);">
+          <label style="color:var(--gold); font-size:14px; font-weight:600; margin-bottom:10px; display:block;">📋 Existing Structures for this Class</label>
+          <div id="s-list" style="font-size:13px;"></div>
+        </div>
       </div>
-      <div class="fg" style="display:flex;align-items:flex-end">
-        <button class="btn btn-gold" style="width:100%" id="load-btn" onclick="loadStudents()">Load Students</button>
+    </div>
+
+    <!-- SUB-TAB 2: MARKS ENTRY -->
+    <div id="sub-marks" class="sub-content">
+      <div class="card">
+        <div class="card-title">📝 Step 2: Marks Entry & Excel Upload</div>
+        <div class="card-sub">Marks are automatically saved to the cloud as you type. <b>Pro Tip:</b> Use the arrow keys on your keyboard to navigate the grid instantly.</div>
+        <div class="grid2" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+          <div class="fg"><label>Class</label><select id="m-class-sel" onchange="onMarksClassChange()"><option value="">Select...</option></select></div>
+          <div class="fg"><label>Subject</label><select id="m-subject-sel"><option value="">Select Class First...</option></select></div>
+          <div class="fg"><label>Exam Term</label><select id="m-setup-sel"><option value="">Select Class First...</option></select></div>
+        </div>
+        <div class="foot-actions" style="margin-top: 5px;">
+          <button class="btn btn-gold" id="btn-load-grid" onclick="loadMarksGrid()">Load Grid</button>
+          <button class="btn btn-ghost" onclick="downloadExcelTemplate()">📥 Download Excel Template</button>
+          <div class="excel-upload-wrap">
+            <button class="btn btn-ghost">📤 Upload Excel File</button>
+            <input type="file" accept=".xlsx, .xls" onchange="handleExcelUpload(event)">
+          </div>
+        </div>
+        
+        <div id="marks-grid-panel" style="display:none; animation: fadeUp 0.3s ease; margin-top: 20px; border-top: 1px solid var(--rim); padding-top: 20px;">
+          <div class="card-title" style="margin-bottom: 15px; font-size: 16px; display:flex; align-items:center;">
+            ✏️ Enter Marks
+            <button class="btn-ghost" style="margin-left: 15px; padding: 6px 12px; font-size: 12px; border-radius: 6px;" onclick="showAnalytics()">📊 View Analytics</button>
+            <span id="m-max-label" style="font-size:13px; color:var(--gold); background:rgba(212,168,67,0.1); padding:4px 10px; border-radius:20px; border:1px solid rgba(212,168,67,0.3); margin-left:auto;"></span>
+          </div>
+          <div style="max-height: 500px; overflow-y: auto; border: 1.5px solid var(--rim); border-radius: 10px;">
+            <table class="marks-table" id="marks-table">
+              <thead id="marks-thead"></thead>
+              <tbody id="marks-tbody"></tbody>
+            </table>
+          </div>
+          <div class="foot-actions" style="margin-top:20px; align-items: center;">
+            <button class="btn btn-gold" id="btn-save-marks" onclick="saveMarksGrid()">💾 Force Save All</button>
+            <span id="auto-save-text" style="font-size: 13px; color: var(--silver); margin-left: 10px; font-weight: 500;">☁️ Cloud Sync Active</span>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- STUDENTS -->
-  <div class="card" id="stu-panel" style="display:none">
-    <div class="card-title">👥 Students <span id="stu-cls" style="font-size:13px;color:var(--silver);font-weight:400"></span></div>
-    <div class="select-bar">
-      <span class="pill" onclick="selectAll(true)">Select all</span>
-      <span class="pill" onclick="selectAll(false)">Clear</span>
-      <span class="count-chip" id="sel-count">0 selected</span>
-    </div>
-    <div class="stu-grid" id="stu-grid"></div>
-    <div class="foot-actions">
-      <button class="btn btn-gold" id="gen-btn" onclick="onGenerate()">🖨️ Generate Admit Cards</button>
-      <span style="font-size:12px;color:var(--muted);align-self:center">2 cards per page · half page each · single card prints on a half page too</span>
-    </div>
-  </div>
+    <!-- SUB-TAB 3: TABULATION REGISTER -->
+    <div id="sub-tabulation" class="sub-content">
+      <div class="card">
+        <div class="card-title">📊 Step 3: Tabulation Register (Broadsheet)</div>
+        <div class="card-sub">Review overall class performance, spot missing data, and export broadsheets before printing report cards. Combine multiple terms to see cumulative results!</div>
+        <div class="grid2">
+          <div class="fg"><label>Class</label><select id="tabu-class-sel" onchange="onTabuClassChange()"><option value="">Select...</option></select></div>
+          <div class="fg" style="margin:0;">
+            <label style="color:var(--gold);">Select Terms to Include</label>
+            <div id="tabu-terms-container" style="max-height:160px; overflow-y:auto; margin-top:5px; display:flex; flex-direction:column; gap:6px; background:var(--panel); border:1.5px solid var(--rim); border-radius:10px; padding:10px;">
+              <span style="color:var(--muted)">Select a class first.</span>
+            </div>
+          </div>
+        </div>
+        <div class="foot-actions" style="margin-top: 15px;">
+          <button class="btn btn-gold" id="btn-load-tabu" onclick="loadTabulation()">Load Tabulation</button>
+          <button class="btn btn-ghost" id="btn-export-tabu-excel" style="display:none;" onclick="exportTabulationExcel()">📥 Export Excel</button>
+          <button class="btn btn-ghost" id="btn-export-tabu-pdf" style="display:none;" onclick="printTabulationPDF()">🖨️ Print PDF</button>
+        </div>
 
+        <div id="tabu-grid-panel" style="display:none; margin-top: 20px; border-top: 1px solid var(--rim); padding-top: 20px; overflow-x: auto;">
+          <!-- Live preview table goes here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- SUB-TAB 4: REPORT CARDS -->
+    <div id="sub-print" class="sub-content">
+      <div class="card" style="border-color: rgba(212,168,67,0.3); background: rgba(212,168,67,0.02);">
+        <div class="card-title" style="color: var(--gold);">🖨️ Step 4: Generate Final Report Cards</div>
+        <div class="card-sub">Select exactly what subjects and terms should appear on the printed report card. Customize your grading scales and dates below.</div>
+        
+        <div class="grid2" style="grid-template-columns: 1fr;">
+          <div class="fg" style="margin-bottom:0;">
+            <label style="display:flex; justify-content:space-between;">
+              Select Class(es)
+              <span style="color:var(--gold); cursor:pointer; font-weight:700; font-size:11px;" onclick="rcSelectAllClasses()">Toggle All</span>
+            </label>
+            <div id="rc-class-container" style="max-height:160px; overflow-y:auto; background:var(--panel); border:1.5px solid var(--rim); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:6px;">
+               <span style="color:var(--muted)">Loading classes...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2" style="background:var(--panel); padding:16px; border-radius:10px; border:1px solid var(--rim); margin-bottom:16px; margin-top:16px;">
+          <div class="fg" style="margin:0;">
+            <label style="color:var(--gold);">Select Terms to Include</label>
+            <div id="rc-terms-container" style="max-height:160px; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+              <span style="color:var(--muted)">Select at least one class.</span>
+            </div>
+          </div>
+          <div class="fg" style="margin:0;">
+            <label style="color:var(--gold);">Select Subjects to Include</label>
+            <div id="rc-subjects-container" style="max-height:160px; overflow-y:auto; margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+              <span style="color:var(--muted)">Select at least one class.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-label" style="font-size:12px;color:var(--silver);font-weight:500;margin-bottom:5px;">Report Card Header & Footer Customization</div>
+        <div class="grid2" style="grid-template-columns: 1fr;">
+          <div class="fg" style="margin-bottom:0;">
+            <label>Grading Scale Text (Prints exactly as typed at the bottom)</label>
+            <input type="text" id="rc-scale-text" value="91-100 : A1 | 81-90 : A2 | 71-80 : B1 | 61-70 : B2 | 51-60 : C1 | 41-50 : C2 | 33-40 : D | 32 & Below : E (Needs improvement)">
+          </div>
+        </div>
+        
+        <div class="grid2" style="grid-template-columns: 1fr 1fr 1fr; margin-top:16px;">
+          <div class="fg"><label>Academic Session (for Title)</label><input type="text" id="rc-session-text" value="2026-27"></div>
+          <div class="fg"><label>Issue Date</label><input type="text" id="rc-date-text" value="___________"></div>
+          <div class="fg"><label>Promotion Text</label><input type="text" id="rc-promo-text" value="Congratulations! Promoted to Class ___________"></div>
+          <div class="fg"><label>Re-open Text</label><input type="text" id="rc-reopen-text" value="School reopens at 7:50 am on ___________"></div>
+        </div>
+
+        <div class="foot-actions" style="margin-top: 20px; border-top:1px solid var(--rim); padding-top:20px;">
+          <button class="btn btn-gold" id="btn-rep-cards" style="width:100%; box-shadow:0 0 20px rgba(212,168,67,0.3);" onclick="generateReportCards()">🖨️ Generate PDF Report Cards</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<!-- MISSING DATA MODAL -->
-<div class="overlay" id="miss-overlay">
-  <div class="modal">
-    <h3>Before you print…</h3>
-    <p>Some details come from other parts of the app. Here's what's missing for the students you selected — the admit card will use <b>placeholders / blank spaces</b> for these, everything else prints normally:</p>
-    <ul class="miss-list" id="miss-list"></ul>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeMiss()">Cancel</button>
-      <button class="btn btn-gold" onclick="proceedGenerate()">Continue anyway</button>
+<!-- NEW ANALYTICS MODAL -->
+<div id="analytics-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 style="font-family:'Playfair Display',serif; color:var(--gold); font-size:22px; margin:0;">📊 Live Class Analytics</h3>
+      <button class="btn-ghost" style="border:none; font-size:18px; cursor:pointer; padding:4px 8px;" onclick="closeAnalytics()">✕</button>
+    </div>
+    <div id="analytics-body" style="margin-top: 20px;">
+       <!-- Dynamic Content -->
     </div>
   </div>
 </div>
 
-<!-- PROGRESS MODAL -->
-<div class="overlay" id="prog-overlay">
-  <div class="modal">
-    <h3><span class="spin"></span> &nbsp;Preparing admit cards</h3>
-    <p id="prog-text">Loading images…</p>
-    <div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div></div>
-  </div>
-</div>
+<!-- Hidden Iframe for Printing -->
+<iframe id="report-iframe" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;"></iframe>
 
 <div class="toast" id="toast"></div>
 
-<!-- YOUR SEPARATE JS FILES -->
 <script src="js/config-v2.js"></script>
 <script src="js/api.js"></script>
 <script src="js/exam-management.js"></script>
