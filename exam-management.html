@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Exam Management — Hello School</title>
+<title>Exam Management — AcademiaX</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- SheetJS for Excel Upload/Download -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -68,12 +68,20 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
 .cell-missing { background: rgba(234, 179, 8, 0.1) !important; color: var(--warn); font-weight: bold; }
 .cell-fail { background: rgba(239, 68, 68, 0.1) !important; color: #f87171; font-weight: bold; }
 
-.s-input { width: 110px; background: var(--panel); border: 1.5px solid var(--rim); color: var(--text); padding: 8px; border-radius: 6px; font-size: 13px; }
-.excel-upload-wrap { position: relative; overflow: hidden; display: inline-block; }
-.excel-upload-wrap input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
 .chk-label { display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid var(--rim); border-radius:6px; cursor:pointer; font-size:13px; transition:.2s; }
 .chk-label:hover { border-color:var(--gold); background:rgba(212,168,67,0.05); }
 .chk-label input { width:16px; height:16px; cursor:pointer; accent-color:var(--gold); }
+
+/* NEW Template Selector Styles */
+.tpl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.tpl-card { background: var(--panel); border: 2px solid var(--rim); border-radius: 10px; padding: 16px 12px; text-align: center; cursor: pointer; transition: .2s; position: relative; overflow: hidden; }
+.tpl-card::before { content:''; position:absolute; top:0; left:0; width:100%; height:4px; background:transparent; transition:.2s;}
+.tpl-card:hover { border-color: var(--silver); transform: translateY(-3px); }
+.tpl-card.active { border-color: var(--gold); background: rgba(212,168,67,0.05); box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+.tpl-card.active::before { background: var(--gold); }
+.tpl-icon { font-size: 28px; margin-bottom: 8px; }
+.tpl-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.tpl-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 /* Analytics Modal Styles */
 .modal-overlay { position: fixed; inset: 0; background: rgba(7,10,20,0.85); backdrop-filter: blur(5px); z-index: 999; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.2s ease; }
@@ -114,6 +122,8 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
 .stu-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .stu-chk{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--rim);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;}
 .stu-card.on .stu-chk{background:var(--gold);border-color:var(--gold);color:#000;}
+.excel-upload-wrap { position: relative; overflow: hidden; display: inline-block; }
+.excel-upload-wrap input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; height: 100%; }
 </style>
 </head>
 <body>
@@ -187,8 +197,29 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
 
     <!-- SUB-TAB 1: EXAM SETUP -->
     <div id="sub-setup" class="sub-content active">
+      
+      <!-- DYNAMIC GRADING SCALE CARD -->
       <div class="card">
-        <div class="card-title">⚙️ Step 1: Create Exam Structure</div>
+        <div class="card-title">⚖️ Global Grading Scale</div>
+        <div class="card-sub">Define the percentage ranges for grades. This automatically calculates grades in Tabulation and Report Cards.</div>
+        
+        <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; border:1px solid var(--rim); margin-bottom:15px;">
+          <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap;">
+            <div style="flex:1; min-width:80px;"><label>Min %</label><input type="number" id="g-min" placeholder="e.g. 91"></div>
+            <div style="flex:1; min-width:80px;"><label>Max %</label><input type="number" id="g-max" placeholder="e.g. 100"></div>
+            <div style="flex:1; min-width:80px;"><label>Grade</label><input type="text" id="g-grade" placeholder="e.g. A1"></div>
+            <div style="flex:2; min-width:120px;"><label>Remark (Optional)</label><input type="text" id="g-remark" placeholder="e.g. Outstanding"></div>
+            <button class="btn btn-ghost" style="padding:11px 20px;" onclick="addGradeRule()">Add</button>
+          </div>
+        </div>
+
+        <div id="grading-scale-list" style="background:var(--panel); border:1px solid var(--rim); border-radius:10px; padding:6px; max-height: 250px; overflow-y: auto;">
+           <!-- Dynamic Grade List Injected Here -->
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">⚙️ Create Exam Structure</div>
         <div class="card-sub">Define terms and columns (e.g., "Term 1" -> PT1 (10), Notebook (5), Half Yearly (80)).</div>
         
         <div class="grid2">
@@ -290,11 +321,56 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
       </div>
     </div>
 
-    <!-- SUB-TAB 4: REPORT CARDS -->
+    <!-- SUB-TAB 4: REPORT CARDS (UPGRADED TEMPLATE GALLERY) -->
     <div id="sub-print" class="sub-content">
+      
+      <!-- TEMPLATE GALLERY -->
+      <div class="card" style="display: none;">
+        <div class="card-title">🎨 Select Report Card Design</div>
+        <div class="card-sub">Choose a structural layout for your final printed report cards. Your original "Acme Classic" is available right here, alongside 5 brand new radical designs!</div>
+        
+        <div class="tpl-grid">
+          <!-- 1. The Original User Favorite -->
+          <div class="tpl-card active" data-tpl="classic" onclick="selectTemplate(this)">
+            <div class="tpl-icon">🏫</div>
+            <div class="tpl-name">The Original Classic</div>
+            <div class="tpl-desc">The original maroon-themed landscape layout you loved.</div>
+          </div>
+          <!-- 2. Corporate Split -->
+          <div class="tpl-card" data-tpl="split" onclick="selectTemplate(this)">
+            <div class="tpl-icon">🏢</div>
+            <div class="tpl-name">Corporate Split</div>
+            <div class="tpl-desc">30/70 Left-Sidebar layout. Ultra premium.</div>
+          </div>
+          <!-- 3. Ivy League -->
+          <div class="tpl-card" data-tpl="ivy" onclick="selectTemplate(this)">
+            <div class="tpl-icon">📜</div>
+            <div class="tpl-name">Ivy League</div>
+            <div class="tpl-desc">Portrait format, double borders, serif fonts.</div>
+          </div>
+          <!-- 4. Dashboard -->
+          <div class="tpl-card" data-tpl="dashboard" onclick="selectTemplate(this)">
+            <div class="tpl-icon">💻</div>
+            <div class="tpl-name">SaaS Dashboard</div>
+            <div class="tpl-desc">Portrait format with modern KPI statistic cards.</div>
+          </div>
+          <!-- 5. Visual -->
+          <div class="tpl-card" data-tpl="visual" onclick="selectTemplate(this)">
+            <div class="tpl-icon">📊</div>
+            <div class="tpl-name">Visual Infographic</div>
+            <div class="tpl-desc">Landscape format with live grade progress bars.</div>
+          </div>
+          <!-- 6. Board Standard -->
+          <div class="tpl-card" data-tpl="board" onclick="selectTemplate(this)">
+            <div class="tpl-icon">📋</div>
+            <div class="tpl-name">CBSE Standard</div>
+            <div class="tpl-desc">Traditional dense grid box format. Very formal.</div>
+          </div>
+        </div>
+      </div>
+
       <div class="card" style="border-color: rgba(212,168,67,0.3); background: rgba(212,168,67,0.02);">
         <div class="card-title" style="color: var(--gold);">🖨️ Step 4: Generate Final Report Cards</div>
-        <div class="card-sub">Select exactly what subjects and terms should appear on the printed report card. Customize your grading scales and dates below.</div>
         
         <div class="grid2" style="grid-template-columns: 1fr;">
           <div class="fg" style="margin-bottom:0;">
@@ -323,20 +399,19 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
           </div>
         </div>
 
-        <div class="section-label" style="font-size:12px;color:var(--silver);font-weight:500;margin-bottom:5px;">Report Card Header & Footer Customization</div>
         <div class="grid2" style="grid-template-columns: 1fr;">
           <div class="fg" style="margin-bottom:0;">
-            <label>Grading Scale Text (Prints exactly as typed at the bottom)</label>
-            <input type="text" id="rc-scale-text" value="91-100 : A1 | 81-90 : A2 | 71-80 : B1 | 61-70 : B2 | 51-60 : C1 | 41-50 : C2 | 33-40 : D | 32 & Below : E (Needs improvement)">
+            <label>Grading Scale Text <span style="color:var(--gold);">(Auto-generated from your Global Grading Scale)</span></label>
+            <input type="text" id="rc-scale-text" readonly style="opacity:0.6; cursor:not-allowed;">
           </div>
         </div>
         
-        <div class="grid2" style="grid-template-columns: 1fr 1fr 1fr; margin-top:16px;">
-          <div class="fg"><label>Academic Session (for Title)</label><input type="text" id="rc-session-text" value="2026-27"></div>
-          <div class="fg"><label>Issue Date</label><input type="text" id="rc-date-text" value="___________"></div>
-          <div class="fg"><label>Promotion Text</label><input type="text" id="rc-promo-text" value="Congratulations! Promoted to Class ___________"></div>
-          <div class="fg"><label>Re-open Text</label><input type="text" id="rc-reopen-text" value="School reopens at 7:50 am on ___________"></div>
-        </div>
+       <div class="grid2" style="grid-template-columns: 1fr 1fr 1fr 1fr; margin-top:16px;">
+  <div class="fg"><label>Academic Session</label><input type="text" id="rc-session-text" value="2026-27"></div>
+  <div class="fg"><label>Issue Date</label><input type="text" id="rc-date-text" value="___________"></div>
+  <div class="fg"><label>Promotion Text</label><input type="text" id="rc-promo-text" value="Promoted to Class ___________"></div>
+  <div class="fg"><label>Re-open Text</label><input type="text" id="rc-reopen-text" value="School reopens on ___________"></div>
+</div>
 
         <div class="foot-actions" style="margin-top: 20px; border-top:1px solid var(--rim); padding-top:20px;">
           <button class="btn btn-gold" id="btn-rep-cards" style="width:100%; box-shadow:0 0 20px rgba(212,168,67,0.3);" onclick="generateReportCards()">🖨️ Generate PDF Report Cards</button>
@@ -347,22 +422,17 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
   </div>
 </div>
 
-<!-- NEW ANALYTICS MODAL -->
 <div id="analytics-modal" class="modal-overlay" style="display:none;">
   <div class="modal-content">
     <div class="modal-header">
-      <h3 style="font-family:'Playfair Display',serif; color:var(--gold); font-size:22px; margin:0;">📊 Live Class Analytics</h3>
-      <button class="btn-ghost" style="border:none; font-size:18px; cursor:pointer; padding:4px 8px;" onclick="closeAnalytics()">✕</button>
+      <h3 style="color:var(--gold); font-size:22px; margin:0;">📊 Live Class Analytics</h3>
+      <button class="btn-ghost" onclick="closeAnalytics()">✕</button>
     </div>
-    <div id="analytics-body" style="margin-top: 20px;">
-       <!-- Dynamic Content -->
-    </div>
+    <div id="analytics-body" style="margin-top: 20px;"></div>
   </div>
 </div>
 
-<!-- Hidden Iframe for Printing -->
 <iframe id="report-iframe" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;"></iframe>
-
 <div class="toast" id="toast"></div>
 
 <script src="js/config-v2.js"></script>

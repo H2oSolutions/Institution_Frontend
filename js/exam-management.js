@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   EXAM MANAGEMENT & REPORT CARDS
+   EXAM MANAGEMENT & REPORT CARDS (EXPANDED TEMPLATE ENGINE)
    ───────────────────────────────────────────────────────────── */
 var HDR_BASE = 'examAdmitHeader';
 var hdrKey   = 'examAdmitHeader';
@@ -14,10 +14,29 @@ var currentGridSetup = null;
 var currentEditSetupId = null;
 var cachedSubjectsForPrint = [];
 
+// Dynamic Grading Scale Variables
+var gradingScale = [];
+var defaultScale = [
+  { min: 91, max: 100, grade: 'A1' },
+  { min: 81, max: 90, grade: 'A2' },
+  { min: 71, max: 80, grade: 'B1' },
+  { min: 61, max: 70, grade: 'B2' },
+  { min: 51, max: 60, grade: 'C1' },
+  { min: 41, max: 50, grade: 'C2' },
+  { min: 33, max: 40, grade: 'D' },
+  { min: 0, max: 32, grade: 'E', remark: 'Needs Improvement' }
+];
+
 (function boot(){
   var token = localStorage.getItem('token') || localStorage.getItem('institutionToken');
-  if (!token) { window.location.href = 'login.html'; return; }
-  loadHeader(); loadClasses(); 
+  if (!token) { 
+      window.location.href = 'login.html'; 
+      return; 
+  }
+  loadHeader(); 
+  loadClasses(); 
+  loadGradingScale();
+  
   ['sch-name','sch-addr','sch-phone','sch-email'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.addEventListener('input', saveHeader);
@@ -27,7 +46,128 @@ var cachedSubjectsForPrint = [];
   document.addEventListener('keydown', handleGridArrowKeys);
 })();
 
-function goDashboard(){ window.location.href = 'dashboard.html'; }
+function goDashboard(){ 
+    window.location.href = 'dashboard.html'; 
+}
+
+/* =========================================================================
+   TEMPLATE SELECTOR LOGIC
+   ========================================================================= */
+function selectTemplate(cardEl) {
+    document.querySelectorAll('.tpl-card').forEach(c => c.classList.remove('active'));
+    cardEl.classList.add('active');
+}
+
+function getSelectedTemplate() {
+    const active = document.querySelector('.tpl-card.active');
+    return active ? active.getAttribute('data-tpl') : 'classic';
+}
+
+/* =========================================================================
+   DYNAMIC GRADING SCALE LOGIC (CLOUD SYNCED)
+   ========================================================================= */
+function loadGradingScale() {
+    const container = document.getElementById('grading-scale-list');
+    if(container) {
+        container.innerHTML = '<div style="color:var(--muted); font-size:12px; text-align:center; padding:10px;">☁️ Loading grading scale from cloud...</div>';
+    }
+
+    apiGet(API_BASE_URL + '/exam-schedules/grading-scale/settings', true)
+      .then(res => {
+          if (res.data && res.data.length > 0) {
+              gradingScale = res.data;
+          } else {
+              gradingScale = [...defaultScale];
+          }
+          renderGradingScale();
+      })
+      .catch(e => {
+          console.warn('Could not load grading scale from cloud, using default.', e);
+          gradingScale = [...defaultScale];
+          renderGradingScale();
+      });
+}
+
+function renderGradingScale() {
+    gradingScale.sort((a, b) => b.min - a.min); // Sort Highest to Lowest
+    const container = document.getElementById('grading-scale-list');
+    
+    if(container) {
+        if(!gradingScale.length) {
+            container.innerHTML = '<div style="color:var(--muted); font-size:12px; text-align:center; padding:10px;">No grading rules defined. Add one above.</div>';
+        } else {
+            container.innerHTML = gradingScale.map((g, i) => `
+                <div style="display:flex; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--rim); font-size:13px; align-items:center; background: rgba(255,255,255,0.01);">
+                    <div>
+                      <strong style="color:var(--gold); font-size:15px; margin-right:10px;">${escH(g.grade)}</strong> 
+                      <span style="font-family:'IBM Plex Mono', monospace;">${g.min}% - ${g.max}%</span> 
+                      <span style="color:var(--silver); font-size:12px; margin-left:12px; font-style:italic;">${escH(g.remark || '')}</span>
+                    </div>
+                    <button class="btn-ghost" style="padding:4px 8px; font-size:11px; color:var(--danger); border-color:var(--danger);" onclick="removeGradeRule(${i})">Delete</button>
+                </div>
+            `).join('');
+        }
+    }
+    
+    // Auto-update report card text field
+    const textStr = gradingScale.map(g => `${g.min}-${g.max} : ${g.grade}`).join(' | ');
+    const rcInput = document.getElementById('rc-scale-text');
+    if(rcInput) rcInput.value = textStr;
+}
+
+function addGradeRule() {
+    const min = parseFloat(document.getElementById('g-min').value);
+    const max = parseFloat(document.getElementById('g-max').value);
+    const grade = document.getElementById('g-grade').value.trim();
+    const remark = document.getElementById('g-remark').value.trim();
+
+    if (isNaN(min) || isNaN(max) || !grade) return toast('Min %, Max %, and Grade are required', 'err');
+    if (min > max) return toast('Min % cannot be greater than Max %', 'err');
+
+    gradingScale.push({ min, max, grade, remark });
+    saveGradingScale();
+    
+    document.getElementById('g-min').value = '';
+    document.getElementById('g-max').value = '';
+    document.getElementById('g-grade').value = '';
+    document.getElementById('g-remark').value = '';
+}
+
+function removeGradeRule(index) {
+    gradingScale.splice(index, 1);
+    saveGradingScale();
+}
+
+function saveGradingScale() {
+    renderGradingScale(); 
+    apiPost(API_BASE_URL + '/exam-schedules/grading-scale/settings', { scale: gradingScale }, true)
+      .then(res => {
+          toast('Grading scale synced to cloud ☁️', 'success');
+      })
+      .catch(e => {
+          toast('Failed to sync grading scale: ' + e.message, 'err');
+      });
+}
+
+function getGradeInfo(total, outOf) {
+  if (outOf === 0) return {g: ''};
+  const perc = (total / outOf) * 100;
+  let assignedGrade = '-';
+  
+  const scale = gradingScale.length ? gradingScale : defaultScale;
+  
+  for (let i = 0; i < scale.length; i++) {
+      if (perc >= scale[i].min && perc <= scale[i].max) {
+          assignedGrade = scale[i].grade;
+          break;
+      }
+  }
+  
+  // Fallback for math rounding (e.g., 100.1%)
+  if (assignedGrade === '-' && perc > 100 && scale.length) assignedGrade = scale[0].grade; 
+  
+  return {g: assignedGrade, p: perc};
+}
 
 /* =========================================================================
    TAB AUTO-REFRESH LOGIC
@@ -56,6 +196,9 @@ function switchSubTab(subId, btn) {
   refreshActiveSubTab(subId);
 }
 
+/* =========================================================================
+   CLASS & STUDENT LOADING LOGIC
+   ========================================================================= */
 function loadClasses() {
   apiGet(API_ENDPOINTS.CLASSES, true).then(res => {
     let htmlTab1 = '<option value="">Select a class…</option><option value="all">All Classes (Entire School)</option>';
@@ -66,12 +209,16 @@ function loadClasses() {
     (res.data || []).filter(c => c.isActive !== false).forEach(c => {
       const className = escH(c.className || c.name);
       const opt = `<option value="${c._id}">${className}</option>`;
-      htmlTab1 += opt; htmlStandard += opt; copyClassHtml += opt;
+      htmlTab1 += opt; 
+      htmlStandard += opt; 
+      copyClassHtml += opt;
       rcClassHtml += `<label class="chk-label"><input type="checkbox" class="rc-class-chk" value="${c._id}" data-name="${escAttr(c.className || c.name)}" onchange="loadReportCardOptions()"> ${className}</label>`;
     });
+    
     // Populate all Class dropdowns
     ['class-sel'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = htmlTab1; });
     ['s-class-sel', 'm-class-sel', 'tabu-class-sel'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = htmlStandard; });
+    
     if(document.getElementById('copy-class-sel')) document.getElementById('copy-class-sel').innerHTML = copyClassHtml;
     if(document.getElementById('rc-class-container')) document.getElementById('rc-class-container').innerHTML = rcClassHtml;
   });
@@ -85,82 +232,216 @@ function rcSelectAllClasses() {
     loadReportCardOptions();
 }
 
+function loadStudents(){
+  var sel = document.getElementById('class-sel'); 
+  var cid = sel.value; 
+  if (!cid){ return toast('Pick a class first','err'); }
+  
+  var btn = document.getElementById('load-btn'); 
+  btn.disabled = true; 
+  btn.textContent = 'Loading…'; 
+  currentClassName = sel.options[sel.selectedIndex].text;
+  
+  var url = API_ENDPOINTS.STUDENTS + '?limit=9999&_t=' + new Date().getTime(); 
+  if (cid !== 'all') url += '&classId=' + encodeURIComponent(cid);
+  
+  apiGet(url, true).then(function(r){
+      students = (r && r.data) || [];
+      students.sort((a, b) => { 
+          var nA = (a.name || '').toLowerCase(), nB = (b.name || '').toLowerCase(); 
+          if (nA < nB) return -1; 
+          if (nA > nB) return 1; 
+          return 0; 
+      });
+      selected = {}; 
+      renderStudents(); 
+      document.getElementById('stu-panel').style.display = 'block';
+      
+      if (!students.length) toast('No students found','err'); 
+      else toast(`Loaded ${students.length} students!`, 'success');
+  }).catch(() => toast('Failed to load students','err'))
+    .finally(() => { btn.disabled = false; btn.textContent = 'Load Students'; });
+}
+
+function renderStudents(){
+  var grid = document.getElementById('stu-grid');
+  if (!students.length){ 
+      grid.innerHTML = '<div class="empty">No students to show.</div>'; 
+      updateCount(); 
+      return; 
+  }
+  grid.innerHTML = students.map(s => {
+    var photo = s.photo ? `<img class="stu-photo" loading="lazy" src="${escAttr(s.photo)}">` : `<div class="stu-photo-ph">👤</div>`;
+    return `<div class="stu-card" data-id="${escAttr(s._id)}" onclick="toggleStu(this)">
+                ${photo}
+                <div class="stu-meta">
+                    <div class="stu-name">${escH(s.name||'—')}</div>
+                    <div class="stu-sub">${escH(s.fatherName||'')}</div>
+                </div>
+                <div class="stu-chk">✓</div>
+            </div>`;
+  }).join(''); 
+  updateCount();
+}
+
+function toggleStu(el){ 
+    var id = el.getAttribute('data-id'); 
+    if (selected[id]){ 
+        delete selected[id]; 
+        el.classList.remove('on'); 
+    } else { 
+        selected[id]=true; 
+        el.classList.add('on'); 
+    } 
+    updateCount(); 
+}
+
+function selectAll(on){ 
+    document.querySelectorAll('.stu-card').forEach(el => { 
+        var id = el.getAttribute('data-id'); 
+        if (on){ 
+            selected[id]=true; 
+            el.classList.add('on'); 
+        } else { 
+            delete selected[id]; 
+            el.classList.remove('on'); 
+        } 
+    }); 
+    updateCount(); 
+}
+
+function updateCount(){ 
+    var n = Object.keys(selected).length; 
+    document.getElementById('sel-count').textContent = n + ' selected'; 
+    document.getElementById('gen-btn').disabled = n === 0; 
+}
+
+function selectedStudents(){ 
+    return students.filter(s => selected[s._id]); 
+}
+
 /* =========================================================================
-   TAB 1: ADMIT CARDS 
+   ADMIT CARD LOGIC & HEADER LOAD
    ========================================================================= */
 function loadHeader(){
   apiGet(API_ENDPOINTS.INSTITUTION_PROFILE, true).then(function(res){
     var d = (res && res.data) || {};
     var code = d.institutionCode || localStorage.getItem('institutionCode') || 'default';
     hdrKey = HDR_BASE + ':' + code;
+    
     if (d.currentAcademicYear) {
       window.currentSession = d.currentAcademicYear;
       var sessionInput = document.getElementById('rc-session-text');
       if (sessionInput) sessionInput.value = window.currentSession;
     }
+    
     var saved = readSaved();
-    setVal('sch-name', d.name || saved.name || ''); setVal('sch-addr', d.address ? composeAddress(d.address) : (saved.addr || ''));
+    setVal('sch-name', d.name || saved.name || ''); 
+    setVal('sch-addr', d.address ? composeAddress(d.address) : (saved.addr || ''));
+    
     var cf = d.contactsFull || {};
     var realPhone = [cf.mobile1, cf.mobile2].filter(Boolean).join(', ');
-    setVal('sch-phone', saved.phone || realPhone || ''); setVal('sch-email', saved.email || cf.email || '');
-    if (d.logo) { schoolLogoUrl = d.logo; showLogo(d.logo); } else if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); } else { schoolLogoUrl = null; showLogo(null); }
+    setVal('sch-phone', saved.phone || realPhone || ''); 
+    setVal('sch-email', saved.email || cf.email || '');
+    
+    if (d.logo) { schoolLogoUrl = d.logo; showLogo(d.logo); } 
+    else if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); } 
+    else { schoolLogoUrl = null; showLogo(null); }
+    
     saveHeader();
   }).catch(function(){
-    var saved = readSaved(); setVal('sch-name', saved.name || ''); setVal('sch-addr', saved.addr || '');
-    setVal('sch-phone', saved.phone || ''); setVal('sch-email', saved.email || '');
+    var saved = readSaved(); 
+    setVal('sch-name', saved.name || ''); 
+    setVal('sch-addr', saved.addr || ''); 
+    setVal('sch-phone', saved.phone || ''); 
+    setVal('sch-email', saved.email || '');
     if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); }
   });
 }
+
 function readSaved(){ try { return JSON.parse(localStorage.getItem(hdrKey) || '{}'); } catch(e){ return {}; } }
 function composeAddress(a){ if (!a) return ''; if (typeof a === 'string') return a; if (a.fullAddress) return a.fullAddress; return [a.city, a.district, a.state].filter(Boolean).join(', '); }
 function saveHeader(){ try { localStorage.setItem(hdrKey, JSON.stringify({ name:getVal('sch-name'), addr:getVal('sch-addr'), phone:getVal('sch-phone'), email:getVal('sch-email'), logo:schoolLogoUrl || null })); } catch(e){} }
 function showLogo(url){ var img = document.getElementById('logo-prev'), ph = document.getElementById('logo-ph'); if (url){ img.src = url; img.style.display='block'; ph.style.display='none'; } else { img.style.display='none'; ph.style.display='flex'; } }
 function onLogoPick(e){ var file = e.target.files && e.target.files[0]; if (!file) return; if (file.size > 3*1024*1024){ return toast('Logo too large (max 3MB)','err'); } var reader = new FileReader(); reader.onload = function(){ schoolLogoUrl = reader.result; showLogo(reader.result); saveHeader(); toast('Logo saved', 'success'); }; reader.readAsDataURL(file); }
-function loadStudents(){
-  var sel = document.getElementById('class-sel'); var cid = sel.value; if (!cid){ return toast('Pick a class first','err'); }
-  var btn = document.getElementById('load-btn'); btn.disabled = true; btn.textContent = 'Loading…'; currentClassName = sel.options[sel.selectedIndex].text;
-  var url = API_ENDPOINTS.STUDENTS + '?limit=9999&_t=' + new Date().getTime(); if (cid !== 'all') url += '&classId=' + encodeURIComponent(cid);
-  apiGet(url, true).then(function(r){
-      students = (r && r.data) || [];
-      students.sort((a, b) => { var nA = (a.name || '').toLowerCase(), nB = (b.name || '').toLowerCase(); if (nA < nB) return -1; if (nA > nB) return 1; return 0; });
-      selected = {}; renderStudents(); document.getElementById('stu-panel').style.display = 'block';
-      if (!students.length) toast('No students found','err'); else toast(`Loaded ${students.length} students!`, 'success');
-  }).catch(() => toast('Failed to load students','err')).finally(() => { btn.disabled = false; btn.textContent = 'Load Students'; });
+
+function onGenerate(){ 
+    var list = selectedStudents(); 
+    if (!list.length) return toast('Select at least one student','err'); 
+    saveHeader(); 
+    var urls = []; 
+    if (schoolLogoUrl) urls.push(schoolLogoUrl); 
+    list.forEach(s => { if (s.photo) urls.push(s.photo); }); 
+    preloadImages(urls.filter((item, pos) => urls.indexOf(item) === pos), () => buildAndPrintAdmit(list)); 
 }
-function renderStudents(){
-  var grid = document.getElementById('stu-grid');
-  if (!students.length){ grid.innerHTML = '<div class="empty">No students to show.</div>'; updateCount(); return; }
-  grid.innerHTML = students.map(s => {
-    var photo = s.photo ? `<img class="stu-photo" loading="lazy" src="${escAttr(s.photo)}">` : `<div class="stu-photo-ph">👤</div>`;
-    return `<div class="stu-card" data-id="${escAttr(s._id)}" onclick="toggleStu(this)">${photo}<div class="stu-meta"><div class="stu-name">${escH(s.name||'—')}</div><div class="stu-sub">${escH(s.fatherName||'')}</div></div><div class="stu-chk">✓</div></div>`;
-  }).join(''); updateCount();
+
+function preloadImages(urls, done){ 
+    if (!urls.length) return done(); 
+    var total = urls.length, loaded = 0, index = 0; 
+    function loadNext() { 
+        if (index >= total) return; 
+        var u = urls[index++]; 
+        var img = new Image(); 
+        img.onload = img.onerror = function() { 
+            loaded++; 
+            if (loaded >= total) done(); else loadNext(); 
+        }; 
+        img.src = u; 
+    } 
+    for (var i = 0; i < Math.min(15, total); i++) loadNext(); 
 }
-function toggleStu(el){ var id = el.getAttribute('data-id'); if (selected[id]){ delete selected[id]; el.classList.remove('on'); } else { selected[id]=true; el.classList.add('on'); } updateCount(); }
-function selectAll(on){ document.querySelectorAll('.stu-card').forEach(el => { var id = el.getAttribute('data-id'); if (on){ selected[id]=true; el.classList.add('on'); } else { delete selected[id]; el.classList.remove('on'); } }); updateCount(); }
-function updateCount(){ var n = Object.keys(selected).length; document.getElementById('sel-count').textContent = n + ' selected'; document.getElementById('gen-btn').disabled = n === 0; }
-function selectedStudents(){ return students.filter(s => selected[s._id]); }
-function onGenerate(){ var list = selectedStudents(); if (!list.length) return toast('Select at least one student','err'); saveHeader(); var urls = []; if (schoolLogoUrl) urls.push(schoolLogoUrl); list.forEach(s => { if (s.photo) urls.push(s.photo); }); preloadImages(urls.filter((item, pos) => urls.indexOf(item) === pos), () => buildAndPrint(list)); }
-function preloadImages(urls, done){ if (!urls.length) return done(); var total = urls.length, loaded = 0, index = 0; function loadNext() { if (index >= total) return; var u = urls[index++]; var img = new Image(); img.onload = img.onerror = function() { loaded++; if (loaded >= total) done(); else loadNext(); }; img.src = u; } for (var i = 0; i < Math.min(15, total); i++) loadNext(); }
-function buildAndPrint(list){
+
+function buildAndPrintAdmit(list){
   var hdr = { name: getVal('sch-name'), addr: getVal('sch-addr'), phone: getVal('sch-phone'), email: getVal('sch-email'), logo: schoolLogoUrl };
   var cards = list.map(s => {
     var photo = s.photo ? `<img class="ac-photo" src="${escAttr(s.photo)}">` : `<div class="ac-photo ac-photo-ph">Photo</div>`;
     var logo = hdr.logo ? `<img class="ac-logo" src="${escAttr(hdr.logo)}">` : '';
-    return `<div class="ac"><div class="ac-head">${logo}<div class="ac-school"><div class="ac-name">${escH(hdr.name)}</div><div class="ac-addr">${escH(hdr.addr)}</div></div></div><div class="ac-title">Examination Admit Card</div><div class="ac-body"><div class="ac-fields"><div class="ac-row"><span class="ac-lbl">Name :-</span><span class="ac-val">${escH(s.name)}</span></div><div class="ac-row"><span class="ac-lbl">Father Name :-</span><span class="ac-val">${escH(s.fatherName)}</span></div><div class="ac-row"><span class="ac-lbl">Class :-</span><span class="ac-val">${escH(s.classId?.className || '')}</span></div><div class="ac-row"><span class="ac-lbl">Roll No. :-</span><span class="ac-val">${escH(s.rollNo)}</span></div></div><div class="ac-photo-wrap">${photo}</div></div><div class="ac-foot"><div class="ac-date">Date: ______________</div><div class="ac-sig">Signature / Principal</div></div></div>`;
+    return `<div class="ac">
+                <div class="ac-head">${logo}<div class="ac-school"><div class="ac-name">${escH(hdr.name)}</div><div class="ac-addr">${escH(hdr.addr)}</div></div></div>
+                <div class="ac-title">Examination Admit Card</div>
+                <div class="ac-body">
+                    <div class="ac-fields">
+                        <div class="ac-row"><span class="ac-lbl">Name :-</span><span class="ac-val">${escH(s.name)}</span></div>
+                        <div class="ac-row"><span class="ac-lbl">Father Name :-</span><span class="ac-val">${escH(s.fatherName)}</span></div>
+                        <div class="ac-row"><span class="ac-lbl">Class :-</span><span class="ac-val">${escH(s.classId?.className || '')}</span></div>
+                        <div class="ac-row"><span class="ac-lbl">Roll No. :-</span><span class="ac-val">${escH(s.rollNo)}</span></div>
+                    </div>
+                    <div class="ac-photo-wrap">${photo}</div>
+                </div>
+                <div class="ac-foot"><div class="ac-date">Date: ______________</div><div class="ac-sig">Signature / Principal</div></div>
+            </div>`;
   }).join('');
-  var old = document.getElementById('admit-print-frame'); if (old && old.parentNode) old.parentNode.removeChild(old);
-  var iframe = document.createElement('iframe'); iframe.id = 'admit-print-frame'; iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; document.body.appendChild(iframe);
-  var doc = iframe.contentWindow.document; doc.open(); doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:A4;margin:0;} *{box-sizing:border-box;margin:0;padding:0;} body{font-family:Georgia,serif;color:#111;} .ac{width:210mm;height:148.5mm;padding:11mm 12mm 9mm;position:relative;border-bottom:1px dashed #999;} .ac:nth-child(even){border-bottom:none;} .ac-head{display:flex;align-items:center;gap:12px;} .ac-logo{width:58px;height:58px;object-fit:contain;} .ac-school{flex:1;} .ac-name{font-size:20px;font-weight:700;} .ac-addr{font-size:11px;color:#333;margin-top:2px;} .ac-title{text-align:center;font-size:15px;font-weight:700;text-decoration:underline;margin:9mm 0 7mm;} .ac-body{display:flex;gap:14px;} .ac-fields{flex:1;} .ac-row{display:flex;align-items:flex-end;margin-bottom:6.5mm;font-size:13.5px;} .ac-lbl{font-weight:700;margin-right:8px;} .ac-val{border-bottom:1px solid #333;flex:1;min-width:120px;} .ac-photo-wrap{width:35mm;display:flex;justify-content:flex-end;} .ac-photo{width:33mm;height:40mm;object-fit:cover;border:1px solid #333;} .ac-photo-ph{display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;} .ac-foot{position:absolute;left:12mm;right:12mm;bottom:9mm;display:flex;justify-content:space-between;align-items:flex-end;} .ac-date{font-size:14px;font-weight:700;} .ac-sig{width:160px;border-top:1px solid #111;padding-top:5px;font-size:14px;font-weight:700;text-align:center;}</style></head><body>'+cards+'</body></html>'); doc.close();
+  
+  var old = document.getElementById('admit-print-frame'); 
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  
+  var iframe = document.createElement('iframe'); 
+  iframe.id = 'admit-print-frame'; 
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; 
+  document.body.appendChild(iframe);
+  
+  var doc = iframe.contentWindow.document; 
+  doc.open(); 
+  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:A4;margin:0;} *{box-sizing:border-box;margin:0;padding:0;} body{font-family:Georgia,serif;color:#111;} .ac{width:210mm;height:148.5mm;padding:11mm 12mm 9mm;position:relative;border-bottom:1px dashed #999;} .ac:nth-child(even){border-bottom:none;} .ac-head{display:flex;align-items:center;gap:12px;} .ac-logo{width:58px;height:58px;object-fit:contain;} .ac-school{flex:1;} .ac-name{font-size:20px;font-weight:700;} .ac-addr{font-size:11px;color:#333;margin-top:2px;} .ac-title{text-align:center;font-size:15px;font-weight:700;text-decoration:underline;margin:9mm 0 7mm;} .ac-body{display:flex;gap:14px;} .ac-fields{flex:1;} .ac-row{display:flex;align-items:flex-end;margin-bottom:6.5mm;font-size:13.5px;} .ac-lbl{font-weight:700;margin-right:8px;} .ac-val{border-bottom:1px solid #333;flex:1;min-width:120px;} .ac-photo-wrap{width:35mm;display:flex;justify-content:flex-end;} .ac-photo{width:33mm;height:40mm;object-fit:cover;border:1px solid #333;} .ac-photo-ph{display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;} .ac-foot{position:absolute;left:12mm;right:12mm;bottom:9mm;display:flex;justify-content:space-between;align-items:flex-end;} .ac-date{font-size:14px;font-weight:700;} .ac-sig{width:160px;border-top:1px solid #111;padding-top:5px;font-size:14px;font-weight:700;text-align:center;}</style></head><body>'+cards+'</body></html>'); 
+  doc.close();
+  
   setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 1500);
 }
 
+
 /* =========================================================================
-   TAB 2: EXAM SETUP (WITH BULK COPY ALL FEATURE)
+   EXAM SETUP LOGIC
    ========================================================================= */
 function addSetupColumn(name = '', max = '') {
-  const container = document.getElementById('s-cols-container'); const div = document.createElement('div'); div.className = 'grid2 setup-col-row'; div.style.marginBottom = '10px';
+  const container = document.getElementById('s-cols-container'); 
+  const div = document.createElement('div'); 
+  div.className = 'grid2 setup-col-row'; 
+  div.style.marginBottom = '10px';
   div.innerHTML = `<input type="text" class="c-name" placeholder="Assessment Name (e.g., PT1)" value="${escAttr(name)}">
-    <div style="display:flex; gap:10px;"><input type="number" class="c-max" placeholder="Max Marks" style="width:60%" value="${max}"><button class="btn-ghost" style="width:40%; padding:0; color:var(--danger); border-color:rgba(239,68,68,0.5);" onclick="this.parentElement.parentElement.remove();">✕</button></div>`;
+    <div style="display:flex; gap:10px;">
+        <input type="number" class="c-max" placeholder="Max Marks" style="width:60%" value="${max}">
+        <button class="btn-ghost" style="width:40%; padding:0; color:var(--danger); border-color:rgba(239,68,68,0.5);" onclick="this.parentElement.parentElement.remove();">✕</button>
+    </div>`;
   container.appendChild(div);
 }
 
@@ -236,19 +517,39 @@ function applyCopySetup() {
 function saveExamSetup() {
   const classId = getVal('s-class-sel'), termName = getVal('s-term-name');
   if (!classId || !termName) return toast('Class and Term Name are required', 'err');
-  const rows = document.querySelectorAll('.setup-col-row'); const assessments = [];
-  rows.forEach(r => { const name = r.querySelector('.c-name').value.trim(); const max = Number(r.querySelector('.c-max').value); if (name && max > 0) assessments.push({ name, maxMarks: max }); });
+  
+  const rows = document.querySelectorAll('.setup-col-row'); 
+  const assessments = [];
+  rows.forEach(r => { 
+      const name = r.querySelector('.c-name').value.trim(); 
+      const max = Number(r.querySelector('.c-max').value); 
+      if (name && max > 0) assessments.push({ name, maxMarks: max }); 
+  });
+  
   if (!assessments.length) return toast('Add at least one valid assessment column with Max Marks', 'err');
-  const btn = document.getElementById('btn-save-setup'); btn.disabled = true; btn.textContent = 'Saving...';
+  
+  const btn = document.getElementById('btn-save-setup'); 
+  btn.disabled = true; 
+  btn.textContent = 'Saving...';
+  
   if (currentEditSetupId) {
-    apiPut(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${currentEditSetupId}`, { termName, assessments }, true).then(res => { toast('Updated successfully!', 'success'); resetSetupForm(); loadExistingSetups(); }).catch(e => toast(e.message || 'Failed to update', 'err')).finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
+    apiPut(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${currentEditSetupId}`, { termName, assessments }, true)
+    .then(res => { toast('Updated successfully!', 'success'); resetSetupForm(); loadExistingSetups(); })
+    .catch(e => toast(e.message || 'Failed to update', 'err'))
+    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
   } else {
-    apiPost(API_ENDPOINTS.EXAM_SETUP, { session: window.currentSession, classId, termName, assessments }, true).then(res => { toast('Created successfully!', 'success'); resetSetupForm(); loadExistingSetups(); }).catch(e => toast(e.message || 'Failed to create', 'err')).finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
+    apiPost(API_ENDPOINTS.EXAM_SETUP, { session: window.currentSession, classId, termName, assessments }, true)
+    .then(res => { toast('Created successfully!', 'success'); resetSetupForm(); loadExistingSetups(); })
+    .catch(e => toast(e.message || 'Failed to create', 'err'))
+    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
   }
 }
 
 function resetSetupForm() {
-  currentEditSetupId = null; setVal('s-term-name', ''); document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>'; document.getElementById('btn-save-setup').textContent = '💾 Save Structure';
+  currentEditSetupId = null; 
+  setVal('s-term-name', ''); 
+  document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>'; 
+  document.getElementById('btn-save-setup').textContent = '💾 Save Structure';
 }
 
 function loadExistingSetups() {
@@ -264,7 +565,16 @@ function loadExistingSetups() {
       list.innerHTML = '<div style="color:var(--muted); padding:10px 0;">No structures created yet.</div>';
     } else {
       list.innerHTML = globalSetups.map(s => {
-        return `<div style="padding:14px; background:rgba(255,255,255,0.02); margin-bottom:12px; border-radius:8px; border:1px solid var(--rim); display:flex; justify-content:space-between; align-items:center;"><div><strong style="color:var(--gold); font-size:15px;">${escH(s.termName)}</strong><br><span style="color:var(--silver); font-size:13px; margin-top:4px; display:block;">${s.assessments.map(a => `${escH(a.name)} (${a.maxMarks})`).join(' &nbsp;|&nbsp; ')}</span></div><div style="display:flex; gap:10px;"><button class="btn-ghost" style="padding:6px 12px; font-size:12px; border-color:var(--gold); color:var(--gold);" onclick="editSetup('${s._id}')">Edit</button><button class="btn-ghost" style="padding:6px 12px; font-size:12px; border-color:rgba(239,68,68,0.5); color:var(--danger);" onclick="deleteSetup('${s._id}')">Delete</button></div></div>`;
+        return `<div style="padding:14px; background:rgba(255,255,255,0.02); margin-bottom:12px; border-radius:8px; border:1px solid var(--rim); display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                      <strong style="color:var(--gold); font-size:15px;">${escH(s.termName)}</strong><br>
+                      <span style="color:var(--silver); font-size:13px; margin-top:4px; display:block;">${s.assessments.map(a => `${escH(a.name)} (${a.maxMarks})`).join(' &nbsp;|&nbsp; ')}</span>
+                  </div>
+                  <div style="display:flex; gap:10px;">
+                      <button class="btn-ghost" style="padding:6px 12px; font-size:12px; border-color:var(--gold); color:var(--gold);" onclick="editSetup('${s._id}')">Edit</button>
+                      <button class="btn-ghost" style="padding:6px 12px; font-size:12px; border-color:rgba(239,68,68,0.5); color:var(--danger);" onclick="deleteSetup('${s._id}')">Delete</button>
+                  </div>
+                </div>`;
       }).join('');
     }
     document.getElementById('existing-setups-card').style.display = 'block';
@@ -272,29 +582,37 @@ function loadExistingSetups() {
 }
 
 function editSetup(id) {
-  const setup = globalSetups.find(s => s._id === id); if(!setup) return; currentEditSetupId = id; setVal('s-term-name', setup.termName);
+  const setup = globalSetups.find(s => s._id === id); 
+  if(!setup) return; 
+  currentEditSetupId = id; 
+  setVal('s-term-name', setup.termName);
   document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>';
-  setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks)); document.getElementById('btn-save-setup').textContent = '💾 Update Structure'; window.scrollTo({ top: 0, behavior: 'smooth' });
+  setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks)); 
+  document.getElementById('btn-save-setup').textContent = '💾 Update Structure'; 
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function deleteSetup(id) {
   if(!confirm('🚨 WARNING: Are you sure? This will delete the structure and ALL marks entered under it. This cannot be undone.')) return;
-  apiDelete(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${id}`, true).then(res => { toast('Deleted successfully', 'success'); resetSetupForm(); loadExistingSetups(); }).catch(e => toast(e.message || 'Failed to delete', 'err'));
+  apiDelete(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${id}`, true)
+    .then(res => { toast('Deleted successfully', 'success'); resetSetupForm(); loadExistingSetups(); })
+    .catch(e => toast(e.message || 'Failed to delete', 'err'));
 }
 
 /* =========================================================================
-   TAB 3: MARKS UPLOAD, EXCEL & CLOUD SYNC
+   MARKS UPLOAD & CLOUD SYNC LOGIC
    ========================================================================= */
-
 function onMarksClassChange() {
   populateSetupsDropdown('m-class-sel', 'm-setup-sel');
   loadClassSubjectsForEntry();
 }
 
 function populateSetupsDropdown(classSelId, setupSelId) {
-  const classId = getVal(classSelId); const sel = document.getElementById(setupSelId);
+  const classId = getVal(classSelId); 
+  const sel = document.getElementById(setupSelId);
   if(!classId) { if(sel) sel.innerHTML = '<option value="">Select Class First...</option>'; return; }
   if(sel) sel.innerHTML = '<option value="">Loading...</option>';
+  
   apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => {
     let html = '<option value="">Select Exam Term...</option>';
     (res.data || []).forEach(s => { html += `<option value="${s._id}">${escH(s.termName)}</option>`; });
@@ -303,62 +621,113 @@ function populateSetupsDropdown(classSelId, setupSelId) {
 }
 
 function loadClassSubjectsForEntry() {
-  const classId = getVal('m-class-sel'); const sel = document.getElementById('m-subject-sel');
+  const classId = getVal('m-class-sel'); 
+  const sel = document.getElementById('m-subject-sel');
   if(!classId) { if(sel) sel.innerHTML = '<option value="">Select Class First...</option>'; return; }
   if(sel) sel.innerHTML = '<option value="">Loading...</option>';
+  
   const apiUrl = API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`;
   apiGet(apiUrl, true).then(res => {
     const subjects = res.data || [];
-    if (!subjects.length) { if(sel) sel.innerHTML = '<option value="">No subjects mapped to this class</option>'; } 
-    else { let html = '<option value="">Select Subject...</option>'; subjects.forEach(s => { html += `<option value="${s._id}">${escH(s.subjectName)}</option>`; }); if(sel) sel.innerHTML = html; }
+    if (!subjects.length) { 
+        if(sel) sel.innerHTML = '<option value="">No subjects mapped to this class</option>'; 
+    } else { 
+        let html = '<option value="">Select Subject...</option>'; 
+        subjects.forEach(s => { html += `<option value="${s._id}">${escH(s.subjectName)}</option>`; }); 
+        if(sel) sel.innerHTML = html; 
+    }
   }).catch(e => { if(sel) sel.innerHTML = '<option value="">Error loading subjects</option>'; });
 }
 
 function loadMarksGrid() {
   const classId = getVal('m-class-sel'), subjectId = getVal('m-subject-sel'), examSetupId = getVal('m-setup-sel');
   if (!classId || !subjectId || !examSetupId) return toast('Select Class, Subject, and Term', 'err');
-  const btn = document.getElementById('btn-load-grid'); const originalText = btn?.textContent || 'Load Grid';
+  
+  const btn = document.getElementById('btn-load-grid'); 
+  const originalText = btn?.textContent || 'Load Grid';
   if(btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+  
   apiGet(`${API_ENDPOINTS.MARKS_GRID}?session=${window.currentSession}&classId=${classId}&subjectId=${subjectId}&examSetupId=${examSetupId}`, true)
-  .then(res => { currentGridSetup = res.setup; renderDynamicGrid(res.data, res.setup); document.getElementById('marks-grid-panel').style.display = 'block'; })
-  .catch(e => toast(e.message || 'Failed to load grid', 'err')).finally(() => { if(btn) { btn.disabled = false; btn.textContent = originalText; } });
+  .then(res => { 
+      currentGridSetup = res.setup; 
+      renderDynamicGrid(res.data, res.setup); 
+      document.getElementById('marks-grid-panel').style.display = 'block'; 
+  })
+  .catch(e => toast(e.message || 'Failed to load grid', 'err'))
+  .finally(() => { if(btn) { btn.disabled = false; btn.textContent = originalText; } });
 }
 
 function renderDynamicGrid(students, setup) {
   const thead = document.getElementById('marks-thead'), tbody = document.getElementById('marks-tbody');
-  let totalMax = 0; let thHtml = '<tr><th style="width:15%;">Roll No</th><th style="width:40%;">Student Name</th>';
-  setup.assessments.forEach(a => { thHtml += `<th style="text-align:center;">${escH(a.name)}<br><small style="color:var(--silver);font-weight:400;">(Max: ${a.maxMarks})</small></th>`; totalMax += a.maxMarks; });
-  thHtml += '</tr>'; if(thead) thead.innerHTML = thHtml;
-  const maxLabel = document.getElementById('m-max-label'); if (maxLabel) maxLabel.textContent = `Total Max Marks: ${totalMax}`;
-  if (!students || !students.length) { if(tbody) tbody.innerHTML = `<tr><td colspan="${setup.assessments.length + 2}" class="empty" style="padding: 30px; text-align: center;">No students found in this class.</td></tr>`; return; }
+  let totalMax = 0; 
+  let thHtml = '<tr><th style="width:15%;">Roll No</th><th style="width:40%;">Student Name</th>';
+  
+  setup.assessments.forEach(a => { 
+      thHtml += `<th style="text-align:center;">${escH(a.name)}<br><small style="color:var(--silver);font-weight:400;">(Max: ${a.maxMarks})</small></th>`; 
+      totalMax += a.maxMarks; 
+  });
+  thHtml += '</tr>'; 
+  if(thead) thead.innerHTML = thHtml;
+  
+  const maxLabel = document.getElementById('m-max-label'); 
+  if (maxLabel) maxLabel.textContent = `Total Max Marks: ${totalMax}`;
+  
+  if (!students || !students.length) { 
+      if(tbody) tbody.innerHTML = `<tr><td colspan="${setup.assessments.length + 2}" class="empty" style="padding: 30px; text-align: center;">No students found in this class.</td></tr>`; 
+      return; 
+  }
+  
   if(tbody) tbody.innerHTML = students.map(s => {
-    let tr = `<tr class="m-row" data-sid="${s.studentId}"><td style="font-family:'IBM Plex Mono',monospace;">${escH(s.rollNo)}</td><td style="font-weight:600;">${escH(s.name)}</td>`;
+    let tr = `<tr class="m-row" data-sid="${s.studentId}">
+                <td style="font-family:'IBM Plex Mono',monospace;">${escH(s.rollNo)}</td>
+                <td style="font-weight:600;">${escH(s.name)}</td>`;
     setup.assessments.forEach(a => {
       const markData = s.marks[a.name] || { status: 'present', obtained: '' };
       const val = markData.status === 'present' ? (markData.obtained ?? '') : markData.status.toUpperCase();
-      tr += `<td style="text-align:center;"><input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${a.maxMarks}" value="${val}" placeholder="0-${a.maxMarks} / AB / M" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();"></td>`;
+      tr += `<td style="text-align:center;">
+                <input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${a.maxMarks}" value="${val}" placeholder="0-${a.maxMarks} / AB" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();">
+             </td>`;
     });
-    tr += '</tr>'; return tr;
+    tr += '</tr>'; 
+    return tr;
   }).join('');
+  
   document.querySelectorAll('.dyn-mark').forEach(el => validateMark(el));
 }
 
 function handleGridArrowKeys(e) {
     if (!e.target.classList.contains('dyn-mark')) return;
-    const td = e.target.closest('td'); const tr = e.target.closest('tr'); const tbody = tr.parentElement;
-    const colIndex = Array.from(tr.children).indexOf(td); const rowIndex = Array.from(tbody.children).indexOf(tr);
+    const td = e.target.closest('td'); 
+    const tr = e.target.closest('tr'); 
+    const tbody = tr.parentElement;
+    const colIndex = Array.from(tr.children).indexOf(td); 
+    const rowIndex = Array.from(tbody.children).indexOf(tr);
     let nextInput = null;
-    if (e.key === 'ArrowRight') { e.preventDefault(); if (tr.children[colIndex + 1]) nextInput = tr.children[colIndex + 1].querySelector('.dyn-mark'); } 
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); if (tr.children[colIndex - 1]) nextInput = tr.children[colIndex - 1].querySelector('.dyn-mark'); } 
-    else if (e.key === 'ArrowDown') { e.preventDefault(); if (tbody.children[rowIndex + 1]) nextInput = tbody.children[rowIndex + 1].children[colIndex].querySelector('.dyn-mark'); } 
-    else if (e.key === 'ArrowUp') { e.preventDefault(); if (tbody.children[rowIndex - 1]) nextInput = tbody.children[rowIndex - 1].children[colIndex].querySelector('.dyn-mark'); }
+    
+    if (e.key === 'ArrowRight') { 
+        e.preventDefault(); 
+        if (tr.children[colIndex + 1]) nextInput = tr.children[colIndex + 1].querySelector('.dyn-mark'); 
+    } else if (e.key === 'ArrowLeft') { 
+        e.preventDefault(); 
+        if (tr.children[colIndex - 1]) nextInput = tr.children[colIndex - 1].querySelector('.dyn-mark'); 
+    } else if (e.key === 'ArrowDown') { 
+        e.preventDefault(); 
+        if (tbody.children[rowIndex + 1]) nextInput = tbody.children[rowIndex + 1].children[colIndex].querySelector('.dyn-mark'); 
+    } else if (e.key === 'ArrowUp') { 
+        e.preventDefault(); 
+        if (tbody.children[rowIndex - 1]) nextInput = tbody.children[rowIndex - 1].children[colIndex].querySelector('.dyn-mark'); 
+    }
+    
     if (nextInput) { nextInput.focus(); nextInput.select(); }
 }
 
 function validateMark(el) {
-  const val = el.value.trim().toUpperCase(), max = Number(el.getAttribute('data-max'));
+  const val = el.value.trim().toUpperCase();
+  const max = Number(el.getAttribute('data-max'));
   el.classList.remove('fail', 'err');
+  
   if (val === '' || val === 'AB' || val === 'ABSENT' || val === 'M' || val === 'MEDICAL') { return; }
+  
   const num = Number(val); 
   if (isNaN(num) || num < 0 || num > max) { el.classList.add('err'); } 
   else if (num < (max * 0.33)) { el.classList.add('fail'); }
@@ -366,69 +735,94 @@ function validateMark(el) {
 
 let autoSaveTimeout = null;
 function triggerAutoSave() {
-    const status = document.getElementById('auto-save-text');
+    const status = document.getElementById('auto-save-text'); 
     if(status) { status.textContent = '⏳ Syncing...'; status.style.color = 'var(--gold)'; }
-    clearTimeout(autoSaveTimeout);
+    clearTimeout(autoSaveTimeout); 
     autoSaveTimeout = setTimeout(() => { silentSaveMarks(); }, 2500); 
 }
 
 function silentSaveMarks() {
     if (!currentGridSetup) return;
-    const rows = document.querySelectorAll('.m-row'); if (!rows.length) return;
+    const rows = document.querySelectorAll('.m-row'); 
+    if (!rows.length) return; 
     let hasFatalError = false;
+    
     const marksData = Array.from(rows).map(r => {
-      const studentId = r.getAttribute('data-sid'); const marksObj = {};
+      const studentId = r.getAttribute('data-sid'); 
+      const marksObj = {};
       r.querySelectorAll('.dyn-mark').forEach(inp => {
         if (inp.classList.contains('err')) hasFatalError = true;
         const name = inp.getAttribute('data-name'), val = inp.value.trim().toUpperCase();
         if (val === 'AB' || val === 'ABSENT') marksObj[name] = { status: 'absent', obtained: null };
         else if (val === 'M' || val === 'MEDICAL') marksObj[name] = { status: 'medical', obtained: null };
         else { const numVal = val === '' ? null : Number(val); marksObj[name] = { status: 'present', obtained: numVal }; }
-      }); return { studentId, marks: marksObj };
+      }); 
+      return { studentId, marks: marksObj };
     });
-    if (hasFatalError) {
-        const status = document.getElementById('auto-save-text');
-        if(status) { status.textContent = '⚠️ Fix red boxes to sync'; status.style.color = 'var(--danger)'; }
-        return;
+    
+    if (hasFatalError) { 
+        const status = document.getElementById('auto-save-text'); 
+        if(status) { status.textContent = '⚠️ Fix red boxes to sync'; status.style.color = 'var(--danger)'; } 
+        return; 
     }
+    
     apiPost(API_ENDPOINTS.MARKS_BULK, { session: window.currentSession, classId: getVal('m-class-sel'), subjectId: getVal('m-subject-sel'), examSetupId: getVal('m-setup-sel'), marksData }, true)
       .then(() => { const status = document.getElementById('auto-save-text'); if(status) { status.textContent = '☁️ Cloud Sync Active'; status.style.color = 'var(--silver)'; } })
       .catch(() => { const status = document.getElementById('auto-save-text'); if(status) { status.textContent = '⚠️ Sync failed'; status.style.color = 'var(--danger)'; } });
 }
 
 function saveMarksGrid() {
-  const btn = document.getElementById('btn-save-marks'); const originalText = btn.textContent; 
-  btn.disabled = true; btn.textContent = 'Saving...';
-  silentSaveMarks();
-  setTimeout(() => { toast('Marks saved to cloud manually', 'success'); btn.disabled = false; btn.textContent = originalText; }, 800);
+  const btn = document.getElementById('btn-save-marks'); 
+  const originalText = btn.textContent; 
+  btn.disabled = true; 
+  btn.textContent = 'Saving...';
+  silentSaveMarks(); 
+  setTimeout(() => { toast('Marks saved to cloud', 'success'); btn.disabled = false; btn.textContent = originalText; }, 800);
 }
 
 function showAnalytics() {
     if (!currentGridSetup) return toast('Load a grid first', 'err');
-    const rows = document.querySelectorAll('.m-row'); if (!rows.length) return toast('No students to analyze', 'err');
-    let totalMax = currentGridSetup.assessments.reduce((sum, a) => sum + a.maxMarks, 0);
+    const rows = document.querySelectorAll('.m-row'); 
+    if (!rows.length) return toast('No students to analyze', 'err');
+    
+    let totalMax = currentGridSetup.assessments.reduce((sum, a) => sum + a.maxMarks, 0); 
     if (totalMax === 0) return toast('Max marks is 0', 'err');
+    
     let studentsData = []; let classTotalObtained = 0; let validStudentCount = 0;
+    
     rows.forEach(r => {
-        const name = r.cells[1].textContent; let stuTotal = 0; let hasValidMark = false;
+        const name = r.cells[1].textContent; 
+        let stuTotal = 0; 
+        let hasValidMark = false;
         r.querySelectorAll('.dyn-mark').forEach(inp => {
             const val = inp.value.trim().toUpperCase();
             if (val !== '' && val !== 'AB' && val !== 'ABSENT' && val !== 'M' && val !== 'MEDICAL') {
-                const num = Number(val); if (!isNaN(num) && num >= 0) { stuTotal += num; hasValidMark = true; }
+                const num = Number(val); 
+                if (!isNaN(num) && num >= 0) { stuTotal += num; hasValidMark = true; }
             }
         });
-        if (hasValidMark) { let perc = (stuTotal / totalMax) * 100; studentsData.push({ name, total: stuTotal, perc: perc }); classTotalObtained += stuTotal; validStudentCount++; }
+        if (hasValidMark) { 
+            let perc = (stuTotal / totalMax) * 100; 
+            studentsData.push({ name, total: stuTotal, perc: perc }); 
+            classTotalObtained += stuTotal; 
+            validStudentCount++; 
+        }
     });
+    
     if (studentsData.length === 0) return toast('No valid marks entered yet', 'err');
+    
     studentsData.sort((a, b) => b.total - a.total);
     const top3 = studentsData.slice(0, 3);
     let top3Html = top3.map((s, i) => {
-        let rankClass = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : 'rank-3'); let medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : '🥉');
+        let rankClass = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : 'rank-3'); 
+        let medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : '🥉');
         return `<div class="rank-row"><span class="${rankClass}">${medal} ${escH(s.name)}</span><span style="color:var(--silver); font-size:13px;">${s.total} / ${totalMax} (${s.perc.toFixed(1)}%)</span></div>`;
     }).join('');
+    
     let classAveragePerc = ((classTotalObtained / (validStudentCount * totalMax)) * 100).toFixed(1);
     let failingStudents = studentsData.filter(s => s.perc < 33);
     let failHtml = failingStudents.length > 0 ? failingStudents.map(s => `<div class="rank-row" style="color:var(--danger); border-color:rgba(239,68,68,0.2);"><span>⚠️ ${escH(s.name)}</span><span>${s.perc.toFixed(1)}%</span></div>`).join('') : `<div style="color:var(--success); font-size:14px; text-align:center; padding: 20px 0;">🎉 All students are passing!</div>`;
+    
     document.getElementById('analytics-body').innerHTML = `
         <div class="stat-card"><h4>🏆 Top 3 Rankers</h4>${top3Html || '<div style="font-size:13px; color:var(--silver);">Not enough data</div>'}</div>
         <div class="grid2">
@@ -437,579 +831,537 @@ function showAnalytics() {
         </div>`;
     document.getElementById('analytics-modal').style.display = 'flex';
 }
+
 function closeAnalytics() { document.getElementById('analytics-modal').style.display = 'none'; }
 
 function downloadExcelTemplate() {
   if (!currentGridSetup) return toast('Load the grid first to generate template', 'err');
-  const rows = document.querySelectorAll('.m-row'); if(!rows.length) return toast('No students to download.', 'err');
+  const rows = document.querySelectorAll('.m-row'); 
+  if(!rows.length) return toast('No students to download.', 'err');
+  
   const data = Array.from(rows).map(r => {
     const obj = { "Student ID (DO NOT EDIT)": r.getAttribute('data-sid'), "Roll No": r.cells[0].textContent, "Student Name": r.cells[1].textContent };
     r.querySelectorAll('.dyn-mark').forEach(inp => { obj[`${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`] = inp.value; }); return obj;
   });
-  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Marks Entry");
+  
+  const ws = XLSX.utils.json_to_sheet(data); 
+  const wb = XLSX.utils.book_new(); 
+  XLSX.utils.book_append_sheet(wb, ws, "Marks Entry");
   const cSelect = document.getElementById('m-class-sel'), sSelect = document.getElementById('m-subject-sel');
   XLSX.writeFile(wb, `${cSelect.options[cSelect.selectedIndex].text}_${sSelect.options[sSelect.selectedIndex].text}_${currentGridSetup.termName}.xlsx`);
 }
 
 function handleExcelUpload(event) {
   if (!currentGridSetup) { event.target.value = ""; return toast('Load the grid first.', 'err'); }
-  const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
+  const file = event.target.files[0]; 
+  if (!file) return; 
+  const reader = new FileReader();
+  
   reader.onload = function(e) {
     try {
-      const data = new Uint8Array(e.target.result), wb = XLSX.read(data, {type: 'array'});
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type: 'array'}); 
       const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       let matchCount = 0;
       json.forEach(row => {
-        const sid = row["Student ID (DO NOT EDIT)"]; if (!sid) return;
+        const sid = row["Student ID (DO NOT EDIT)"]; 
+        if (!sid) return;
         const tr = document.querySelector(`.m-row[data-sid="${sid}"]`);
         if (tr) {
           tr.querySelectorAll('.dyn-mark').forEach(inp => {
             const key = `${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`;
             if (row[key] !== undefined) { inp.value = row[key]; validateMark(inp); }
-          }); matchCount++;
+          }); 
+          matchCount++;
         }
       }); 
-      toast(`Mapped ${matchCount} students from Excel.`, 'success');
+      toast(`Mapped ${matchCount} students from Excel.`, 'success'); 
       triggerAutoSave(); 
     } catch(err) { toast('Error reading Excel file.', 'err'); }
     event.target.value = "";
-  }; reader.readAsArrayBuffer(file);
+  }; 
+  reader.readAsArrayBuffer(file);
 }
 
 /* =========================================================================
-   TABULATION REGISTER (NEW - Smart Multi-Term Support & Accurate Averages)
+   TABULATION REGISTER LOGIC
    ========================================================================= */
 
-function onTabuClassChange() {
-  const classId = getVal('tabu-class-sel');
-  const container = document.getElementById('tabu-terms-container');
-  
-  if (!classId) {
-    container.innerHTML = '<span style="color:var(--muted)">Select a class first.</span>';
-    return;
-  }
-  
-  container.innerHTML = '<span style="color:var(--muted)">Loading terms...</span>';
-
-  apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => {
-    const setups = res.data || [];
-    if (!setups.length) {
-      container.innerHTML = '<span style="color:var(--muted)">No terms found. Create Exam Setup first.</span>';
-    } else {
-      container.innerHTML = setups.map(s => `<label class="chk-label"><input type="checkbox" class="tabu-term-chk" value="${s._id}" checked> ${escH(s.termName)}</label>`).join('');
-    }
-  });
+function onTabuClassChange() { 
+    const classId = getVal('tabu-class-sel'); 
+    const container = document.getElementById('tabu-terms-container'); 
+    if (!classId) return; 
+    
+    apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => { 
+        const setups = res.data || []; 
+        container.innerHTML = setups.map(s => `<label class="chk-label"><input type="checkbox" class="tabu-term-chk" value="${s._id}" checked> ${escH(s.termName)}</label>`).join(''); 
+    }); 
 }
 
 var currentTabuData = null; 
 var currentTabuSubjs = [];
 
-function loadTabulation() {
-  const classId = getVal('tabu-class-sel');
-  const termChks = document.querySelectorAll('.tabu-term-chk:checked');
-  if (!classId) return toast('Select Class', 'err');
-  if (termChks.length === 0) return toast('Select at least one Term', 'err');
-  
-  const selectedTermIds = Array.from(termChks).map(c => c.value);
-  const btn = document.getElementById('btn-load-tabu');
-  btn.disabled = true; btn.textContent = 'Loading...';
-
-  const subjUrl = API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`;
-
-  Promise.all([
-    apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${classId}`, true),
-    apiGet(subjUrl, true)
-  ]).then(results => {
-    const res = results[0];
-    const subjRes = results[1];
+function loadTabulation() { 
+    const classId = getVal('tabu-class-sel'); 
+    const termChks = document.querySelectorAll('.tabu-term-chk:checked'); 
+    if (!classId || termChks.length===0) return; 
     
-    const activeSubjectNames = (subjRes.data || []).map(s => s.subjectName);
-
-    const setups = res.setups.filter(s => selectedTermIds.includes(s._id));
-    if (!setups.length) return toast('Setup not found', 'err');
-    
-    const termMax = setups.reduce((sum, setup) => sum + setup.assessments.reduce((s, a) => s + a.maxMarks, 0), 0);
-    const studentsData = res.data || [];
-    
-    let subjectsSet = new Set();
-    studentsData.forEach(item => {
-       Object.keys(item.subjects).forEach(sub => {
-           if (activeSubjectNames.includes(sub)) {
-               subjectsSet.add(sub);
-           }
-       });
-    });
-    const subjects = Array.from(subjectsSet).sort();
-    currentTabuSubjs = subjects;
-    
-    let processed = studentsData.map(item => {
-       const stu = item.student;
-       let grandTotal = 0;
-       let subTotals = {};
-       let failCount = 0;
-       let anyMissing = false; 
-
-       subjects.forEach(sub => {
-          let sTotal = 0;
-          let termVals = {};
-          let hasAnyMarks = false;
-
-          setups.forEach(setup => {
-              const termData = item.subjects[sub]?.[setup._id];
-              let tTotal = 0;
-              let tHasMarks = false;
-
-              if (termData) {
-                  setup.assessments.forEach(a => {
-                      const m = termData[a.name];
-                      if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') {
-                          tTotal += Number(m.obtained);
-                          tHasMarks = true;
-                          hasAnyMarks = true;
-                      }
-                  });
-              }
-              
-              termVals[setup._id] = tHasMarks ? tTotal : 'AB';
-              sTotal += tTotal;
-          });
-          
-          if (sTotal < (termMax * 0.33)) failCount++;
-          if (!hasAnyMarks) anyMissing = true;
-          
-          subTotals[sub] = { 
-              terms: termVals, 
-              val: hasAnyMarks ? sTotal : 'AB', 
-              missing: !hasAnyMarks, 
-              fail: (hasAnyMarks && sTotal < (termMax * 0.33)) 
-          };
-          
-          grandTotal += sTotal;
-       });
-       
-       const maxPossible = termMax * subjects.length;
-       const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0;
-       
-       return {
-           id: stu._id, rollNo: stu.rollNo, name: stu.name, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing
-       };
-    });
-    
-    processed.sort((a, b) => b.grandTotal - a.grandTotal);
-    let currentRank = 1;
-    processed.forEach((p, i) => {
-        if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1;
-        p.rank = currentRank; 
-    });
-    
-    processed.sort((a, b) => {
-       const ra = parseInt(a.rollNo) || 9999; const rb = parseInt(b.rollNo) || 9999;
-       if (ra !== rb) return ra - rb;
-       return a.name.localeCompare(b.name);
-    });
-    
-    currentTabuData = { setups, students: processed, termMax, selectedTermNames: setups.map(s => s.termName).join(' + ') };
-    renderTabulationGrid();
-    
-  }).catch(e => toast(e.message || 'Failed to load tabulation', 'err'))
-    .finally(() => { btn.disabled = false; btn.textContent = 'Load Tabulation'; });
+    const selectedTermIds = Array.from(termChks).map(c => c.value); 
+    Promise.all([ 
+        apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${classId}`, true), 
+        apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`, true) 
+    ]).then(results => { 
+        const res = results[0]; 
+        const activeSubjectNames = (results[1].data || []).map(s => s.subjectName); 
+        const setups = res.setups.filter(s => selectedTermIds.includes(s._id)); 
+        const termMax = setups.reduce((sum, setup) => sum + setup.assessments.reduce((s, a) => s + a.maxMarks, 0), 0); 
+        const studentsData = res.data || []; 
+        
+        let subjectsSet = new Set(); 
+        studentsData.forEach(item => { 
+            Object.keys(item.subjects).forEach(sub => { 
+                if (activeSubjectNames.includes(sub)) subjectsSet.add(sub); 
+            }); 
+        }); 
+        
+        const subjects = Array.from(subjectsSet).sort(); 
+        currentTabuSubjs = subjects; 
+        
+        let processed = studentsData.map(item => { 
+            const stu = item.student; 
+            let grandTotal = 0; 
+            let subTotals = {}; 
+            let failCount = 0; 
+            let anyMissing = false; 
+            
+            subjects.forEach(sub => { 
+                let sTotal = 0; 
+                let termVals = {}; 
+                let hasAnyMarks = false; 
+                
+                setups.forEach(setup => { 
+                    const termData = item.subjects[sub]?.[setup._id]; 
+                    let tTotal = 0; 
+                    let tHasMarks = false; 
+                    if (termData) { 
+                        setup.assessments.forEach(a => { 
+                            const m = termData[a.name]; 
+                            if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') { 
+                                tTotal += Number(m.obtained); tHasMarks = true; hasAnyMarks = true; 
+                            } 
+                        }); 
+                    } 
+                    termVals[setup._id] = tHasMarks ? tTotal : 'AB'; 
+                    sTotal += tTotal; 
+                }); 
+                
+                if (sTotal < (termMax * 0.33)) failCount++; 
+                if (!hasAnyMarks) anyMissing = true; 
+                subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (termMax * 0.33)) }; 
+                grandTotal += sTotal; 
+            }); 
+            
+            const maxPossible = termMax * subjects.length; 
+            const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0; 
+            return { id: stu._id, rollNo: stu.rollNo, name: stu.name, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing }; 
+        }); 
+        
+        processed.sort((a, b) => b.grandTotal - a.grandTotal); 
+        let currentRank = 1; 
+        processed.forEach((p, i) => { 
+            if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1; 
+            p.rank = currentRank; 
+        }); 
+        
+        processed.sort((a, b) => { 
+            const ra = parseInt(a.rollNo) || 9999; 
+            const rb = parseInt(b.rollNo) || 9999; 
+            if (ra !== rb) return ra - rb; 
+            return a.name.localeCompare(b.name); 
+        }); 
+        
+        currentTabuData = { setups, students: processed, termMax, selectedTermNames: setups.map(s => s.termName).join(' + ') }; 
+        renderTabulationGrid(); 
+    }); 
 }
 
-function renderTabulationGrid() {
-   const panel = document.getElementById('tabu-grid-panel');
-   const { setups, students, termMax } = currentTabuData;
-   
-   let html = `<table class="marks-table tabu-table"><thead>`;
-   
-   if (setups.length > 1) {
-       let ths1 = `<tr><th rowspan="2" style="width:50px; vertical-align:middle;">Roll</th><th rowspan="2" style="min-width:180px; text-align:left; vertical-align:middle;">Student Name</th>`;
-       let ths2 = `<tr>`;
-
-       currentTabuSubjs.forEach(sub => { 
-           ths1 += `<th colspan="${setups.length + 1}" style="color:var(--gold); border-bottom: 1px solid var(--rim);">${escH(sub)}</th>`; 
-           setups.forEach(setup => {
-               const tMax = setup.assessments.reduce((s, a) => s + a.maxMarks, 0);
-               ths2 += `<th>${escH(setup.termName.substring(0, 8))}..<br><small style="color:var(--silver);font-weight:400;">(${tMax})</small></th>`;
-           });
-           ths2 += `<th style="color:var(--gold);">Subj Total<br><small style="color:var(--silver);font-weight:400;">(${termMax})</small></th>`;
-       });
-
-       ths1 += `<th rowspan="2" style="vertical-align:middle; color:var(--gold);">Grand Total<br><small style="color:var(--silver);font-weight:400;">(${termMax * currentTabuSubjs.length})</small></th><th rowspan="2" style="vertical-align:middle; color:var(--gold);">%</th><th rowspan="2" style="vertical-align:middle; color:var(--gold);">Grade</th><th rowspan="2" style="vertical-align:middle; color:var(--gold);">Rank</th></tr>`;
-       ths2 += `</tr>`;
-       html += ths1 + ths2 + `</thead><tbody>`;
-   } else {
-       let ths = `<tr><th style="width:50px">Roll</th><th style="min-width:180px; text-align:left;">Student Name</th>`;
-       currentTabuSubjs.forEach(sub => { ths += `<th>${escH(sub)}<br><small style="color:var(--silver);font-weight:400;">(${termMax})</small></th>`; });
-       ths += `<th style="color:var(--gold);">Grand Total<br><small style="color:var(--silver);font-weight:400;">(${termMax * currentTabuSubjs.length})</small></th><th style="color:var(--gold);">%</th><th style="color:var(--gold);">Grade</th><th style="color:var(--gold);">Rank</th></tr>`;
-       html += ths + `</thead><tbody>`;
-   }
-   
-   let subjSums = {}; let subjCounts = {};
-   currentTabuSubjs.forEach(s => { subjSums[s] = 0; subjCounts[s] = 0; });
-   let totalClassPerc = 0; let totalRankedStus = 0;
-
-   if (!students.length) {
-       const cols = setups.length > 1 ? (currentTabuSubjs.length * (setups.length + 1) + 6) : (currentTabuSubjs.length + 6);
-       html += `<tr><td colspan="${cols}" style="text-align:center; padding:20px; color:var(--muted)">No data found.</td></tr>`;
-   }
-
-   students.forEach(s => {
-      let tds = `<td style="font-family:monospace">${escH(s.rollNo || '-')}</td><td style="text-align:left; font-weight:600;">${escH(s.name)}</td>`;
-      currentTabuSubjs.forEach(sub => {
-          const st = s.subTotals[sub];
-          let cls = '';
-          if (st.missing) cls = 'cell-missing';
-          else if (st.fail) cls = 'cell-fail';
-          
-          if (setups.length > 1) {
-              setups.forEach(setup => {
-                  let tVal = st.terms[setup._id];
-                  tds += `<td class="${tVal === 'AB' ? 'cell-missing' : ''}">${tVal}</td>`;
-              });
-          }
-
-          if (!st.missing && typeof st.val === 'number') {
-              subjSums[sub] += st.val; subjCounts[sub]++;
-          }
-          
-          tds += `<td class="${cls}" ${setups.length > 1 ? 'style="font-weight:bold; background:rgba(212,168,67,0.1);"' : ''}>${st.val}</td>`;
-      });
-      
-      let rowFailCls = s.failCount > 0 ? 'color:var(--danger);' : '';
-      let grade = getGradeInfo(s.grandTotal, s.maxPossible).g;
-      
-      tds += `<td style="font-weight:bold; ${rowFailCls}">${s.grandTotal}</td>`;
-      tds += `<td style="font-weight:bold;">${s.perc.toFixed(1)}%</td>`;
-      tds += `<td style="font-weight:bold; ${grade==='E' ? 'color:var(--danger);' : ''}">${grade}</td>`;
-      tds += `<td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`;
-      
-      totalClassPerc += s.perc; totalRankedStus++;
-      
-      html += `<tr>${tds}</tr>`;
-   });
-   
-   if (students.length > 0) {
-       let avgTds = `<td colspan="2" style="text-align:right; font-weight:bold; color:var(--teal);">Class Average</td>`;
-       currentTabuSubjs.forEach(sub => {
-           let avg = subjCounts[sub] > 0 ? (subjSums[sub] / subjCounts[sub]).toFixed(1) : '-';
-           if (setups.length > 1) {
-               avgTds += `<td colspan="${setups.length}" style="background:rgba(255,255,255,0.02)"></td>`;
-           }
-           avgTds += `<td style="font-weight:bold; color:var(--teal);">${avg}</td>`;
-       });
-       let overallAvg = totalRankedStus > 0 ? (totalClassPerc / totalRankedStus).toFixed(1) + '%' : '-';
-       avgTds += `<td colspan="4" style="text-align:center; font-weight:bold; color:var(--teal);">Overall: ${overallAvg}</td>`;
-       
-       html += `<tr>${avgTds}</tr>`;
-   }
-   
-   html += `</tbody></table>`;
-   
-   panel.innerHTML = html;
-   panel.style.display = 'block';
-   document.getElementById('btn-export-tabu-excel').style.display = 'inline-block';
-   document.getElementById('btn-export-tabu-pdf').style.display = 'inline-block';
+function renderTabulationGrid() { 
+    const panel = document.getElementById('tabu-grid-panel'); 
+    const { setups, students, termMax } = currentTabuData; 
+    let html = `<table class="marks-table tabu-table"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" style="text-align:left;">Student Name</th>`; 
+    let ths2 = `<tr>`; 
+    
+    currentTabuSubjs.forEach(sub => { 
+        html += `<th colspan="${setups.length + 1}" style="color:var(--gold); border-bottom:1px solid var(--rim);">${escH(sub)}</th>`; 
+        setups.forEach(setup => { 
+            const tMax = setup.assessments.reduce((s, a) => s + a.maxMarks, 0); 
+            ths2 += `<th>${escH(setup.termName.substring(0, 8))}..<br><small>(${tMax})</small></th>`; 
+        }); 
+        ths2 += `<th style="color:var(--gold);">Total<br><small>(${termMax})</small></th>`; 
+    }); 
+    
+    html += `<th rowspan="2" style="color:var(--gold);">Grand Total</th><th rowspan="2" style="color:var(--gold);">%</th><th rowspan="2" style="color:var(--gold);">Grade</th><th rowspan="2" style="color:var(--gold);">Rank</th></tr>`; 
+    ths2 += `</tr>`; 
+    html += ths2 + `</thead><tbody>`; 
+    
+    students.forEach(s => { 
+        let tds = `<td>${escH(s.rollNo || '-')}</td><td style="text-align:left; font-weight:600;">${escH(s.name)}</td>`; 
+        currentTabuSubjs.forEach(sub => { 
+            const st = s.subTotals[sub]; 
+            setups.forEach(setup => { 
+                tds += `<td class="${st.terms[setup._id] === 'AB' ? 'cell-missing' : ''}">${st.terms[setup._id]}</td>`; 
+            }); 
+            tds += `<td class="${st.fail ? 'cell-fail' : ''}" style="font-weight:bold; background:rgba(212,168,67,0.1);">${st.val}</td>`; 
+        }); 
+        let grade = getGradeInfo(s.grandTotal, s.maxPossible).g; 
+        tds += `<td style="font-weight:bold;">${s.grandTotal}</td><td style="font-weight:bold;">${s.perc.toFixed(1)}%</td><td style="font-weight:bold;">${grade}</td><td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`; 
+        html += `<tr>${tds}</tr>`; 
+    }); 
+    
+    html += `</tbody></table>`; 
+    panel.innerHTML = html; 
+    panel.style.display = 'block'; 
+    document.getElementById('btn-export-tabu-pdf').style.display = 'inline-block'; 
+    document.getElementById('btn-export-tabu-excel').style.display = 'inline-block';
 }
 
 function exportTabulationExcel() {
-  if (!currentTabuData) return;
-  const { setups, students, termMax } = currentTabuData;
-  const cSelect = document.getElementById('tabu-class-sel');
+  if (!currentTabuData) return; 
+  const { setups, students, termMax } = currentTabuData; 
+  const cSelect = document.getElementById('tabu-class-sel'); 
   const className = cSelect.options[cSelect.selectedIndex].text;
-
+  
   const data = students.map(s => {
       let obj = { "Roll No": s.rollNo || '-', "Student Name": s.name };
       currentTabuSubjs.forEach(sub => { 
-          if (setups.length > 1) {
-              setups.forEach(setup => {
-                 const tMax = setup.assessments.reduce((acc, a) => acc + a.maxMarks, 0);
-                 obj[`${sub} - ${setup.termName} (${tMax})`] = s.subTotals[sub].terms[setup._id];
-              });
-              obj[`${sub} Total (${termMax})`] = s.subTotals[sub].val;
-          } else {
+          if (setups.length > 1) { 
+              setups.forEach(setup => { 
+                  const tMax = setup.assessments.reduce((acc, a) => acc + a.maxMarks, 0); 
+                  obj[`${sub} - ${setup.termName} (${tMax})`] = s.subTotals[sub].terms[setup._id]; 
+              }); 
+              obj[`${sub} Total (${termMax})`] = s.subTotals[sub].val; 
+          } else { 
               obj[`${sub} (${termMax})`] = s.subTotals[sub].val; 
           }
       });
-      
       let grade = getGradeInfo(s.grandTotal, s.maxPossible).g;
-
-      obj[`Grand Total (${termMax * currentTabuSubjs.length})`] = s.grandTotal;
-      obj["Percentage"] = s.perc.toFixed(1) + '%';
-      obj["Grade"] = grade;
-      obj["Rank"] = s.rank;
+      obj[`Grand Total (${termMax * currentTabuSubjs.length})`] = s.grandTotal; 
+      obj["Percentage"] = s.perc.toFixed(1) + '%'; 
+      obj["Grade"] = grade; 
+      obj["Rank"] = s.rank; 
       return obj;
   });
-
+  
   const ws = XLSX.utils.json_to_sheet(data); 
   const wb = XLSX.utils.book_new(); 
-  XLSX.utils.book_append_sheet(wb, ws, "Tabulation");
+  XLSX.utils.book_append_sheet(wb, ws, "Tabulation"); 
   XLSX.writeFile(wb, `Tabulation_${className}.xlsx`);
 }
 
-function printTabulationPDF() {
-  if (!currentTabuData) return;
-  const { selectedTermNames } = currentTabuData;
-  const cSelect = document.getElementById('tabu-class-sel');
-  const className = cSelect.options[cSelect.selectedIndex].text;
-  const schName = getVal('sch-name') || 'Hello School';
-
-  let printWin = window.open('', '_blank');
-  if (!printWin) return toast('Allow popups to print', 'err');
-
-  let tableHtml = document.querySelector('.tabu-table').outerHTML;
-  tableHtml = tableHtml.replace(/var\(--teal\)/g, '#0f766e')
-                       .replace(/var\(--danger\)/g, '#b91c1c')
-                       .replace(/var\(--gold\)/g, '#000')
-                       .replace(/var\(--silver\)/g, '#666')
-                       .replace(/cell-missing/g, 'print-missing')
-                       .replace(/cell-fail/g, 'print-fail')
-                       .replace(/background:rgba\(212,168,67,0\.1\);/g, 'background:#f3f4f6;');
-
-  const html = `<!DOCTYPE html><html><head><title>Tabulation - ${className}</title>
-      <style>
-          @page { size: landscape; margin: 10mm; }
-          body { font-family: Arial, sans-serif; font-size: 11px; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          h2, h3 { text-align: center; margin: 5px 0; }
-          .tabu-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-          .tabu-table th, .tabu-table td { border: 1px solid #000; padding: 4px; text-align: center; }
-          .tabu-table th { background-color: #f3f4f6; }
-          .print-missing { background-color: #fef08a !important; font-weight: bold; }
-          .print-fail { background-color: #fecaca !important; color: #b91c1c !important; font-weight: bold; }
-          .signatures { display: flex; justify-content: space-between; margin-top: 50px; padding: 0 40px; font-weight: bold; }
-      </style></head><body>
-      <h2>${escH(schName)}</h2>
-      <h3>Tabulation Register: ${escH(selectedTermNames)} | Class: ${escH(className)} | Session: ${window.currentSession}</h3>
-      ${tableHtml}
-      <div class="signatures">
-          <div>Class Teacher</div>
-          <div>Examination In-Charge</div>
-          <div>Principal</div>
-      </div>
-      <script>setTimeout(function(){ window.print(); window.close(); }, 1000);</script>
-      </body></html>`;
-
-  printWin.document.open();
-  printWin.document.write(html);
-  printWin.document.close();
+function printTabulationPDF() { 
+    let printWin = window.open('', '_blank'); 
+    let tableHtml = document.querySelector('.tabu-table').outerHTML.replace(/var\(--gold\)/g, '#000').replace(/var\(--rim\)/g, '#000'); 
+    printWin.document.write(`<html><head><style>@page{size:landscape;} table{width:100%; border-collapse:collapse; font-size:10px; text-align:center;} th,td{border:1px solid #000; padding:3px;}</style></head><body><h2>Tabulation</h2>${tableHtml}<script>setTimeout(()=>window.print(), 500);</script></body></html>`); 
 }
 
+
 /* =========================================================================
-   TAB 4: REPORT CARDS (Asynchronous Background Chunking & Pre-Flight Warning)
+   TAB 4: REPORT CARDS (TEMPLATE GALLERY ENABLED)
    ========================================================================= */
 
 function loadReportCardOptions() {
   const classChks = document.querySelectorAll('.rc-class-chk:checked');
-  const termsContainer = document.getElementById('rc-terms-container');
-  const subjectsContainer = document.getElementById('rc-subjects-container');
+  const termsContainer = document.getElementById('rc-terms-container'), subjectsContainer = document.getElementById('rc-subjects-container');
   
-  if (classChks.length === 0) {
-    termsContainer.innerHTML = '<span style="color:var(--muted)">Select at least one class.</span>';
-    subjectsContainer.innerHTML = '<span style="color:var(--muted)">Select at least one class.</span>';
-    return;
+  if (classChks.length === 0) { 
+      termsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; 
+      subjectsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; 
+      return; 
   }
   
-  termsContainer.innerHTML = '<span style="color:var(--muted)">Loading terms...</span>';
-  subjectsContainer.innerHTML = '<span style="color:var(--muted)">Loading subjects...</span>';
-
-  const classIds = Array.from(classChks).map(c => c.value);
+  termsContainer.innerHTML = 'Loading...'; 
+  subjectsContainer.innerHTML = 'Loading...';
   
-  const setupPromises = classIds.map(cid => apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${cid}`, true).catch(() => ({data: []})));
-  const subjPromises = classIds.map(cid => apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${cid}`, true).catch(() => ({data: []})));
-
-  Promise.all([Promise.all(setupPromises), Promise.all(subjPromises)]).then(results => {
-      const setupsArrs = results[0];
-      const subjsArrs = results[1];
+  const classIds = Array.from(classChks).map(c => c.value);
+  Promise.all([ 
+      Promise.all(classIds.map(cid => apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${cid}`, true).catch(()=>({data:[]})))) , 
+      Promise.all(classIds.map(cid => apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${cid}`, true).catch(()=>({data:[]})))) 
+  ]).then(results => {
+      let uniqueTerms = new Map(), uniqueSubjs = new Map();
+      results[0].forEach(res => { (res.data || []).forEach(s => uniqueTerms.set(s.termName, s.termName)); });
+      results[1].forEach(res => { (res.data || []).forEach(s => uniqueSubjs.set(s.subjectName, s.subjectName)); });
       
-      let uniqueTerms = new Map();
-      let uniqueSubjs = new Map();
-      
-      setupsArrs.forEach(res => {
-          (res.data || []).forEach(s => uniqueTerms.set(s.termName, s.termName));
-      });
-      
-      subjsArrs.forEach(res => {
-          (res.data || []).forEach(s => uniqueSubjs.set(s.subjectName, s.subjectName));
-      });
-      
-      if (uniqueTerms.size === 0) {
-          termsContainer.innerHTML = '<span style="color:var(--muted)">No terms found. Create Exam Setup first.</span>';
-      } else {
-          termsContainer.innerHTML = Array.from(uniqueTerms.values()).map(tName => `<label class="chk-label"><input type="checkbox" class="rc-term-chk" value="${escAttr(tName)}" checked> ${escH(tName)}</label>`).join('');
-      }
-      
-      if (uniqueSubjs.size === 0) {
-          subjectsContainer.innerHTML = '<span style="color:var(--muted)">No subjects mapped to selected classes.</span>';
-      } else {
-          subjectsContainer.innerHTML = Array.from(uniqueSubjs.values()).map(sName => `<label class="chk-label"><input type="checkbox" class="rc-subj-chk" value="${escAttr(sName)}" checked> ${escH(sName)}</label>`).join('');
-      }
-  }).catch(e => {
-      termsContainer.innerHTML = '<span style="color:var(--danger)">Error loading data.</span>';
-      subjectsContainer.innerHTML = '<span style="color:var(--danger)">Error loading data.</span>';
+      termsContainer.innerHTML = Array.from(uniqueTerms.values()).map(tName => `<label class="chk-label"><input type="checkbox" class="rc-term-chk" value="${escAttr(tName)}" checked> ${escH(tName)}</label>`).join('') || 'No terms found.';
+      subjectsContainer.innerHTML = Array.from(uniqueSubjs.values()).map(sName => `<label class="chk-label"><input type="checkbox" class="rc-subj-chk" value="${escAttr(sName)}" checked> ${escH(sName)}</label>`).join('') || 'No subjects mapped.';
   });
 }
 
 function generateReportCards() {
-  const classChks = document.querySelectorAll('.rc-class-chk:checked');
-  if(classChks.length === 0) return toast('Select at least one Class', 'err');
+  const classChks = document.querySelectorAll('.rc-class-chk:checked'); 
+  if(classChks.length === 0) return toast('Select Class', 'err');
+  
+  const termChks = document.querySelectorAll('.rc-term-chk:checked'), subjChks = document.querySelectorAll('.rc-subj-chk:checked');
+  if(termChks.length === 0 || subjChks.length === 0) return toast('Select Terms & Subjects', 'err');
 
-  const termChks = document.querySelectorAll('.rc-term-chk:checked');
-  const subjChks = document.querySelectorAll('.rc-subj-chk:checked');
-  if(termChks.length === 0) return toast('Select at least one Term', 'err');
-  if(subjChks.length === 0) return toast('Select at least one Subject', 'err');
-
-  const selectedTermNames = Array.from(termChks).map(c => c.value);
+  const selectedTemplate = getSelectedTemplate(); 
+  const selectedTermNames = Array.from(termChks).map(c => c.value); 
   cachedSubjectsForPrint = Array.from(subjChks).map(c => c.value);
-
-  const btn = document.getElementById('btn-rep-cards');
-  const originalText = btn.textContent;
-  btn.disabled = true; btn.textContent = 'Analyzing Data...';
-
-  const classIds = Array.from(classChks).map(c => c.value);
-  const classNamesMap = {};
+  
+  const btn = document.getElementById('btn-rep-cards'); 
+  const originalText = btn.textContent; 
+  btn.disabled = true; 
+  btn.textContent = 'Analyzing Data...';
+  
+  const classIds = Array.from(classChks).map(c => c.value); 
+  const classNamesMap = {}; 
   Array.from(classChks).forEach(c => { classNamesMap[c.value] = c.getAttribute('data-name'); });
 
-  const reportPromises = classIds.map(cid => 
-      apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${cid}`, true)
-      .then(res => ({ classId: cid, className: classNamesMap[cid], res: res }))
-      .catch(e => null) 
-  );
-
+  const reportPromises = classIds.map(cid => apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${cid}`, true).then(res => ({ classId: cid, className: classNamesMap[cid], res: res })).catch(e => null));
+  
   Promise.all(reportPromises).then(results => {
-      let allStudents = [];
-      let missingCount = 0;
-
+      let allStudents = [], missingCount = 0;
       results.forEach(classData => {
           if(!classData || !classData.res) return;
-          const setups = classData.res.setups.filter(s => selectedTermNames.includes(s.termName));
+          const setups = classData.res.setups.filter(s => selectedTermNames.includes(s.termName)); 
           const studentsData = classData.res.data || [];
           
           studentsData.forEach(item => {
-              item.matchedSetups = setups;
-              item.className = classData.className;
-              
+              item.matchedSetups = setups; 
+              item.className = classData.className; 
               let hasMissing = false;
+              
               cachedSubjectsForPrint.forEach(subName => {
-                  setups.forEach(setup => {
-                      const termData = item.subjects[subName]?.[setup._id] || {};
-                      setup.assessments.forEach(a => {
-                          if(!termData[a.name] || (termData[a.name].status === 'present' && termData[a.name].obtained === null)) {
-                              hasMissing = true;
-                          }
-                      });
+                  setups.forEach(setup => { 
+                      const termData = item.subjects[subName]?.[setup._id] || {}; 
+                      setup.assessments.forEach(a => { 
+                          if(!termData[a.name] || (termData[a.name].status === 'present' && termData[a.name].obtained === null)) { 
+                              hasMissing = true; 
+                          } 
+                      }); 
                   });
               });
-              if(hasMissing) missingCount++;
+              if(hasMissing) missingCount++; 
               allStudents.push(item);
           });
       });
       
       if(allStudents.length === 0) { 
           btn.disabled = false; btn.textContent = originalText; 
-          return toast('No students found for the selected classes.', 'err'); 
+          return toast('No students found.', 'err'); 
+      }
+      if(missingCount > 0) { 
+          if(!confirm(`⚠️ Warning: ${missingCount} student(s) have missing marks. Generate anyway?`)) { 
+              btn.disabled = false; btn.textContent = originalText; return; 
+          } 
       }
 
-      if(missingCount > 0) {
-          if(!confirm(`⚠️ Warning: ${missingCount} student(s) have missing marks for the selected subjects/terms. Generate report cards anyway?`)) {
-              btn.disabled = false; btn.textContent = originalText; return;
-          }
-      }
-
-      let oldFrame = document.getElementById('report-iframe');
+      let oldFrame = document.getElementById('report-iframe'); 
       if (oldFrame) oldFrame.remove();
       
-      let iframe = document.createElement('iframe');
-      iframe.id = 'report-iframe';
-      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+      let iframe = document.createElement('iframe'); 
+      iframe.id = 'report-iframe'; 
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; 
       document.body.appendChild(iframe);
       
-      let doc = iframe.contentWindow.document;
+      let doc = iframe.contentWindow.document; 
       doc.open();
       
-      doc.write(getReportCardCSSAndHeader());
+      // Pass the selected template to get the correct CSS layout
+      doc.write(getReportCardCSSAndHeader(selectedTemplate));
       
       let i = 0;
       function processChunk() {
          const chunk = allStudents.slice(i, i + 10);
          if (chunk.length === 0) {
-            doc.write('</body></html>');
-            doc.close();
+            doc.write('</body></html>'); 
+            doc.close(); 
             btn.textContent = 'Opening Print Dialog...';
-            setTimeout(() => {
-               iframe.contentWindow.focus();
-               iframe.contentWindow.print();
-               btn.disabled = false;
-               btn.textContent = originalText;
-            }, 1000);
+            setTimeout(() => { 
+                iframe.contentWindow.focus(); 
+                iframe.contentWindow.print(); 
+                btn.disabled = false; 
+                btn.textContent = originalText; 
+            }, 1000); 
             return;
          }
          
-         let html = buildACMEReportCardHTML(chunk, cachedSubjectsForPrint);
+         // Route to the correct HTML Template Engine
+         let html = '';
+         if (selectedTemplate === 'split') {
+             html = buildSplitReportCard(chunk, cachedSubjectsForPrint);
+         } else if (selectedTemplate === 'ivy') {
+             html = buildIvyReportCard(chunk, cachedSubjectsForPrint);
+         } else if (selectedTemplate === 'dashboard') {
+             html = buildDashboardReportCard(chunk, cachedSubjectsForPrint);
+         } else if (selectedTemplate === 'visual') {
+             html = buildVisualReportCard(chunk, cachedSubjectsForPrint);
+         } else if (selectedTemplate === 'board') {
+             html = buildBoardReportCard(chunk, cachedSubjectsForPrint);
+         } else {
+             // Fallback to the Original Classic
+             html = buildClassicReportCard(chunk, cachedSubjectsForPrint);
+         }
+         
          doc.write(html);
-         
-         i += 10;
-         const pct = Math.min(100, Math.round((i / allStudents.length) * 100));
-         btn.textContent = `Generating PDF (${pct}%)...`;
-         
+         i += 10; 
+         const pct = Math.min(100, Math.round((i / allStudents.length) * 100)); 
+         btn.textContent = `Generating PDF (${pct}%)...`; 
          setTimeout(processChunk, 20);
       }
       processChunk();
-  }).catch(e => {
-      toast(e.message || 'Failed to process report cards', 'err');
-      btn.disabled = false; btn.textContent = originalText;
-  });
+  }).catch(e => { toast(e.message || 'Failed to process report cards', 'err'); btn.disabled = false; btn.textContent = originalText; });
 }
 
-function getGradeInfo(total, outOf) {
-  if (outOf === 0) return {g: ''};
-  const perc = (total / outOf) * 100;
-  if(perc >= 91) return {g:'A1'};
-  if(perc >= 81) return {g:'A2'};
-  if(perc >= 71) return {g:'B1'};
-  if(perc >= 61) return {g:'B2'};
-  if(perc >= 51) return {g:'C1'};
-  if(perc >= 41) return {g:'C2'};
-  if(perc >= 33) return {g:'D'};
-  return {g:'E'};
+/* =========================================================================
+   TEMPLATE ENGINES (CSS & HTML BUILDERS)
+   ========================================================================= */
+
+function getReportCardCSSAndHeader(templateId) {
+  let css = '';
+  
+  if (templateId === 'split') {
+      css = `@page { size: A4 landscape; margin: 0; } 
+             body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1e293b; margin:0; padding:0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff;}
+             .rc-page { width: 297mm; height: 210mm; page-break-after: always; display: flex; position: relative;}
+             .left-bar { width: 32%; background: #0f172a; color: #fff; padding: 30px; display: flex; flex-direction: column; justify-content: space-between; }
+             .right-bar { width: 68%; background: #fff; padding: 30px; display:flex; flex-direction: column;}
+             .sch-logo { width: 80px; height: 80px; object-fit: contain; background: #fff; padding: 5px; border-radius: 10px; margin-bottom: 20px;}
+             .sch-name { font-size: 22px; font-weight: 700; color: #f8fafc; line-height: 1.2; text-transform: uppercase;}
+             .sch-addr { font-size: 11px; color: #94a3b8; margin-top: 5px; }
+             .stu-info { margin-top: 40px; border-top: 1px solid #334155; padding-top: 20px;}
+             .stu-info p { margin: 6px 0; font-size: 13px; color: #cbd5e1;}
+             .stu-info strong { color: #fff; display:block; font-size: 16px; margin-bottom: 4px;}
+             .report-title { font-size: 28px; color: #0f172a; font-weight: 300; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 25px; text-transform:uppercase; letter-spacing: 1px;}
+             .rc-table { width: 100%; border-collapse: collapse; text-align: center; }
+             .rc-table th, .rc-table td { border-bottom: 1px solid #e2e8f0; padding: 10px 6px; }
+             .rc-table th { color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;}
+             .rc-table .subj-col { text-align: left; font-weight: 600; color: #0f172a; font-size: 13px;}
+             .rc-table tr:last-child td { border-bottom: 2px solid #0f172a; }
+             .bottom-meta { margin-top: auto; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #64748b;}
+             .sig-box { width: 150px; border-top: 1px solid #94a3b8; padding-top: 5px; text-align: center; margin-top: 40px; font-weight: 600; color:#fff;}
+             .scale-box { background: #1e293b; padding: 15px; border-radius: 8px; margin-top:20px; font-size: 10px; color: #cbd5e1; line-height: 1.5;}`;
+  } 
+  else if (templateId === 'ivy') {
+      css = `@page { size: A4 portrait; margin: 15mm; } 
+             body { font-family: 'Times New Roman', Times, serif; font-size: 12px; color: #000; margin:0; padding:0; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+             .rc-page { width: 100%; height: 260mm; page-break-after: always; padding: 20px; box-sizing: border-box; border: 8px double #111; position: relative;}
+             .watermark { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); opacity:0.04; width:400px; z-index:-1;}
+             .header { text-align: center; margin-bottom: 30px; }
+             .header h1 { margin: 0; font-size: 32px; font-weight: normal; text-transform: uppercase; letter-spacing: 2px;}
+             .header h2 { margin: 5px 0 0; font-size: 16px; font-weight: normal; letter-spacing: 1px;}
+             .header p { margin: 5px 0 0; font-size: 12px; font-style: italic; }
+             .header-line { width: 60%; margin: 15px auto; border-top: 1px solid #000; }
+             .info-grid { display: flex; justify-content: space-between; margin-bottom: 30px; padding: 0 20px; font-size: 13px;}
+             .info-grid span { display: block; margin-bottom: 5px; }
+             .rc-table { width: 100%; border-collapse: collapse; text-align: center; margin-bottom: 30px;}
+             .rc-table th, .rc-table td { border: 1px solid #000; padding: 6px; }
+             .rc-table th { background: #f9f9f9; font-weight: bold; text-transform: uppercase; font-size: 11px; }
+             .rc-table .subj-col { text-align: left; font-weight: bold; padding-left: 10px; text-transform: uppercase;}
+             .summary-box { border: 2px solid #000; padding: 15px; margin-bottom: 30px; text-align: center; font-size: 14px; font-weight: bold; background: #fafafa;}
+             .scale-text { font-size: 11px; text-align: center; margin-bottom: 40px; }
+             .signatures { display: flex; justify-content: space-between; padding: 0 40px; font-style: italic; }
+             .signatures div { width: 150px; border-top: 1px solid #000; text-align: center; padding-top: 5px; }`;
+  }
+  else if (templateId === 'dashboard') {
+      css = `@page { size: A4 portrait; margin: 10mm; }
+             body { font-family: 'DM Sans', Arial, sans-serif; font-size: 12px; color: #1e293b; margin:0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#f8fafc;}
+             .rc-page { width: 100%; height: 270mm; page-break-after: always; padding: 25px; box-sizing: border-box; background: #fff; border-radius: 16px; border: 1px solid #e2e8f0;}
+             .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px; }
+             .sch-logo { max-height: 50px; border-radius: 8px;}
+             .header-text h1 { margin: 0; font-size: 20px; color: #0f172a; font-weight: 700; text-transform: uppercase;}
+             .header-text p { margin: 2px 0 0; font-size: 11px; color: #64748b; }
+             .badge { background: #eff6ff; color: #2563eb; padding: 6px 12px; border-radius: 20px; font-weight: 700; font-size: 12px; border: 1px solid #bfdbfe;}
+             .stu-card { display: flex; align-items: center; padding: 15px; background: #f1f5f9; border-radius: 12px; margin-bottom: 20px; gap: 20px;}
+             .stu-photo { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+             .stu-meta h2 { margin: 0 0 4px 0; font-size: 18px; color: #0f172a; }
+             .stu-meta p { margin: 0; color: #475569; font-size: 13px; }
+             .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 25px;}
+             .kpi-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.02);}
+             .kpi-title { font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; letter-spacing:0.5px;}
+             .kpi-val { font-size: 22px; font-weight: 700; color: #0f172a;}
+             .kpi-val.highlight { color: #10b981; }
+             .rc-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;}
+             .rc-table th, .rc-table td { padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0;}
+             .rc-table th { background: #f8fafc; font-weight: 700; color: #475569; font-size: 11px; text-transform: uppercase;}
+             .rc-table .subj-col { text-align: left; font-weight: 700; color: #0f172a; }
+             .rc-table tr:last-child td { border-bottom: none; }
+             .scale-text { font-size: 10px; text-align: center; color: #94a3b8; margin: 20px 0;}
+             .signatures { display: flex; justify-content: space-between; margin-top: auto; padding-top: 30px; font-weight: 700; color: #475569;}
+             .sig-line { width: 120px; border-top: 2px solid #e2e8f0; text-align: center; padding-top: 8px; }`;
+  }
+  else if (templateId === 'visual') {
+      css = `@page { size: A4 landscape; margin: 10mm; }
+             body { font-family: 'Inter', Arial, sans-serif; font-size: 12px; color: #1f2937; margin:0; -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff;}
+             .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 0; box-sizing: border-box; display: flex; flex-direction: column;}
+             .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 15px; margin-bottom: 20px; border-bottom: 4px solid #3b82f6;}
+             .header h1 { margin: 0; font-size: 24px; color: #111; font-weight: 800; letter-spacing:-0.5px;}
+             .header p { margin: 2px 0 0; color: #6b7280; font-size: 13px;}
+             .info-strip { display: flex; background: #f3f4f6; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; justify-content: space-between; margin-bottom: 20px;}
+             .rc-table { width: 100%; border-collapse: collapse; text-align: center; }
+             .rc-table th, .rc-table td { padding: 12px 8px; border-bottom: 1px solid #e5e7eb;}
+             .rc-table th { color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;}
+             .rc-table .subj-col { text-align: left; font-weight: 700; font-size: 14px; width: 25%;}
+             .bar-container { width: 100%; background: #e5e7eb; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 4px;}
+             .bar-fill { height: 100%; background: #3b82f6; border-radius: 4px;}
+             .bar-wrapper { display: flex; flex-direction: column; align-items: center; }
+             .score-text { font-weight: 800; font-size: 14px; }
+             .bottom-section { margin-top: auto; }
+             .scale-text { font-size: 11px; text-align: center; color: #9ca3af; margin-bottom: 20px;}
+             .signatures { display: flex; justify-content: space-between; padding: 20px; background:#f9fafb; border-radius:8px; font-weight:700; color:#4b5563;}`;
+  }
+  else if (templateId === 'board') {
+      css = `@page { size: A4 landscape; margin: 8mm; }
+             body { font-family: Arial, sans-serif; font-size: 12px; color: #000; margin:0; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+             .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 5px; box-sizing: border-box; border: 2px solid #000;}
+             .inner-border { border: 1px solid #000; padding: 15px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; position:relative;}
+             .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 10px;}
+             .header img { position: absolute; top: 15px; left: 15px; max-height: 80px;}
+             .header h1 { margin: 0; font-size: 26px; font-weight: bold; text-transform: uppercase;}
+             .header h2 { margin: 4px 0; font-size: 14px; font-weight: bold; }
+             .info-grid { display: flex; justify-content: space-between; margin-bottom: 10px; text-transform: uppercase; font-weight: bold; font-size: 12px; border: 1px solid #000; padding: 8px;}
+             .rc-table { width: 100%; border-collapse: collapse; text-align: center; border: 2px solid #000; margin-bottom: 10px;}
+             .rc-table th, .rc-table td { border: 1px solid #000; padding: 5px; }
+             .rc-table th { background: #eaeaea; font-weight: bold; text-transform: uppercase; font-size: 11px;}
+             .rc-table .subj-col { text-align: left; font-weight: bold; text-transform: uppercase; padding-left: 5px;}
+             .summary-row { font-weight: bold; background: #eaeaea; }
+             .scale-text { font-size: 10px; text-align: center; margin-top: auto; margin-bottom: 15px; text-transform: uppercase;}
+             .signatures { display: flex; justify-content: space-between; font-weight: bold; text-transform: uppercase; padding: 0 20px;}
+             .signatures div { width: 180px; border-top: 1px dashed #000; text-align: center; padding-top: 5px; }`;
+  }
+  else {
+      // THE ORIGINAL CLASSIC ACME TEMPLATE (Identical to your favorite one)
+      css = `@page { size: A4 landscape; margin: 8mm; }
+             body { font-family: Arial, sans-serif; font-size: 13px; color: #000; margin:0; padding:0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
+             .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 0; box-sizing: border-box; display: block; position: relative; overflow: hidden;}
+             .header { text-align: center; margin-bottom: 12px; }
+             .header h1 { margin: 0; color: #8b0000; font-family: Arial, sans-serif; font-size: 26px; font-weight: bold; text-transform: uppercase;}
+             .header p { margin: 5px 0 0; font-size: 15px; color: #333; font-weight: bold; }
+             .header h3 { margin: 10px 0 0; color: #8b0000; font-size: 20px; font-weight: bold; }
+             .info-grid { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 0 40px; }
+             .info-col table { font-size: 14px; border-collapse: collapse; }
+             .info-col td { padding: 3px 15px; }
+             .info-col td:first-child { font-weight: normal; }
+             .info-col td:last-child { font-weight: bold; }
+             .table-wrapper { margin-bottom: 15px; }
+             .rc-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; border: 2px solid #000; }
+             .rc-table th, .rc-table td { border: 1px solid #000; padding: 5px 4px; color: #000;}
+             .rc-table th { background: #e0e0e0; font-weight: normal; }
+             .rc-table .subj-col { text-align: left; font-weight: bold; padding-left: 10px; width: 14%; }
+             .bold-cell { font-weight: bold; }
+             .left-align { text-align: left !important; padding-left: 10px !important; }
+             .bottom-section { padding-bottom: 0px; margin-top: 15px; }
+             .scale-text { font-size: 12px; text-align: center; margin: 10px 0 15px 0; font-weight: bold; letter-spacing: 0.5px;}
+             .sign-text { font-size: 12px; vertical-align: top; }
+             .empty-row td { padding: 8px 10px; text-align: left; }`;
+  }
+  
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report Card</title><style>${css}</style></head><body>`;
 }
 
-function getReportCardCSSAndHeader() {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report Card</title>
-    <style>
-      @page { size: A4 landscape; margin: 8mm; }
-      body { font-family: Arial, sans-serif; font-size: 13px; color: #000; margin:0; padding:0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
-      .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 0; box-sizing: border-box; display: block; position: relative; overflow: hidden;}
-      
-      .header { text-align: center; margin-bottom: 12px; }
-      .header h1 { margin: 0; color: #8b0000; font-family: Arial, sans-serif; font-size: 26px; font-weight: bold; text-transform: uppercase;}
-      .header p { margin: 5px 0 0; font-size: 15px; color: #333; font-weight: bold; }
-      .header h3 { margin: 10px 0 0; color: #8b0000; font-size: 20px; font-weight: bold; }
-      
-      .info-grid { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 0 40px; }
-      .info-col table { font-size: 14px; border-collapse: collapse; }
-      .info-col td { padding: 3px 15px; }
-      .info-col td:first-child { font-weight: normal; }
-      .info-col td:last-child { font-weight: bold; }
-
-      .table-wrapper { margin-bottom: 15px; }
-      .rc-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; border: 2px solid #000; }
-      .rc-table th, .rc-table td { border: 1px solid #000; padding: 5px 4px; color: #000;}
-      .rc-table th { background: #e0e0e0; font-weight: normal; }
-      .rc-table .subj-col { text-align: left; font-weight: bold; padding-left: 10px; width: 14%; }
-      .bold-cell { font-weight: bold; }
-      .left-align { text-align: left !important; padding-left: 10px !important; }
-      
-      .bottom-section { padding-bottom: 0px; margin-top: 15px; }
-      .scale-text { font-size: 12px; text-align: center; margin: 10px 0 15px 0; font-weight: bold; letter-spacing: 0.5px;}
-      
-      .sign-text { font-size: 12px; vertical-align: top; }
-      .empty-row td { padding: 8px 10px; text-align: left; }
-    </style></head><body>`;
-}
-
-function buildACMEReportCardHTML(studentsChunk, selectedSubjectsList) {
+// ─── ENGINE 1: ORIGINAL CLASSIC ACME (The default you loved) ───
+function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
   const schName = getVal('sch-name') || 'Your School Name';
   const schAddr = getVal('sch-addr') || 'School Address';
-  
   const scaleText = getVal('rc-scale-text');
   const promoText = getVal('rc-promo-text');
   const reopenText = getVal('rc-reopen-text');
@@ -1164,14 +1516,448 @@ function buildACMEReportCardHTML(studentsChunk, selectedSubjectsList) {
   return html;
 }
 
+// ─── ENGINE 2: CORPORATE SPLIT ───
+function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
+  const schName = getVal('sch-name') || 'Your School Name', schAddr = getVal('sch-addr') || 'School Address', sessionText = getVal('rc-session-text') || window.currentSession, scaleText = getVal('rc-scale-text');
+  let logoHtml = schoolLogoUrl ? `<img src="${escAttr(schoolLogoUrl)}" class="sch-logo">` : '<div class="sch-logo" style="display:flex;align-items:center;justify-content:center;color:#94a3b8;">LOGO</div>';
+  let html = '';
+  
+  studentsChunk.forEach(item => {
+    const stu = item.student, subjectsDict = item.subjects, className = item.className;
+    const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    let grandTotal = 0; let grandMax = 0;
+    selectedSubjectsList.forEach(subName => {
+        sortedSetups.forEach(setup => {
+            const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+            setup.assessments.forEach(a => {
+                if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); }
+                grandMax += a.maxMarks;
+            });
+        });
+    });
+    
+    const finalGr = getGradeInfo(grandTotal, grandMax).g; 
+    const finalPerc = grandMax > 0 ? ((grandTotal/grandMax)*100).toFixed(1) : 0;
+
+    html += `<div class="rc-page">
+      <div class="left-bar">
+         <div>
+             ${logoHtml}
+             <div class="sch-name">${escH(schName)}</div>
+             <div class="sch-addr">${escH(schAddr)}</div>
+             
+             <div class="stu-info">
+                 <strong>${escH(stu.name)}</strong>
+                 <p>Class: ${escH(className)} &nbsp;|&nbsp; Roll No: ${escH(stu.rollNo || '—')}</p>
+                 <p>D.O.B: ${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB') : '—'}</p>
+                 <p>Parent: ${escH(stu.fatherName || stu.motherName || '—')}</p>
+             </div>
+             
+             <div class="scale-box">
+                 <div style="font-weight:700; color:#fff; margin-bottom:5px; font-size:12px;">ACADEMIC SUMMARY</div>
+                 <div>Total Score: <span style="color:#fff; font-weight:700;">${grandTotal} / ${grandMax}</span></div>
+                 <div>Percentage: <span style="color:#10b981; font-weight:700; font-size:14px;">${finalPerc}%</span></div>
+                 <div>Overall Grade: <span style="color:#fbbf24; font-weight:700; font-size:14px;">${finalGr}</span></div>
+             </div>
+         </div>
+         
+         <div>
+            <div class="scale-box" style="margin-top:0;"><strong>Grading Scale:</strong><br>${escH(scaleText).replace(/\|/g, '<br>')}</div>
+            <div class="sig-box">Principal Signature</div>
+         </div>
+      </div>
+      
+      <div class="right-bar">
+         <div class="report-title">Academic Performance <span style="font-size:14px; font-weight:700; color:#94a3b8; float:right; margin-top:12px;">SESSION: ${escH(sessionText)}</span></div>
+         
+         <table class="rc-table"><thead><tr><th class="subj-col">Subjects</th>`;
+          sortedSetups.forEach(setup => { html += `<th colspan="${setup.assessments.length + 2}">${escH(setup.termName)}</th>`; });
+    html += `</tr><tr><th></th>`;
+          sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
+    html += `</tr></thead><tbody>`;
+
+    selectedSubjectsList.forEach(subName => {
+      html += `<tr><td class="subj-col">${escH(subName)}</td>`;
+      sortedSetups.forEach(setup => {
+        let termTotal = 0, termMax = 0; const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+        setup.assessments.forEach(a => {
+          const markObj = termData[a.name];
+          if (markObj && markObj.status === 'present') { const val = Number(markObj.obtained || 0); termTotal += val; html += `<td>${val}</td>`; } 
+          else { html += `<td style="color:#cbd5e1;">-</td>`; }
+          termMax += a.maxMarks;
+        });
+        const gradeObj = getGradeInfo(termTotal, termMax); 
+        html += `<td style="font-weight:700;">${termTotal || ''}</td><td style="font-weight:700; color:#3b82f6;">${termTotal ? gradeObj.g : ''}</td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table>
+         <div class="bottom-meta">
+            <div><strong>Teacher Remarks:</strong> ___________________________________________________________</div>
+            <div class="sig-box" style="margin-top:0; color:#0f172a; width:200px;">Class Teacher</div>
+         </div>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// ─── ENGINE 3: IVY LEAGUE TRANSCRIPT ───
+function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
+  const schName = getVal('sch-name') || 'Your School Name', schAddr = getVal('sch-addr') || 'School Address', sessionText = getVal('rc-session-text') || window.currentSession, scaleText = getVal('rc-scale-text');
+  let logoHtml = schoolLogoUrl ? `<img src="${escAttr(schoolLogoUrl)}" class="watermark">` : '';
+  let html = '';
+  
+  studentsChunk.forEach(item => {
+    const stu = item.student, subjectsDict = item.subjects, className = item.className;
+    const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    let grandTotal = 0; let grandMax = 0;
+    selectedSubjectsList.forEach(subName => { 
+        sortedSetups.forEach(setup => { 
+            const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+            setup.assessments.forEach(a => { 
+                if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
+                grandMax += a.maxMarks; 
+            }); 
+        }); 
+    });
+    const finalGr = getGradeInfo(grandTotal, grandMax).g; 
+    const finalPerc = grandMax > 0 ? ((grandTotal/grandMax)*100).toFixed(1) : 0;
+
+    html += `<div class="rc-page">
+      ${logoHtml}
+      <div class="header">
+          <h1>${escH(schName)}</h1>
+          <p>${escH(schAddr)}</p>
+          <div class="header-line"></div>
+          <h2>OFFICIAL TRANSCRIPT OF ACADEMIC RECORD</h2>
+          <p>Session: ${escH(sessionText)}</p>
+      </div>
+      
+      <div class="info-grid">
+          <div>
+              <span><strong>Student Name:</strong> ${escH(stu.name)}</span>
+              <span><strong>Date of Birth:</strong> ${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB') : '—'}</span>
+          </div>
+          <div style="text-align:right;">
+              <span><strong>Class:</strong> ${escH(className)}</span>
+              <span><strong>Student ID / Roll No:</strong> ${escH(stu.rollNo || '—')}</span>
+          </div>
+      </div>
+
+      <table class="rc-table"><thead><tr><th rowspan="2" class="subj-col">Course / Subject</th>`;
+          sortedSetups.forEach(setup => { html += `<th colspan="2">${escH(setup.termName)}</th>`; });
+    html += `<th rowspan="2">Cumulative<br>Credits/Marks</th><th rowspan="2">Final<br>Grade</th></tr><tr>`;
+          sortedSetups.forEach(() => { html += `<th>Score</th><th>Grade</th>`; });
+    html += `</tr></thead><tbody>`;
+
+    selectedSubjectsList.forEach(subName => {
+      html += `<tr><td class="subj-col">${escH(subName)}</td>`;
+      let subjTotal = 0; let subjMax = 0;
+      
+      sortedSetups.forEach(setup => {
+        let termTotal = 0, termMax = 0; 
+        const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+        
+        setup.assessments.forEach(a => { 
+            const markObj = termData[a.name]; 
+            if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
+            termMax += a.maxMarks; 
+        });
+        
+        const termGr = getGradeInfo(termTotal, termMax).g; 
+        html += `<td>${termTotal || '-'}</td><td>${termTotal ? termGr : '-'}</td>`;
+        subjTotal += termTotal; subjMax += termMax;
+      });
+      
+      const subjGr = getGradeInfo(subjTotal, subjMax).g;
+      html += `<td><strong>${subjTotal || '-'}</strong></td><td><strong>${subjTotal ? subjGr : '-'}</strong></td></tr>`;
+    });
+
+    html += `</tbody></table>
+      
+      <div class="summary-box">
+          OVERALL ACADEMIC STANDING: &nbsp;&nbsp;&nbsp; TOTAL: ${grandTotal} / ${grandMax} &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; PERCENTAGE: ${finalPerc}% &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; FINAL GRADE: ${finalGr}
+      </div>
+      
+      <div class="scale-text"><strong>GRADING LEGEND:</strong><br>${escH(scaleText)}</div>
+      
+      <div class="signatures" style="margin-top:auto;">
+          <div>Registrar / Teacher</div>
+          <div>Head of Institution</div>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// ─── ENGINE 4: SAAS DASHBOARD ───
+function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
+  const schName = getVal('sch-name') || 'Your School Name', schAddr = getVal('sch-addr') || 'School Address', sessionText = getVal('rc-session-text') || window.currentSession, scaleText = getVal('rc-scale-text');
+  let logoHtml = schoolLogoUrl ? `<img src="${escAttr(schoolLogoUrl)}" class="sch-logo">` : '';
+  let html = '';
+  
+  studentsChunk.forEach(item => {
+    const stu = item.student, subjectsDict = item.subjects, className = item.className;
+    const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    let grandTotal = 0; let grandMax = 0;
+    selectedSubjectsList.forEach(subName => { 
+        sortedSetups.forEach(setup => { 
+            const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+            setup.assessments.forEach(a => { 
+                if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
+                grandMax += a.maxMarks; 
+            }); 
+        }); 
+    });
+    
+    const finalGr = getGradeInfo(grandTotal, grandMax).g; 
+    const finalPerc = grandMax > 0 ? ((grandTotal/grandMax)*100).toFixed(1) : 0;
+    var photoHtml = stu.photo ? `<img src="${escAttr(stu.photo)}" class="stu-photo">` : `<div class="stu-photo" style="background:#cbd5e1; display:flex; align-items:center; justify-content:center; color:#fff;">👤</div>`;
+
+    html += `<div class="rc-page">
+      <div class="header">
+          <div class="header-text"><h1>${escH(schName)}</h1><p>${escH(schAddr)}</p></div>
+          ${logoHtml}
+          <div class="badge">SESSION ${escH(sessionText)}</div>
+      </div>
+      
+      <div class="stu-card">
+          ${photoHtml}
+          <div class="stu-meta">
+              <h2>${escH(stu.name)}</h2>
+              <p>Class: ${escH(className)} &nbsp;•&nbsp; Roll No: ${escH(stu.rollNo || '—')} &nbsp;•&nbsp; Parent: ${escH(stu.fatherName || '—')}</p>
+          </div>
+      </div>
+
+      <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-title">Total Marks</div><div class="kpi-val">${grandTotal}<span style="font-size:12px; color:#94a3b8;">/${grandMax}</span></div></div>
+          <div class="kpi-card"><div class="kpi-title">Percentage</div><div class="kpi-val highlight">${finalPerc}%</div></div>
+          <div class="kpi-card"><div class="kpi-title">Overall Grade</div><div class="kpi-val" style="color:#f59e0b;">${finalGr}</div></div>
+          <div class="kpi-card"><div class="kpi-title">Attendance</div><div class="kpi-val">___<span style="font-size:12px; color:#94a3b8;">/___</span></div></div>
+      </div>
+
+      <table class="rc-table"><thead><tr><th class="subj-col">Subjects</th>`;
+          sortedSetups.forEach(setup => { html += `<th colspan="2">${escH(setup.termName)}</th>`; });
+    html += `<th>Final Total</th><th>Grade</th></tr></thead><tbody>`;
+
+    selectedSubjectsList.forEach(subName => {
+      html += `<tr><td class="subj-col">${escH(subName)}</td>`;
+      let subjTotal = 0; let subjMax = 0;
+      
+      sortedSetups.forEach(setup => {
+        let termTotal = 0, termMax = 0; 
+        const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+        
+        setup.assessments.forEach(a => { 
+            const markObj = termData[a.name]; 
+            if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
+            termMax += a.maxMarks; 
+        });
+        
+        const termGr = getGradeInfo(termTotal, termMax).g; 
+        html += `<td>${termTotal || '-'}</td><td style="color:#64748b;">${termTotal ? termGr : '-'}</td>`;
+        subjTotal += termTotal; subjMax += termMax;
+      });
+      
+      const subjGr = getGradeInfo(subjTotal, subjMax).g;
+      html += `<td><strong>${subjTotal || '-'}</strong></td><td><strong style="color:#3b82f6;">${subjTotal ? subjGr : '-'}</strong></td></tr>`;
+    });
+
+    html += `</tbody></table>
+      <div class="scale-text">${escH(scaleText)}</div>
+      <div class="signatures"><div class="sig-line">Class Teacher</div><div class="sig-line">Principal</div><div class="sig-line">Parent</div></div>
+    </div>`;
+  });
+  return html;
+}
+
+// ─── ENGINE 5: VISUAL INFOGRAPHIC ───
+function buildVisualReportCard(studentsChunk, selectedSubjectsList) {
+  const schName = getVal('sch-name') || 'Your School Name', sessionText = getVal('rc-session-text') || window.currentSession, scaleText = getVal('rc-scale-text');
+  let html = '';
+  
+  studentsChunk.forEach(item => {
+    const stu = item.student, subjectsDict = item.subjects, className = item.className;
+    const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    html += `<div class="rc-page">
+      <div class="header">
+          <div><h1>${escH(schName)}</h1><p>Performance Analytics & Report Card</p></div>
+          <div style="text-align:right;"><div style="font-weight:800; font-size:18px; color:#3b82f6;">${escH(sessionText)}</div></div>
+      </div>
+      
+      <div class="info-strip">
+          <div>STUDENT: <span style="color:#3b82f6;">${escH(stu.name)}</span></div>
+          <div>CLASS: <span style="color:#3b82f6;">${escH(className)}</span></div>
+          <div>ROLL NO: <span style="color:#3b82f6;">${escH(stu.rollNo || '—')}</span></div>
+      </div>
+
+      <table class="rc-table"><thead><tr><th class="subj-col">Subject Analysis</th>`;
+          sortedSetups.forEach(setup => { html += `<th>${escH(setup.termName)}</th>`; });
+    html += `<th>Cumulative Score</th><th>Progress Bar</th><th>Grade</th></tr></thead><tbody>`;
+
+    selectedSubjectsList.forEach(subName => {
+      html += `<tr><td class="subj-col">${escH(subName)}</td>`;
+      let subjTotal = 0; let subjMax = 0;
+      
+      sortedSetups.forEach(setup => {
+        let termTotal = 0, termMax = 0; 
+        const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+        
+        setup.assessments.forEach(a => { 
+            const markObj = termData[a.name]; 
+            if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
+            termMax += a.maxMarks; 
+        });
+        
+        html += `<td><span class="score-text">${termTotal || '-'}</span> <span style="font-size:10px; color:#9ca3af;">/${termMax}</span></td>`;
+        subjTotal += termTotal; subjMax += termMax;
+      });
+      
+      const subjGr = getGradeInfo(subjTotal, subjMax).g;
+      const subjPerc = subjMax > 0 ? (subjTotal/subjMax)*100 : 0;
+      
+      // Visual Bar HTML
+      const barHtml = `<div class="bar-container"><div class="bar-fill" style="width:${subjPerc}%; background:${subjPerc > 80 ? '#10b981' : subjPerc > 40 ? '#3b82f6' : '#ef4444'};"></div></div>`;
+      
+      html += `<td><span class="score-text" style="color:#111;">${subjTotal || '-'}</span> <span style="font-size:10px; color:#9ca3af;">/${subjMax}</span></td>
+               <td style="width:20%;">${barHtml}</td>
+               <td><span class="score-text" style="color:#111;">${subjTotal ? subjGr : '-'}</span></td></tr>`;
+    });
+
+    html += `</tbody></table>
+      
+      <div class="bottom-section">
+          <div class="scale-text">Grading Scale: ${escH(scaleText)}</div>
+          <div class="signatures">
+              <div>Remarks: _________________________________________</div>
+              <div>Authorized Signatory</div>
+          </div>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+// ─── ENGINE 6: STRICT BOARD (CBSE STYLE) ───
+function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
+  const schName = getVal('sch-name') || 'Your School Name', schAddr = getVal('sch-addr') || 'School Address', sessionText = getVal('rc-session-text') || window.currentSession, scaleText = getVal('rc-scale-text');
+  let logoHtml = schoolLogoUrl ? `<img src="${escAttr(schoolLogoUrl)}">` : '';
+  let html = '';
+  
+  studentsChunk.forEach(item => {
+    const stu = item.student, subjectsDict = item.subjects, className = item.className;
+    const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    
+    let grandTotal = 0; let grandMax = 0;
+    selectedSubjectsList.forEach(subName => { 
+        sortedSetups.forEach(setup => { 
+            const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+            setup.assessments.forEach(a => { 
+                if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
+                grandMax += a.maxMarks; 
+            }); 
+        }); 
+    });
+    
+    const finalGr = getGradeInfo(grandTotal, grandMax).g; 
+    const finalPerc = grandMax > 0 ? ((grandTotal/grandMax)*100).toFixed(1) : 0;
+
+    html += `<div class="rc-page"><div class="inner-border">
+      <div class="header">
+          ${logoHtml}
+          <h1>${escH(schName)}</h1>
+          <h2>${escH(schAddr)}</h2>
+          <h2>ACADEMIC PERFORMANCE RECORD - SESSION ${escH(sessionText)}</h2>
+      </div>
+      
+      <div class="info-grid">
+        <div style="flex:1;">
+            STUDENT NAME: ${escH(stu.name)}<br><br>
+            MOTHER'S NAME: ${escH(stu.motherName || '—')}<br><br>
+            FATHER'S NAME: ${escH(stu.fatherName || '—')}
+        </div>
+        <div style="flex:1; text-align:right;">
+            CLASS/SEC: ${escH(className)}<br><br>
+            ROLL NO: ${escH(stu.rollNo || '—')}<br><br>
+            D.O.B: ${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB') : '—'}
+        </div>
+      </div>
+
+      <table class="rc-table"><thead><tr><th rowspan="2" class="subj-col">Scholastic Areas (Subjects)</th>`;
+          sortedSetups.forEach(setup => { html += `<th colspan="${setup.assessments.length + 2}">${escH(setup.termName)}</th>`; });
+    html += `</tr><tr>`;
+          sortedSetups.forEach(setup => { 
+              let termMaxTotal = 0; 
+              setup.assessments.forEach(a => { 
+                  html += `<th>${escH(a.name)}<br>(${a.maxMarks})</th>`; 
+                  termMaxTotal += a.maxMarks; 
+              }); 
+              html += `<th>Total<br>(${termMaxTotal})</th><th>Gr</th>`; 
+          });
+    html += `</tr></thead><tbody>`;
+
+    selectedSubjectsList.forEach(subName => {
+      html += `<tr><td class="subj-col">${escH(subName)}</td>`;
+      sortedSetups.forEach(setup => {
+        let termTotal = 0, termMax = 0; 
+        const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
+        
+        setup.assessments.forEach(a => {
+          const markObj = termData[a.name];
+          if (markObj && markObj.status === 'present') { 
+              const val = Number(markObj.obtained || 0); 
+              termTotal += val; 
+              html += `<td>${val}</td>`; 
+          } else if (markObj) { 
+              html += `<td>${markObj.status === 'absent' ? 'AB' : 'M'}</td>`; 
+          } else { 
+              html += `<td></td>`; 
+          }
+          termMax += a.maxMarks;
+        });
+        
+        const gradeObj = getGradeInfo(termTotal, termMax); 
+        html += `<td class="summary-row">${termTotal || ''}</td><td class="summary-row">${termTotal ? gradeObj.g : ''}</td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table>
+      
+      <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:12px; margin-bottom:10px;">
+          <div style="border:1px solid #000; padding:10px; flex:1; margin-right:10px;">GRAND TOTAL: ${grandTotal} / ${grandMax}</div>
+          <div style="border:1px solid #000; padding:10px; flex:1; margin-right:10px;">PERCENTAGE: ${finalPerc}%</div>
+          <div style="border:1px solid #000; padding:10px; flex:1;">OVERALL GRADE: ${finalGr}</div>
+      </div>
+
+      <div class="scale-text"><strong>GRADING SCALE:</strong> ${escH(scaleText)}</div>
+      
+      <div class="signatures">
+          <div>CLASS TEACHER</div>
+          <div>EXAMINER</div>
+          <div>PRINCIPAL</div>
+      </div>
+    </div></div>`;
+  });
+  return html;
+}
+
 /* ================= UTILS ================= */
-function getVal(id){ return (document.getElementById(id).value||'').trim(); }
+function getVal(id){ var el = document.getElementById(id); return el ? (el.value||'').trim() : ''; }
 function setVal(id,v){ document.getElementById(id).value = v || ''; }
 function escH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s){ return escH(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 var _tt;
-function toast(msg, kind){
-  var t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show' + (kind==='err'?' err':'');
-  clearTimeout(_tt); _tt = setTimeout(() => t.className='toast', 3000);
+function toast(msg, kind){ 
+    var t = document.getElementById('toast'); 
+    t.textContent = msg; 
+    t.className = 'toast show' + (kind==='err'?' err':''); 
+    clearTimeout(_tt); 
+    _tt = setTimeout(() => t.className='toast', 3000); 
 }
