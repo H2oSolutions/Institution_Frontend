@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   EXAM MANAGEMENT & REPORT CARDS (DUAL-CHECKBOX CLONE ENGINE)
+   EXAM MANAGEMENT & REPORT CARDS (SUBJECT OVERRIDE ENGINE)
    ───────────────────────────────────────────────────────────── */
 var HDR_BASE = 'examAdmitHeader';
 var hdrKey   = 'examAdmitHeader';
@@ -28,10 +28,7 @@ var defaultScale = [
 
 (function boot(){
   var token = localStorage.getItem('token') || localStorage.getItem('institutionToken');
-  if (!token) { 
-      window.location.href = 'login.html'; 
-      return; 
-  }
+  if (!token) { window.location.href = 'login.html'; return; }
   loadHeader(); 
   loadClasses(); 
   loadGradingScale();
@@ -44,9 +41,7 @@ var defaultScale = [
   document.addEventListener('keydown', handleGridArrowKeys);
 })();
 
-function goDashboard(){ 
-    window.location.href = 'dashboard.html'; 
-}
+function goDashboard(){ window.location.href = 'dashboard.html'; }
 
 /* =========================================================================
    TEMPLATE SELECTOR LOGIC
@@ -62,25 +57,19 @@ function getSelectedTemplate() {
 }
 
 /* =========================================================================
-   DYNAMIC GRADING SCALE LOGIC (CLOUD SYNCED)
+   DYNAMIC GRADING SCALE LOGIC
    ========================================================================= */
 function loadGradingScale() {
     const container = document.getElementById('grading-scale-list');
-    if(container) {
-        container.innerHTML = '<div style="color:var(--muted); font-size:12px; text-align:center; padding:10px;">☁️ Loading grading scale from cloud...</div>';
-    }
+    if(container) container.innerHTML = '<div style="color:var(--muted); font-size:12px; text-align:center; padding:10px;">☁️ Loading grading scale from cloud...</div>';
 
     apiGet(API_BASE_URL + '/exam-schedules/grading-scale/settings', true)
       .then(res => {
-          if (res.data && res.data.length > 0) {
-              gradingScale = res.data;
-          } else {
-              gradingScale = [...defaultScale];
-          }
+          if (res.data && res.data.length > 0) gradingScale = res.data;
+          else gradingScale = [...defaultScale];
           renderGradingScale();
       })
       .catch(e => {
-          console.warn('Could not load grading scale from cloud, using default.', e);
           gradingScale = [...defaultScale];
           renderGradingScale();
       });
@@ -124,10 +113,8 @@ function addGradeRule() {
     gradingScale.push({ min, max, grade, remark });
     saveGradingScale();
     
-    document.getElementById('g-min').value = '';
-    document.getElementById('g-max').value = '';
-    document.getElementById('g-grade').value = '';
-    document.getElementById('g-remark').value = '';
+    document.getElementById('g-min').value = ''; document.getElementById('g-max').value = '';
+    document.getElementById('g-grade').value = ''; document.getElementById('g-remark').value = '';
 }
 
 function removeGradeRule(index) {
@@ -138,8 +125,8 @@ function removeGradeRule(index) {
 function saveGradingScale() {
     renderGradingScale(); 
     apiPost(API_BASE_URL + '/exam-schedules/grading-scale/settings', { scale: gradingScale }, true)
-      .then(res => { toast('Grading scale synced to cloud ☁️', 'success'); })
-      .catch(e => { toast('Failed to sync grading scale: ' + e.message, 'err'); });
+      .then(res => toast('Grading scale synced to cloud ☁️', 'success'))
+      .catch(e => toast('Failed to sync grading scale', 'err'));
 }
 
 function getGradeInfo(total, outOf) {
@@ -148,14 +135,9 @@ function getGradeInfo(total, outOf) {
   let assignedGrade = '-';
   
   const scale = gradingScale.length ? gradingScale : defaultScale;
-  
   for (let i = 0; i < scale.length; i++) {
-      if (perc >= scale[i].min && perc <= scale[i].max) {
-          assignedGrade = scale[i].grade;
-          break;
-      }
+      if (perc >= scale[i].min && perc <= scale[i].max) { assignedGrade = scale[i].grade; break; }
   }
-  
   if (assignedGrade === '-' && perc > 100 && scale.length) assignedGrade = scale[0].grade; 
   return {g: assignedGrade, p: perc};
 }
@@ -200,10 +182,7 @@ function loadClasses() {
     (res.data || []).filter(c => c.isActive !== false).forEach(c => {
       const className = escH(c.className || c.name);
       const opt = `<option value="${c._id}">${className}</option>`;
-      htmlTab1 += opt; 
-      htmlStandard += opt; 
-      
-      // Changed to clone-class-chk
+      htmlTab1 += opt; htmlStandard += opt; 
       cloneClassHtml += `<label class="chk-label clone-label" data-cid="${c._id}"><input type="checkbox" class="clone-class-chk" value="${c._id}"> ${className}</label>`;
       rcClassHtml += `<label class="chk-label"><input type="checkbox" class="rc-class-chk" value="${c._id}" data-name="${escAttr(c.className || c.name)}" onchange="loadReportCardOptions()"> ${className}</label>`;
     });
@@ -217,9 +196,7 @@ function loadClasses() {
 }
 
 function toggleCloneClasses() {
-    const visibleChks = Array.from(document.querySelectorAll('.clone-label'))
-                             .filter(lbl => lbl.style.display !== 'none')
-                             .map(lbl => lbl.querySelector('.clone-class-chk'));
+    const visibleChks = Array.from(document.querySelectorAll('.clone-label')).filter(lbl => lbl.style.display !== 'none').map(lbl => lbl.querySelector('.clone-class-chk'));
     if (!visibleChks.length) return;
     const allChecked = visibleChks.every(c => c.checked);
     visibleChks.forEach(c => c.checked = !allChecked);
@@ -245,9 +222,7 @@ function loadStudents(){
   var cid = sel.value; 
   if (!cid){ return toast('Pick a class first','err'); }
   
-  var btn = document.getElementById('load-btn'); 
-  btn.disabled = true; 
-  btn.textContent = 'Loading…'; 
+  var btn = document.getElementById('load-btn'); btn.disabled = true; btn.textContent = 'Loading…'; 
   currentClassName = sel.options[sel.selectedIndex].text;
   
   var url = API_ENDPOINTS.STUDENTS + '?limit=9999&_t=' + new Date().getTime(); 
@@ -255,81 +230,33 @@ function loadStudents(){
   
   apiGet(url, true).then(function(r){
       students = (r && r.data) || [];
-      students.sort((a, b) => { 
-          var nA = (a.name || '').toLowerCase(), nB = (b.name || '').toLowerCase(); 
-          if (nA < nB) return -1; 
-          if (nA > nB) return 1; 
-          return 0; 
-      });
+      students.sort((a, b) => { var nA = (a.name || '').toLowerCase(), nB = (b.name || '').toLowerCase(); if (nA < nB) return -1; if (nA > nB) return 1; return 0; });
       selected = {}; 
       renderStudents(); 
       document.getElementById('stu-panel').style.display = 'block';
-      
-      if (!students.length) toast('No students found','err'); 
-      else toast(`Loaded ${students.length} students!`, 'success');
-  }).catch(() => toast('Failed to load students','err'))
-    .finally(() => { btn.disabled = false; btn.textContent = 'Load Students'; });
+      if (!students.length) toast('No students found','err'); else toast(`Loaded ${students.length} students!`, 'success');
+  }).catch(() => toast('Failed to load students','err')).finally(() => { btn.disabled = false; btn.textContent = 'Load Students'; });
 }
 
 function renderStudents(){
   var grid = document.getElementById('stu-grid');
-  if (!students.length){ 
-      grid.innerHTML = '<div class="empty">No students to show.</div>'; 
-      updateCount(); 
-      return; 
-  }
+  if (!students.length){ grid.innerHTML = '<div class="empty">No students to show.</div>'; updateCount(); return; }
   grid.innerHTML = students.map(s => {
     var photo = s.photo ? `<img class="stu-photo" loading="lazy" src="${escAttr(s.photo)}">` : `<div class="stu-photo-ph">👤</div>`;
     return `<div class="stu-card" data-id="${escAttr(s._id)}" onclick="toggleStu(this)">
-                ${photo}
-                <div class="stu-meta">
-                    <div class="stu-name">${escH(s.name||'—')}</div>
-                    <div class="stu-sub">${escH(s.fatherName||'')}</div>
-                </div>
-                <div class="stu-chk">✓</div>
+                ${photo}<div class="stu-meta"><div class="stu-name">${escH(s.name||'—')}</div><div class="stu-sub">${escH(s.fatherName||'')}</div></div><div class="stu-chk">✓</div>
             </div>`;
   }).join(''); 
   updateCount();
 }
 
-function toggleStu(el){ 
-    var id = el.getAttribute('data-id'); 
-    if (selected[id]){ 
-        delete selected[id]; 
-        el.classList.remove('on'); 
-    } else { 
-        selected[id]=true; 
-        el.classList.add('on'); 
-    } 
-    updateCount(); 
-}
-
-function selectAll(on){ 
-    document.querySelectorAll('.stu-card').forEach(el => { 
-        var id = el.getAttribute('data-id'); 
-        if (on){ 
-            selected[id]=true; 
-            el.classList.add('on'); 
-        } else { 
-            delete selected[id]; 
-            el.classList.remove('on'); 
-        } 
-    }); 
-    updateCount(); 
-}
-
-function updateCount(){ 
-    var n = Object.keys(selected).length; 
-    document.getElementById('sel-count').textContent = n + ' selected'; 
-    document.getElementById('gen-btn').disabled = n === 0; 
-}
-
-function selectedStudents(){ 
-    return students.filter(s => selected[s._id]); 
-}
+function toggleStu(el){ var id = el.getAttribute('data-id'); if (selected[id]){ delete selected[id]; el.classList.remove('on'); } else { selected[id]=true; el.classList.add('on'); } updateCount(); }
+function selectAll(on){ document.querySelectorAll('.stu-card').forEach(el => { var id = el.getAttribute('data-id'); if (on){ selected[id]=true; el.classList.add('on'); } else { delete selected[id]; el.classList.remove('on'); } }); updateCount(); }
+function updateCount(){ var n = Object.keys(selected).length; document.getElementById('sel-count').textContent = n + ' selected'; document.getElementById('gen-btn').disabled = n === 0; }
+function selectedStudents(){ return students.filter(s => selected[s._id]); }
 
 /* =========================================================================
-   ADMIT CARD LOGIC & HEADER LOAD
+   ADMIT CARD LOGIC
    ========================================================================= */
 function loadHeader(){
   apiGet(API_ENDPOINTS.INSTITUTION_PROFILE, true).then(function(res){
@@ -337,32 +264,16 @@ function loadHeader(){
     var code = d.institutionCode || localStorage.getItem('institutionCode') || 'default';
     hdrKey = HDR_BASE + ':' + code;
     
-    if (d.currentAcademicYear) {
-      window.currentSession = d.currentAcademicYear;
-      var sessionInput = document.getElementById('rc-session-text');
-      if (sessionInput) sessionInput.value = window.currentSession;
-    }
+    if (d.currentAcademicYear) { window.currentSession = d.currentAcademicYear; var sessionInput = document.getElementById('rc-session-text'); if (sessionInput) sessionInput.value = window.currentSession; }
     
     var saved = readSaved();
-    setVal('sch-name', d.name || saved.name || ''); 
-    setVal('sch-addr', d.address ? composeAddress(d.address) : (saved.addr || ''));
-    
-    var cf = d.contactsFull || {};
-    var realPhone = [cf.mobile1, cf.mobile2].filter(Boolean).join(', ');
-    setVal('sch-phone', saved.phone || realPhone || ''); 
-    setVal('sch-email', saved.email || cf.email || '');
-    
-    if (d.logo) { schoolLogoUrl = d.logo; showLogo(d.logo); } 
-    else if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); } 
-    else { schoolLogoUrl = null; showLogo(null); }
-    
+    setVal('sch-name', d.name || saved.name || ''); setVal('sch-addr', d.address ? composeAddress(d.address) : (saved.addr || ''));
+    var cf = d.contactsFull || {}; var realPhone = [cf.mobile1, cf.mobile2].filter(Boolean).join(', ');
+    setVal('sch-phone', saved.phone || realPhone || ''); setVal('sch-email', saved.email || cf.email || '');
+    if (d.logo) { schoolLogoUrl = d.logo; showLogo(d.logo); } else if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); } else { schoolLogoUrl = null; showLogo(null); }
     saveHeader();
   }).catch(function(){
-    var saved = readSaved(); 
-    setVal('sch-name', saved.name || ''); 
-    setVal('sch-addr', saved.addr || ''); 
-    setVal('sch-phone', saved.phone || ''); 
-    setVal('sch-email', saved.email || '');
+    var saved = readSaved(); setVal('sch-name', saved.name || ''); setVal('sch-addr', saved.addr || ''); setVal('sch-phone', saved.phone || ''); setVal('sch-email', saved.email || '');
     if (saved.logo) { schoolLogoUrl = saved.logo; showLogo(saved.logo); }
   });
 }
@@ -387,13 +298,8 @@ function preloadImages(urls, done){
     if (!urls.length) return done(); 
     var total = urls.length, loaded = 0, index = 0; 
     function loadNext() { 
-        if (index >= total) return; 
-        var u = urls[index++]; 
-        var img = new Image(); 
-        img.onload = img.onerror = function() { 
-            loaded++; 
-            if (loaded >= total) done(); else loadNext(); 
-        }; 
+        if (index >= total) return; var u = urls[index++]; var img = new Image(); 
+        img.onload = img.onerror = function() { loaded++; if (loaded >= total) done(); else loadNext(); }; 
         img.src = u; 
     } 
     for (var i = 0; i < Math.min(15, total); i++) loadNext(); 
@@ -420,37 +326,109 @@ function buildAndPrintAdmit(list){
             </div>`;
   }).join('');
   
-  var old = document.getElementById('admit-print-frame'); 
-  if (old && old.parentNode) old.parentNode.removeChild(old);
-  
-  var iframe = document.createElement('iframe'); 
-  iframe.id = 'admit-print-frame'; 
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; 
-  document.body.appendChild(iframe);
-  
-  var doc = iframe.contentWindow.document; 
-  doc.open(); 
+  var old = document.getElementById('admit-print-frame'); if (old && old.parentNode) old.parentNode.removeChild(old);
+  var iframe = document.createElement('iframe'); iframe.id = 'admit-print-frame'; iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; document.body.appendChild(iframe);
+  var doc = iframe.contentWindow.document; doc.open(); 
   doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page{size:A4;margin:0;} *{box-sizing:border-box;margin:0;padding:0;} body{font-family:Georgia,serif;color:#111;} .ac{width:210mm;height:148.5mm;padding:11mm 12mm 9mm;position:relative;border-bottom:1px dashed #999;} .ac:nth-child(even){border-bottom:none;} .ac-head{display:flex;align-items:center;gap:12px;} .ac-logo{width:58px;height:58px;object-fit:contain;} .ac-school{flex:1;} .ac-name{font-size:20px;font-weight:700;} .ac-addr{font-size:11px;color:#333;margin-top:2px;} .ac-title{text-align:center;font-size:15px;font-weight:700;text-decoration:underline;margin:9mm 0 7mm;} .ac-body{display:flex;gap:14px;} .ac-fields{flex:1;} .ac-row{display:flex;align-items:flex-end;margin-bottom:6.5mm;font-size:13.5px;} .ac-lbl{font-weight:700;margin-right:8px;} .ac-val{border-bottom:1px solid #333;flex:1;min-width:120px;} .ac-photo-wrap{width:35mm;display:flex;justify-content:flex-end;} .ac-photo{width:33mm;height:40mm;object-fit:cover;border:1px solid #333;} .ac-photo-ph{display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;} .ac-foot{position:absolute;left:12mm;right:12mm;bottom:9mm;display:flex;justify-content:space-between;align-items:flex-end;} .ac-date{font-size:14px;font-weight:700;} .ac-sig{width:160px;border-top:1px solid #111;padding-top:5px;font-size:14px;font-weight:700;text-align:center;}</style></head><body>'+cards+'</body></html>'); 
   doc.close();
-  
   setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); }, 1500);
 }
 
 
 /* =========================================================================
-   EXAM SETUP LOGIC (ULTRA CLEAN CLONING ENGINE)
+   EXAM SETUP LOGIC (WITH SUBJECT OVERRIDES)
    ========================================================================= */
-function addSetupColumn(name = '', max = '') {
+function addSetupColumn(name = '', max = '', overridesStr = '{}') {
   const container = document.getElementById('s-cols-container'); 
   const div = document.createElement('div'); 
   div.className = 'grid2 setup-col-row'; 
   div.style.marginBottom = '10px';
+  
+  let btnStyle = overridesStr !== '{}' ? 'background:rgba(212,168,67,0.1); color:var(--gold);' : 'color:var(--silver); background:transparent;';
+  let btnText = overridesStr !== '{}' ? '⚙️ (Active)' : '⚙️ Overrides';
+
   div.innerHTML = `<input type="text" class="c-name" placeholder="Assessment Name (e.g., PT1)" value="${escAttr(name)}">
-    <div style="display:flex; gap:10px;">
-        <input type="number" class="c-max" placeholder="Max Marks" style="width:60%" value="${max}">
-        <button class="btn-ghost" style="width:40%; padding:0; color:var(--danger); border-color:rgba(239,68,68,0.5);" onclick="this.parentElement.parentElement.remove();">✕</button>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <input type="number" class="c-max" placeholder="Global Max" style="width:40%" value="${max}">
+        <button class="btn-ghost" style="width:40%; padding:0; ${btnStyle} border-color:var(--gold);" title="Subject Overrides" onclick="openOverrideModal(this)">${btnText}</button>
+        <button class="btn-ghost" style="width:20%; padding:0; color:var(--danger); border-color:rgba(239,68,68,0.5);" onclick="this.parentElement.parentElement.remove();">✕</button>
+        <input type="hidden" class="c-overrides" value="${escAttr(overridesStr)}">
     </div>`;
   container.appendChild(div);
+}
+
+// Subject Override Modal Logic
+let currentOverrideRow = null;
+
+function openOverrideModal(btn) {
+    const classId = getVal('s-class-sel');
+    if (!classId) return toast('Please select a Primary Class first.', 'err');
+    
+    currentOverrideRow = btn.closest('.setup-col-row');
+    const globalMax = currentOverrideRow.querySelector('.c-max').value || 0;
+    const overridesObj = JSON.parse(currentOverrideRow.querySelector('.c-overrides').value || '{}');
+    const assName = currentOverrideRow.querySelector('.c-name').value || 'This Assessment';
+
+    document.getElementById('override-modal-title').textContent = `⚙️ Overrides for ${assName}`;
+    const body = document.getElementById('override-body');
+    body.innerHTML = '<div style="color:var(--muted)">Loading subjects...</div>';
+    document.getElementById('override-modal').style.display = 'flex';
+
+    apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`, true)
+    .then(res => {
+        const subjects = res.data || [];
+        if (!subjects.length) {
+            body.innerHTML = '<div style="color:var(--warn)">No subjects found for this class. Map subjects in the Class module first.</div>';
+            return;
+        }
+        let html = `<div style="font-size:13px; color:var(--silver); margin-bottom:15px;">Global Max is set to <b style="color:var(--gold);">${globalMax}</b>. Change it below only for subjects that need a different Max Mark.</div>`;
+        html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">`;
+        subjects.forEach(s => {
+            const sName = s.subjectName;
+            const val = overridesObj[sName] || globalMax;
+            html += `
+                <div style="background:var(--panel); padding:10px; border:1px solid var(--rim); border-radius:8px;">
+                    <label style="color:var(--text); margin-bottom:4px;">${escH(sName)}</label>
+                    <input type="number" class="o-max-input" data-sub="${escAttr(sName)}" value="${val}" style="padding:6px; font-size:13px; background:var(--surface);">
+                </div>
+            `;
+        });
+        html += `</div>`;
+        body.innerHTML = html;
+    }).catch(() => body.innerHTML = '<div style="color:var(--danger)">Error loading subjects.</div>');
+}
+
+function closeOverrideModal() { document.getElementById('override-modal').style.display = 'none'; }
+
+function saveOverrides() {
+    if (!currentOverrideRow) return closeOverrideModal();
+    const globalMax = Number(currentOverrideRow.querySelector('.c-max').value);
+    const inputs = document.querySelectorAll('.o-max-input');
+    const overrides = {};
+    
+    inputs.forEach(inp => {
+        const sub = inp.getAttribute('data-sub');
+        const val = Number(inp.value);
+        if (val > 0 && val !== globalMax) {
+            overrides[sub] = val;
+        }
+    });
+    
+    currentOverrideRow.querySelector('.c-overrides').value = JSON.stringify(overrides);
+    
+    const btn = currentOverrideRow.querySelector('button[title="Subject Overrides"]');
+    if (Object.keys(overrides).length > 0) {
+        btn.style.background = 'rgba(212,168,67,0.1)';
+        btn.style.color = 'var(--gold)';
+        btn.textContent = '⚙️ (Active)';
+    } else {
+        btn.style.background = 'transparent';
+        btn.style.color = 'var(--silver)';
+        btn.textContent = '⚙️ Overrides';
+    }
+    
+    closeOverrideModal();
+    toast('Overrides applied to this column!', 'success');
 }
 
 function saveExamSetup() {
@@ -463,14 +441,13 @@ function saveExamSetup() {
   rows.forEach(r => { 
       const name = r.querySelector('.c-name').value.trim(); 
       const max = Number(r.querySelector('.c-max').value); 
-      if (name && max > 0) assessments.push({ name, maxMarks: max }); 
+      const overrides = JSON.parse(r.querySelector('.c-overrides').value || '{}');
+      if (name && max > 0) assessments.push({ name, maxMarks: max, overrides }); 
   });
   
   if (!assessments.length) return toast('Add at least one valid assessment column with Max Marks', 'err');
   
-  const btn = document.getElementById('btn-save-setup'); 
-  btn.disabled = true; 
-  btn.textContent = 'Saving...';
+  const btn = document.getElementById('btn-save-setup'); btn.disabled = true; btn.textContent = 'Saving...';
   
   if (currentEditSetupId) {
     apiPut(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${currentEditSetupId}`, { termName, assessments }, true)
@@ -495,20 +472,12 @@ function resetSetupForm() {
 function loadExistingSetups() {
   const classId = getVal('s-class-sel');
   
-  // Hide the currently selected class from the target clone list to prevent cloning to itself
   document.querySelectorAll('.clone-label').forEach(lbl => {
-      if (lbl.getAttribute('data-cid') === classId) {
-          lbl.style.display = 'none';
-          lbl.querySelector('input').checked = false;
-      } else {
-          lbl.style.display = 'flex';
-      }
+      if (lbl.getAttribute('data-cid') === classId) { lbl.style.display = 'none'; lbl.querySelector('input').checked = false; } 
+      else { lbl.style.display = 'flex'; }
   });
 
-  if(!classId) {
-    document.getElementById('existing-setups-card').style.display = 'none';
-    return;
-  }
+  if(!classId) { document.getElementById('existing-setups-card').style.display = 'none'; return; }
   
   apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => {
     const list = document.getElementById('s-list'); 
@@ -518,12 +487,14 @@ function loadExistingSetups() {
       list.innerHTML = '<div style="color:var(--muted); padding:10px 0;">No structures created yet.</div>';
       document.getElementById('clone-term-container').innerHTML = '<span style="color:var(--muted)">No terms available to clone.</span>';
     } else {
-      // Map existing setups to the view list
       list.innerHTML = globalSetups.map(s => {
         return `<div style="padding:14px; background:rgba(255,255,255,0.02); margin-bottom:12px; border-radius:8px; border:1px solid var(--rim); display:flex; justify-content:space-between; align-items:center;">
                   <div>
                       <strong style="color:var(--gold); font-size:15px;">${escH(s.termName)}</strong><br>
-                      <span style="color:var(--silver); font-size:13px; margin-top:4px; display:block;">${s.assessments.map(a => `${escH(a.name)} (${a.maxMarks})`).join(' &nbsp;|&nbsp; ')}</span>
+                      <span style="color:var(--silver); font-size:13px; margin-top:4px; display:block;">${s.assessments.map(a => {
+                          const hasOvr = a.overrides && Object.keys(a.overrides).length > 0;
+                          return `${escH(a.name)} (${a.maxMarks}${hasOvr?'*':''})`;
+                      }).join(' &nbsp;|&nbsp; ')}</span>
                   </div>
                   <div style="display:flex; gap:10px;">
                       <button class="btn-ghost" style="padding:6px 12px; font-size:12px; border-color:var(--gold); color:var(--gold);" onclick="editSetup('${s._id}')">Edit</button>
@@ -532,7 +503,6 @@ function loadExistingSetups() {
                 </div>`;
       }).join('');
       
-      // Also map them into the Clone box checkboxes
       document.getElementById('clone-term-container').innerHTML = globalSetups.map(s => 
           `<label class="chk-label"><input type="checkbox" class="clone-term-chk" value="${s._id}" checked> ${escH(s.termName)}</label>`
       ).join('');
@@ -547,7 +517,7 @@ function editSetup(id) {
   currentEditSetupId = id; 
   setVal('s-term-name', setup.termName);
   document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>';
-  setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks)); 
+  setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks, JSON.stringify(a.overrides || {}))); 
   document.getElementById('btn-save-setup').textContent = '💾 Update Term'; 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -563,64 +533,42 @@ function cloneStructureToClasses() {
     const sourceClassId = getVal('s-class-sel');
     if (!sourceClassId || globalSetups.length === 0) return toast('No structure to clone', 'err');
     
-    // 1. Get Selected Terms
     const termChks = document.querySelectorAll('.clone-term-chk:checked');
     if (termChks.length === 0) return toast('Select at least one term to clone', 'err');
     const selectedTermIds = Array.from(termChks).map(c => c.value);
     const termsToClone = globalSetups.filter(s => selectedTermIds.includes(s._id));
 
-    // 2. Get Selected Target Classes
     const targetChks = document.querySelectorAll('.clone-class-chk:checked');
     if (targetChks.length === 0) return toast('Select at least one target class', 'err');
     const targetClassIds = Array.from(targetChks).map(c => c.value);
     
-    // 3. Confirm & Execute
-    if (!confirm(`This will copy ${termsToClone.length} term(s) to ${targetClassIds.length} class(es). Proceed?`)) return;
+    if (!confirm(`This will copy ${termsToClone.length} term(s) (including subject overrides) to ${targetClassIds.length} class(es). Proceed?`)) return;
     
     const btn = document.querySelector('button[onclick="cloneStructureToClasses()"]');
-    const origText = btn.textContent;
-    btn.textContent = 'Cloning...';
-    btn.disabled = true;
+    const origText = btn.textContent; btn.textContent = 'Cloning...'; btn.disabled = true;
     
     let promises = [];
     targetClassIds.forEach(targetCid => {
         termsToClone.forEach(setup => {
             promises.push(
-                apiPost(API_ENDPOINTS.EXAM_SETUP, {
-                    session: window.currentSession,
-                    classId: targetCid,
-                    termName: setup.termName,
-                    assessments: setup.assessments
-                }, true)
+                apiPost(API_ENDPOINTS.EXAM_SETUP, { session: window.currentSession, classId: targetCid, termName: setup.termName, assessments: setup.assessments }, true)
             );
         });
     });
     
     Promise.all(promises)
-        .then(() => {
-            toast('Structure successfully cloned to all selected classes!', 'success');
-            targetChks.forEach(c => c.checked = false); // Uncheck targets so they don't accidentally click twice
-        })
-        .catch(e => {
-            toast('Some terms failed to copy (they may already exist in those classes).', 'err');
-        })
-        .finally(() => {
-            btn.textContent = origText;
-            btn.disabled = false;
-        });
+        .then(() => { toast('Structure successfully cloned!', 'success'); targetChks.forEach(c => c.checked = false); })
+        .catch(e => { toast('Some terms failed to copy (they may already exist in those classes).', 'err'); })
+        .finally(() => { btn.textContent = origText; btn.disabled = false; });
 }
 
 /* =========================================================================
    MARKS UPLOAD & CLOUD SYNC LOGIC
    ========================================================================= */
-function onMarksClassChange() {
-  populateSetupsDropdown('m-class-sel', 'm-setup-sel');
-  loadClassSubjectsForEntry();
-}
+function onMarksClassChange() { populateSetupsDropdown('m-class-sel', 'm-setup-sel'); loadClassSubjectsForEntry(); }
 
 function populateSetupsDropdown(classSelId, setupSelId) {
-  const classId = getVal(classSelId); 
-  const sel = document.getElementById(setupSelId);
+  const classId = getVal(classSelId); const sel = document.getElementById(setupSelId);
   if(!classId) { if(sel) sel.innerHTML = '<option value="">Select Class First...</option>'; return; }
   if(sel) sel.innerHTML = '<option value="">Loading...</option>';
   
@@ -632,17 +580,15 @@ function populateSetupsDropdown(classSelId, setupSelId) {
 }
 
 function loadClassSubjectsForEntry() {
-  const classId = getVal('m-class-sel'); 
-  const sel = document.getElementById('m-subject-sel');
+  const classId = getVal('m-class-sel'); const sel = document.getElementById('m-subject-sel');
   if(!classId) { if(sel) sel.innerHTML = '<option value="">Select Class First...</option>'; return; }
   if(sel) sel.innerHTML = '<option value="">Loading...</option>';
   
   const apiUrl = API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`;
   apiGet(apiUrl, true).then(res => {
     const subjects = res.data || [];
-    if (!subjects.length) { 
-        if(sel) sel.innerHTML = '<option value="">No subjects mapped to this class</option>'; 
-    } else { 
+    if (!subjects.length) { if(sel) sel.innerHTML = '<option value="">No subjects mapped to this class</option>'; } 
+    else { 
         let html = '<option value="">Select Subject...</option>'; 
         subjects.forEach(s => { html += `<option value="${s._id}">${escH(s.subjectName)}</option>`; }); 
         if(sel) sel.innerHTML = html; 
@@ -650,38 +596,47 @@ function loadClassSubjectsForEntry() {
   }).catch(e => { if(sel) sel.innerHTML = '<option value="">Error loading subjects</option>'; });
 }
 
+// Global helper to get the specific max marks for a subject
+function getSubMax(a, subName) {
+    return (a.overrides && a.overrides[subName] !== undefined) ? Number(a.overrides[subName]) : Number(a.maxMarks);
+}
+
 function loadMarksGrid() {
   const classId = getVal('m-class-sel'), subjectId = getVal('m-subject-sel'), examSetupId = getVal('m-setup-sel');
   if (!classId || !subjectId || !examSetupId) return toast('Select Class, Subject, and Term', 'err');
   
-  const btn = document.getElementById('btn-load-grid'); 
-  const originalText = btn?.textContent || 'Load Grid';
+  const btn = document.getElementById('btn-load-grid'); const originalText = btn?.textContent || 'Load Grid';
   if(btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+  
+  const sSelect = document.getElementById('m-subject-sel');
+  const subjectName = sSelect.options[sSelect.selectedIndex].text;
   
   apiGet(`${API_ENDPOINTS.MARKS_GRID}?session=${window.currentSession}&classId=${classId}&subjectId=${subjectId}&examSetupId=${examSetupId}`, true)
   .then(res => { 
       currentGridSetup = res.setup; 
-      renderDynamicGrid(res.data, res.setup); 
+      renderDynamicGrid(res.data, res.setup, subjectName); 
       document.getElementById('marks-grid-panel').style.display = 'block'; 
   })
   .catch(e => toast(e.message || 'Failed to load grid', 'err'))
   .finally(() => { if(btn) { btn.disabled = false; btn.textContent = originalText; } });
 }
 
-function renderDynamicGrid(students, setup) {
+function renderDynamicGrid(students, setup, subjectName) {
   const thead = document.getElementById('marks-thead'), tbody = document.getElementById('marks-tbody');
   let totalMax = 0; 
   let thHtml = '<tr><th style="width:15%;">Roll No</th><th style="width:40%;">Student Name</th>';
   
   setup.assessments.forEach(a => { 
-      thHtml += `<th style="text-align:center;">${escH(a.name)}<br><small style="color:var(--silver);font-weight:400;">(Max: ${a.maxMarks})</small></th>`; 
-      totalMax += a.maxMarks; 
+      const aMax = getSubMax(a, subjectName);
+      let overrideIndicator = (aMax !== a.maxMarks) ? '<span style="color:#ef4444; font-size:10px;"> (Override)</span>' : '';
+      thHtml += `<th style="text-align:center;">${escH(a.name)}${overrideIndicator}<br><small style="color:var(--silver);font-weight:400;">(Max: ${aMax})</small></th>`; 
+      totalMax += aMax; 
   });
   thHtml += '</tr>'; 
   if(thead) thead.innerHTML = thHtml;
   
   const maxLabel = document.getElementById('m-max-label'); 
-  if (maxLabel) maxLabel.textContent = `Total Max Marks: ${totalMax}`;
+  if (maxLabel) maxLabel.textContent = `Total Subject Max Marks: ${totalMax}`;
   
   if (!students || !students.length) { 
       if(tbody) tbody.innerHTML = `<tr><td colspan="${setup.assessments.length + 2}" class="empty" style="padding: 30px; text-align: center;">No students found in this class.</td></tr>`; 
@@ -693,10 +648,11 @@ function renderDynamicGrid(students, setup) {
                 <td style="font-family:'IBM Plex Mono',monospace;">${escH(s.rollNo)}</td>
                 <td style="font-weight:600;">${escH(s.name)}</td>`;
     setup.assessments.forEach(a => {
+      const aMax = getSubMax(a, subjectName);
       const markData = s.marks[a.name] || { status: 'present', obtained: '' };
       const val = markData.status === 'present' ? (markData.obtained ?? '') : markData.status.toUpperCase();
       tr += `<td style="text-align:center;">
-                <input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${a.maxMarks}" value="${val}" placeholder="0-${a.maxMarks} / AB" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();">
+                <input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${aMax}" value="${val}" placeholder="0-${aMax} / AB" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();">
              </td>`;
     });
     tr += '</tr>'; 
@@ -708,26 +664,14 @@ function renderDynamicGrid(students, setup) {
 
 function handleGridArrowKeys(e) {
     if (!e.target.classList.contains('dyn-mark')) return;
-    const td = e.target.closest('td'); 
-    const tr = e.target.closest('tr'); 
-    const tbody = tr.parentElement;
-    const colIndex = Array.from(tr.children).indexOf(td); 
-    const rowIndex = Array.from(tbody.children).indexOf(tr);
+    const td = e.target.closest('td'); const tr = e.target.closest('tr'); const tbody = tr.parentElement;
+    const colIndex = Array.from(tr.children).indexOf(td); const rowIndex = Array.from(tbody.children).indexOf(tr);
     let nextInput = null;
     
-    if (e.key === 'ArrowRight') { 
-        e.preventDefault(); 
-        if (tr.children[colIndex + 1]) nextInput = tr.children[colIndex + 1].querySelector('.dyn-mark'); 
-    } else if (e.key === 'ArrowLeft') { 
-        e.preventDefault(); 
-        if (tr.children[colIndex - 1]) nextInput = tr.children[colIndex - 1].querySelector('.dyn-mark'); 
-    } else if (e.key === 'ArrowDown') { 
-        e.preventDefault(); 
-        if (tbody.children[rowIndex + 1]) nextInput = tbody.children[rowIndex + 1].children[colIndex].querySelector('.dyn-mark'); 
-    } else if (e.key === 'ArrowUp') { 
-        e.preventDefault(); 
-        if (tbody.children[rowIndex - 1]) nextInput = tbody.children[rowIndex - 1].children[colIndex].querySelector('.dyn-mark'); 
-    }
+    if (e.key === 'ArrowRight') { e.preventDefault(); if (tr.children[colIndex + 1]) nextInput = tr.children[colIndex + 1].querySelector('.dyn-mark'); } 
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); if (tr.children[colIndex - 1]) nextInput = tr.children[colIndex - 1].querySelector('.dyn-mark'); } 
+    else if (e.key === 'ArrowDown') { e.preventDefault(); if (tbody.children[rowIndex + 1]) nextInput = tbody.children[rowIndex + 1].children[colIndex].querySelector('.dyn-mark'); } 
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (tbody.children[rowIndex - 1]) nextInput = tbody.children[rowIndex - 1].children[colIndex].querySelector('.dyn-mark'); }
     
     if (nextInput) { nextInput.focus(); nextInput.select(); }
 }
@@ -784,9 +728,7 @@ function silentSaveMarks() {
 
 function saveMarksGrid() {
   const btn = document.getElementById('btn-save-marks'); 
-  const originalText = btn.textContent; 
-  btn.disabled = true; 
-  btn.textContent = 'Saving...';
+  const originalText = btn.textContent; btn.disabled = true; btn.textContent = 'Saving...';
   silentSaveMarks(); 
   setTimeout(() => { toast('Marks saved to cloud', 'success'); btn.disabled = false; btn.textContent = originalText; }, 800);
 }
@@ -796,15 +738,17 @@ function showAnalytics() {
     const rows = document.querySelectorAll('.m-row'); 
     if (!rows.length) return toast('No students to analyze', 'err');
     
-    let totalMax = currentGridSetup.assessments.reduce((sum, a) => sum + a.maxMarks, 0); 
+    const sSelect = document.getElementById('m-subject-sel');
+    const subjectName = sSelect.options[sSelect.selectedIndex].text;
+    
+    let totalMax = currentGridSetup.assessments.reduce((sum, a) => sum + getSubMax(a, subjectName), 0); 
     if (totalMax === 0) return toast('Max marks is 0', 'err');
     
     let studentsData = []; let classTotalObtained = 0; let validStudentCount = 0;
     
     rows.forEach(r => {
         const name = r.cells[1].textContent; 
-        let stuTotal = 0; 
-        let hasValidMark = false;
+        let stuTotal = 0; let hasValidMark = false;
         r.querySelectorAll('.dyn-mark').forEach(inp => {
             const val = inp.value.trim().toUpperCase();
             if (val !== '' && val !== 'AB' && val !== 'ABSENT' && val !== 'M' && val !== 'MEDICAL') {
@@ -815,8 +759,7 @@ function showAnalytics() {
         if (hasValidMark) { 
             let perc = (stuTotal / totalMax) * 100; 
             studentsData.push({ name, total: stuTotal, perc: perc }); 
-            classTotalObtained += stuTotal; 
-            validStudentCount++; 
+            classTotalObtained += stuTotal; validStudentCount++; 
         }
     });
     
@@ -825,8 +768,7 @@ function showAnalytics() {
     studentsData.sort((a, b) => b.total - a.total);
     const top3 = studentsData.slice(0, 3);
     let top3Html = top3.map((s, i) => {
-        let rankClass = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : 'rank-3'); 
-        let medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : '🥉');
+        let rankClass = i === 0 ? 'rank-1' : (i === 1 ? 'rank-2' : 'rank-3'); let medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : '🥉');
         return `<div class="rank-row"><span class="${rankClass}">${medal} ${escH(s.name)}</span><span style="color:var(--silver); font-size:13px;">${s.total} / ${totalMax} (${s.perc.toFixed(1)}%)</span></div>`;
     }).join('');
     
@@ -850,33 +792,32 @@ function downloadExcelTemplate() {
   const rows = document.querySelectorAll('.m-row'); 
   if(!rows.length) return toast('No students to download.', 'err');
   
+  const sSelect = document.getElementById('m-subject-sel');
+  const subjectName = sSelect.options[sSelect.selectedIndex].text;
+  
   const data = Array.from(rows).map(r => {
     const obj = { "Student ID (DO NOT EDIT)": r.getAttribute('data-sid'), "Roll No": r.cells[0].textContent, "Student Name": r.cells[1].textContent };
     r.querySelectorAll('.dyn-mark').forEach(inp => { obj[`${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`] = inp.value; }); return obj;
   });
   
-  const ws = XLSX.utils.json_to_sheet(data); 
-  const wb = XLSX.utils.book_new(); 
+  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); 
   XLSX.utils.book_append_sheet(wb, ws, "Marks Entry");
-  const cSelect = document.getElementById('m-class-sel'), sSelect = document.getElementById('m-subject-sel');
-  XLSX.writeFile(wb, `${cSelect.options[cSelect.selectedIndex].text}_${sSelect.options[sSelect.selectedIndex].text}_${currentGridSetup.termName}.xlsx`);
+  const cSelect = document.getElementById('m-class-sel');
+  XLSX.writeFile(wb, `${cSelect.options[cSelect.selectedIndex].text}_${subjectName}_${currentGridSetup.termName}.xlsx`);
 }
 
 function handleExcelUpload(event) {
   if (!currentGridSetup) { event.target.value = ""; return toast('Load the grid first.', 'err'); }
-  const file = event.target.files[0]; 
-  if (!file) return; 
+  const file = event.target.files[0]; if (!file) return; 
   const reader = new FileReader();
   
   reader.onload = function(e) {
     try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, {type: 'array'}); 
+      const data = new Uint8Array(e.target.result); const wb = XLSX.read(data, {type: 'array'}); 
       const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       let matchCount = 0;
       json.forEach(row => {
-        const sid = row["Student ID (DO NOT EDIT)"]; 
-        if (!sid) return;
+        const sid = row["Student ID (DO NOT EDIT)"]; if (!sid) return;
         const tr = document.querySelector(`.m-row[data-sid="${sid}"]`);
         if (tr) {
           tr.querySelectorAll('.dyn-mark').forEach(inp => {
@@ -895,7 +836,7 @@ function handleExcelUpload(event) {
 }
 
 /* =========================================================================
-   TABULATION REGISTER LOGIC
+   TABULATION REGISTER LOGIC (DYNAMIC SUBJECT OVERRIDES APPLIED)
    ========================================================================= */
 
 function onTabuClassChange() { 
@@ -925,7 +866,6 @@ function loadTabulation() {
         const res = results[0]; 
         const activeSubjectNames = (results[1].data || []).map(s => s.subjectName); 
         const setups = res.setups.filter(s => selectedTermIds.includes(s._id)); 
-        const termMax = setups.reduce((sum, setup) => sum + setup.assessments.reduce((s, a) => s + a.maxMarks, 0), 0); 
         const studentsData = res.data || []; 
         
         let subjectsSet = new Set(); 
@@ -941,12 +881,14 @@ function loadTabulation() {
         let processed = studentsData.map(item => { 
             const stu = item.student; 
             let grandTotal = 0; 
+            let maxPossible = 0;
             let subTotals = {}; 
             let failCount = 0; 
             let anyMissing = false; 
             
             subjects.forEach(sub => { 
                 let sTotal = 0; 
+                let sMax = 0;
                 let termVals = {}; 
                 let hasAnyMarks = false; 
                 
@@ -954,61 +896,57 @@ function loadTabulation() {
                     const termData = item.subjects[sub]?.[setup._id]; 
                     let tTotal = 0; 
                     let tHasMarks = false; 
-                    if (termData) { 
-                        setup.assessments.forEach(a => { 
+                    
+                    setup.assessments.forEach(a => { 
+                        sMax += getSubMax(a, sub);
+                        if (termData) { 
                             const m = termData[a.name]; 
                             if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') { 
                                 tTotal += Number(m.obtained); tHasMarks = true; hasAnyMarks = true; 
                             } 
-                        }); 
-                    } 
+                        }
+                    }); 
                     termVals[setup._id] = tHasMarks ? tTotal : 'AB'; 
                     sTotal += tTotal; 
                 }); 
                 
-                if (sTotal < (termMax * 0.33)) failCount++; 
+                if (sTotal < (sMax * 0.33)) failCount++; 
                 if (!hasAnyMarks) anyMissing = true; 
-                subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (termMax * 0.33)) }; 
-                grandTotal += sTotal; 
+                
+                subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', max: sMax, missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (sMax * 0.33)) }; 
+                if(hasAnyMarks) grandTotal += sTotal;
+                maxPossible += sMax;
             }); 
             
-            const maxPossible = termMax * subjects.length; 
             const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0; 
             return { id: stu._id, rollNo: stu.rollNo, name: stu.name, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing }; 
         }); 
         
         processed.sort((a, b) => b.grandTotal - a.grandTotal); 
         let currentRank = 1; 
-        processed.forEach((p, i) => { 
-            if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1; 
-            p.rank = currentRank; 
-        }); 
+        processed.forEach((p, i) => { if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1; p.rank = currentRank; }); 
+        processed.sort((a, b) => { const ra = parseInt(a.rollNo) || 9999; const rb = parseInt(b.rollNo) || 9999; if (ra !== rb) return ra - rb; return a.name.localeCompare(b.name); }); 
         
-        processed.sort((a, b) => { 
-            const ra = parseInt(a.rollNo) || 9999; 
-            const rb = parseInt(b.rollNo) || 9999; 
-            if (ra !== rb) return ra - rb; 
-            return a.name.localeCompare(b.name); 
-        }); 
-        
-        currentTabuData = { setups, students: processed, termMax, selectedTermNames: setups.map(s => s.termName).join(' + ') }; 
+        currentTabuData = { setups, students: processed, selectedTermNames: setups.map(s => s.termName).join(' + ') }; 
         renderTabulationGrid(); 
     }); 
 }
 
 function renderTabulationGrid() { 
     const panel = document.getElementById('tabu-grid-panel'); 
-    const { setups, students, termMax } = currentTabuData; 
+    const { setups, students } = currentTabuData; 
     let html = `<table class="marks-table tabu-table"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" style="text-align:left;">Student Name</th>`; 
     let ths2 = `<tr>`; 
     
     currentTabuSubjs.forEach(sub => { 
         html += `<th colspan="${setups.length + 1}" style="color:var(--gold); border-bottom:1px solid var(--rim);">${escH(sub)}</th>`; 
+        let subTotalMax = 0;
         setups.forEach(setup => { 
-            const tMax = setup.assessments.reduce((s, a) => s + a.maxMarks, 0); 
+            const tMax = setup.assessments.reduce((s, a) => s + getSubMax(a, sub), 0); 
+            subTotalMax += tMax;
             ths2 += `<th>${escH(setup.termName.substring(0, 8))}..<br><small>(${tMax})</small></th>`; 
         }); 
-        ths2 += `<th style="color:var(--gold);">Total<br><small>(${termMax})</small></th>`; 
+        ths2 += `<th style="color:var(--gold);">Total<br><small>(${subTotalMax})</small></th>`; 
     }); 
     
     html += `<th rowspan="2" style="color:var(--gold);">Grand Total</th><th rowspan="2" style="color:var(--gold);">%</th><th rowspan="2" style="color:var(--gold);">Grade</th><th rowspan="2" style="color:var(--gold);">Rank</th></tr>`; 
@@ -1019,26 +957,22 @@ function renderTabulationGrid() {
         let tds = `<td>${escH(s.rollNo || '-')}</td><td style="text-align:left; font-weight:600;">${escH(s.name)}</td>`; 
         currentTabuSubjs.forEach(sub => { 
             const st = s.subTotals[sub]; 
-            setups.forEach(setup => { 
-                tds += `<td class="${st.terms[setup._id] === 'AB' ? 'cell-missing' : ''}">${st.terms[setup._id]}</td>`; 
-            }); 
+            setups.forEach(setup => { tds += `<td class="${st.terms[setup._id] === 'AB' ? 'cell-missing' : ''}">${st.terms[setup._id]}</td>`; }); 
             tds += `<td class="${st.fail ? 'cell-fail' : ''}" style="font-weight:bold; background:rgba(212,168,67,0.1);">${st.val}</td>`; 
         }); 
         let grade = getGradeInfo(s.grandTotal, s.maxPossible).g; 
-        tds += `<td style="font-weight:bold;">${s.grandTotal}</td><td style="font-weight:bold;">${s.perc.toFixed(1)}%</td><td style="font-weight:bold;">${grade}</td><td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`; 
+        tds += `<td style="font-weight:bold;">${s.grandTotal} <span style="font-size:10px; color:var(--silver);">/${s.maxPossible}</span></td><td style="font-weight:bold;">${s.perc.toFixed(1)}%</td><td style="font-weight:bold;">${grade}</td><td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`; 
         html += `<tr>${tds}</tr>`; 
     }); 
     
     html += `</tbody></table>`; 
-    panel.innerHTML = html; 
-    panel.style.display = 'block'; 
-    document.getElementById('btn-export-tabu-pdf').style.display = 'inline-block'; 
-    document.getElementById('btn-export-tabu-excel').style.display = 'inline-block';
+    panel.innerHTML = html; panel.style.display = 'block'; 
+    document.getElementById('btn-export-tabu-pdf').style.display = 'inline-block'; document.getElementById('btn-export-tabu-excel').style.display = 'inline-block';
 }
 
 function exportTabulationExcel() {
   if (!currentTabuData) return; 
-  const { setups, students, termMax } = currentTabuData; 
+  const { setups, students } = currentTabuData; 
   const cSelect = document.getElementById('tabu-class-sel'); 
   const className = cSelect.options[cSelect.selectedIndex].text;
   
@@ -1047,24 +981,23 @@ function exportTabulationExcel() {
       currentTabuSubjs.forEach(sub => { 
           if (setups.length > 1) { 
               setups.forEach(setup => { 
-                  const tMax = setup.assessments.reduce((acc, a) => acc + a.maxMarks, 0); 
+                  const tMax = setup.assessments.reduce((acc, a) => acc + getSubMax(a, sub), 0); 
                   obj[`${sub} - ${setup.termName} (${tMax})`] = s.subTotals[sub].terms[setup._id]; 
               }); 
-              obj[`${sub} Total (${termMax})`] = s.subTotals[sub].val; 
+              obj[`${sub} Total (${s.subTotals[sub].max})`] = s.subTotals[sub].val; 
           } else { 
-              obj[`${sub} (${termMax})`] = s.subTotals[sub].val; 
+              obj[`${sub} (${s.subTotals[sub].max})`] = s.subTotals[sub].val; 
           }
       });
       let grade = getGradeInfo(s.grandTotal, s.maxPossible).g;
-      obj[`Grand Total (${termMax * currentTabuSubjs.length})`] = s.grandTotal; 
+      obj[`Grand Total (${s.maxPossible})`] = s.grandTotal; 
       obj["Percentage"] = s.perc.toFixed(1) + '%'; 
       obj["Grade"] = grade; 
       obj["Rank"] = s.rank; 
       return obj;
   });
   
-  const ws = XLSX.utils.json_to_sheet(data); 
-  const wb = XLSX.utils.book_new(); 
+  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); 
   XLSX.utils.book_append_sheet(wb, ws, "Tabulation"); 
   XLSX.writeFile(wb, `Tabulation_${className}.xlsx`);
 }
@@ -1077,21 +1010,15 @@ function printTabulationPDF() {
 
 
 /* =========================================================================
-   TAB 4: REPORT CARDS (TEMPLATE GALLERY ENABLED)
+   TAB 4: REPORT CARDS
    ========================================================================= */
 
 function loadReportCardOptions() {
   const classChks = document.querySelectorAll('.rc-class-chk:checked');
   const termsContainer = document.getElementById('rc-terms-container'), subjectsContainer = document.getElementById('rc-subjects-container');
   
-  if (classChks.length === 0) { 
-      termsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; 
-      subjectsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; 
-      return; 
-  }
-  
-  termsContainer.innerHTML = 'Loading...'; 
-  subjectsContainer.innerHTML = 'Loading...';
+  if (classChks.length === 0) { termsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; subjectsContainer.innerHTML = '<span style="color:var(--muted)">Select a class.</span>'; return; }
+  termsContainer.innerHTML = 'Loading...'; subjectsContainer.innerHTML = 'Loading...';
   
   const classIds = Array.from(classChks).map(c => c.value);
   Promise.all([ 
@@ -1118,14 +1045,10 @@ function generateReportCards() {
   const selectedTermNames = Array.from(termChks).map(c => c.value); 
   cachedSubjectsForPrint = Array.from(subjChks).map(c => c.value);
   
-  const btn = document.getElementById('btn-rep-cards'); 
-  const originalText = btn.textContent; 
-  btn.disabled = true; 
-  btn.textContent = 'Analyzing Data...';
+  const btn = document.getElementById('btn-rep-cards'); const originalText = btn.textContent; btn.disabled = true; btn.textContent = 'Analyzing Data...';
   
   const classIds = Array.from(classChks).map(c => c.value); 
-  const classNamesMap = {}; 
-  Array.from(classChks).forEach(c => { classNamesMap[c.value] = c.getAttribute('data-name'); });
+  const classNamesMap = {}; Array.from(classChks).forEach(c => { classNamesMap[c.value] = c.getAttribute('data-name'); });
 
   const reportPromises = classIds.map(cid => apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${cid}`, true).then(res => ({ classId: cid, className: classNamesMap[cid], res: res })).catch(e => null));
   
@@ -1137,87 +1060,39 @@ function generateReportCards() {
           const studentsData = classData.res.data || [];
           
           studentsData.forEach(item => {
-              item.matchedSetups = setups; 
-              item.className = classData.className; 
-              let hasMissing = false;
-              
+              item.matchedSetups = setups; item.className = classData.className; let hasMissing = false;
               cachedSubjectsForPrint.forEach(subName => {
                   setups.forEach(setup => { 
                       const termData = item.subjects[subName]?.[setup._id] || {}; 
-                      setup.assessments.forEach(a => { 
-                          if(!termData[a.name] || (termData[a.name].status === 'present' && termData[a.name].obtained === null)) { 
-                              hasMissing = true; 
-                          } 
-                      }); 
+                      setup.assessments.forEach(a => { if(!termData[a.name] || (termData[a.name].status === 'present' && termData[a.name].obtained === null)) { hasMissing = true; } }); 
                   });
               });
-              if(hasMissing) missingCount++; 
-              allStudents.push(item);
+              if(hasMissing) missingCount++; allStudents.push(item);
           });
       });
       
-      if(allStudents.length === 0) { 
-          btn.disabled = false; btn.textContent = originalText; 
-          return toast('No students found.', 'err'); 
-      }
-      if(missingCount > 0) { 
-          if(!confirm(`⚠️ Warning: ${missingCount} student(s) have missing marks. Generate anyway?`)) { 
-              btn.disabled = false; btn.textContent = originalText; return; 
-          } 
-      }
+      if(allStudents.length === 0) { btn.disabled = false; btn.textContent = originalText; return toast('No students found.', 'err'); }
+      if(missingCount > 0) { if(!confirm(`⚠️ Warning: ${missingCount} student(s) have missing marks. Generate anyway?`)) { btn.disabled = false; btn.textContent = originalText; return; } }
 
-      let oldFrame = document.getElementById('report-iframe'); 
-      if (oldFrame) oldFrame.remove();
-      
-      let iframe = document.createElement('iframe'); 
-      iframe.id = 'report-iframe'; 
-      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; 
-      document.body.appendChild(iframe);
-      
-      let doc = iframe.contentWindow.document; 
-      doc.open();
-      
-      // Pass the selected template to get the correct CSS layout
-      doc.write(getReportCardCSSAndHeader(selectedTemplate));
+      let oldFrame = document.getElementById('report-iframe'); if (oldFrame) oldFrame.remove();
+      let iframe = document.createElement('iframe'); iframe.id = 'report-iframe'; iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; document.body.appendChild(iframe);
+      let doc = iframe.contentWindow.document; doc.open(); doc.write(getReportCardCSSAndHeader(selectedTemplate));
       
       let i = 0;
       function processChunk() {
          const chunk = allStudents.slice(i, i + 10);
-         if (chunk.length === 0) {
-            doc.write('</body></html>'); 
-            doc.close(); 
-            btn.textContent = 'Opening Print Dialog...';
-            setTimeout(() => { 
-                iframe.contentWindow.focus(); 
-                iframe.contentWindow.print(); 
-                btn.disabled = false; 
-                btn.textContent = originalText; 
-            }, 1000); 
-            return;
-         }
+         if (chunk.length === 0) { doc.write('</body></html>'); doc.close(); btn.textContent = 'Opening Print Dialog...'; setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); btn.disabled = false; btn.textContent = originalText; }, 1000); return; }
          
-         // Route to the correct HTML Template Engine
          let html = '';
-         if (selectedTemplate === 'split') {
-             html = buildSplitReportCard(chunk, cachedSubjectsForPrint);
-         } else if (selectedTemplate === 'ivy') {
-             html = buildIvyReportCard(chunk, cachedSubjectsForPrint);
-         } else if (selectedTemplate === 'dashboard') {
-             html = buildDashboardReportCard(chunk, cachedSubjectsForPrint);
-         } else if (selectedTemplate === 'visual') {
-             html = buildVisualReportCard(chunk, cachedSubjectsForPrint);
-         } else if (selectedTemplate === 'board') {
-             html = buildBoardReportCard(chunk, cachedSubjectsForPrint);
-         } else {
-             // Fallback to the Original Classic
-             html = buildClassicReportCard(chunk, cachedSubjectsForPrint);
-         }
+         if (selectedTemplate === 'split') html = buildSplitReportCard(chunk, cachedSubjectsForPrint);
+         else if (selectedTemplate === 'ivy') html = buildIvyReportCard(chunk, cachedSubjectsForPrint);
+         else if (selectedTemplate === 'dashboard') html = buildDashboardReportCard(chunk, cachedSubjectsForPrint);
+         else if (selectedTemplate === 'visual') html = buildVisualReportCard(chunk, cachedSubjectsForPrint);
+         else if (selectedTemplate === 'board') html = buildBoardReportCard(chunk, cachedSubjectsForPrint);
+         else html = buildClassicReportCard(chunk, cachedSubjectsForPrint);
          
          doc.write(html);
-         i += 10; 
-         const pct = Math.min(100, Math.round((i / allStudents.length) * 100)); 
-         btn.textContent = `Generating PDF (${pct}%)...`; 
-         setTimeout(processChunk, 20);
+         i += 10; const pct = Math.min(100, Math.round((i / allStudents.length) * 100)); btn.textContent = `Generating PDF (${pct}%)...`; setTimeout(processChunk, 20);
       }
       processChunk();
   }).catch(e => { toast(e.message || 'Failed to process report cards', 'err'); btn.disabled = false; btn.textContent = originalText; });
@@ -1340,7 +1215,7 @@ function getReportCardCSSAndHeader(templateId) {
              .signatures div { width: 180px; border-top: 1px dashed #000; text-align: center; padding-top: 5px; }`;
   }
   else {
-      // THE ORIGINAL CLASSIC ACME TEMPLATE (Default)
+      // THE ORIGINAL CLASSIC ACME TEMPLATE
       css = `@page { size: A4 landscape; margin: 8mm; }
              body { font-family: Arial, sans-serif; font-size: 13px; color: #000; margin:0; padding:0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
              .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 0; box-sizing: border-box; display: block; position: relative; overflow: hidden;}
@@ -1422,19 +1297,15 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
           let overallMaxTotal = 0;
           
           sortedSetups.forEach(setup => {
-            const termMax = setup.assessments.reduce((sum, a) => sum + a.maxMarks, 0);
-            overallMaxTotal += termMax;
             html += `<th colspan="${setup.assessments.length + 2}">${escH(setup.termName)}</th>`;
           });
             
     html += `</tr><tr>`;
           sortedSetups.forEach(setup => {
-            let termMaxTotal = 0;
             setup.assessments.forEach(a => { 
-              html += `<th>${escH(a.name)}(${a.maxMarks})</th>`; 
-              termMaxTotal += a.maxMarks;
+              html += `<th>${escH(a.name)}<br>(${a.maxMarks})</th>`; 
             });
-            html += `<th>Marks Obtained<br>(${termMaxTotal})</th><th>Grade</th>`;
+            html += `<th>Marks<br>Obtained</th><th>Grade</th>`;
           });
     html += `</tr></thead><tbody>`;
 
@@ -1446,17 +1317,19 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
         const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
         
         setup.assessments.forEach(a => {
+          const aMax = getSubMax(a, subName);
           const markObj = termData[a.name];
           if (markObj && markObj.status === 'present') {
             const val = Number(markObj.obtained || 0);
             termTotal += val;
-            html += `<td>${val}</td>`;
+            if (aMax !== a.maxMarks) html += `<td>${val} <span style="font-size:10px; color:#555;">/${aMax}</span></td>`;
+            else html += `<td>${val}</td>`;
           } else if (markObj) {
             html += `<td>${markObj.status === 'absent' ? 'AB' : 'M'}</td>`;
           } else {
             html += `<td></td>`;
           }
-          termMax += a.maxMarks;
+          termMax += aMax;
         });
         
         const gradeObj = getGradeInfo(termTotal, termMax);
@@ -1543,7 +1416,7 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => {
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); }
-                grandMax += a.maxMarks;
+                grandMax += getSubMax(a, subName);
             });
         });
     });
@@ -1585,7 +1458,7 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
          <table class="rc-table"><thead><tr><th class="subj-col">Subjects</th>`;
           sortedSetups.forEach(setup => { html += `<th colspan="${setup.assessments.length + 2}">${escH(setup.termName)}</th>`; });
     html += `</tr><tr><th></th>`;
-          sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
+          sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}<br>(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
     html += `</tr></thead><tbody>`;
 
     selectedSubjectsList.forEach(subName => {
@@ -1593,10 +1466,14 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
       sortedSetups.forEach(setup => {
         let termTotal = 0, termMax = 0; const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
         setup.assessments.forEach(a => {
+          const aMax = getSubMax(a, subName);
           const markObj = termData[a.name];
-          if (markObj && markObj.status === 'present') { const val = Number(markObj.obtained || 0); termTotal += val; html += `<td>${val}</td>`; } 
+          if (markObj && markObj.status === 'present') { 
+              const val = Number(markObj.obtained || 0); termTotal += val; 
+              html += `<td>${val}${aMax !== a.maxMarks ? `<span style="font-size:10px; color:#888;">/${aMax}</span>` : ''}</td>`; 
+          } 
           else { html += `<td style="color:#cbd5e1;">-</td>`; }
-          termMax += a.maxMarks;
+          termMax += aMax;
         });
         const gradeObj = getGradeInfo(termTotal, termMax); 
         html += `<td style="font-weight:700;">${termTotal || ''}</td><td style="font-weight:700; color:#3b82f6;">${termTotal ? gradeObj.g : ''}</td>`;
@@ -1631,7 +1508,7 @@ function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
-                grandMax += a.maxMarks; 
+                grandMax += getSubMax(a, subName); 
             }); 
         }); 
     });
@@ -1676,7 +1553,7 @@ function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
         setup.assessments.forEach(a => { 
             const markObj = termData[a.name]; 
             if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
-            termMax += a.maxMarks; 
+            termMax += getSubMax(a, subName); 
         });
         
         const termGr = getGradeInfo(termTotal, termMax).g; 
@@ -1721,7 +1598,7 @@ function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
-                grandMax += a.maxMarks; 
+                grandMax += getSubMax(a, subName); 
             }); 
         }); 
     });
@@ -1767,7 +1644,7 @@ function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
         setup.assessments.forEach(a => { 
             const markObj = termData[a.name]; 
             if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
-            termMax += a.maxMarks; 
+            termMax += getSubMax(a, subName); 
         });
         
         const termGr = getGradeInfo(termTotal, termMax).g; 
@@ -1823,7 +1700,7 @@ function buildVisualReportCard(studentsChunk, selectedSubjectsList) {
         setup.assessments.forEach(a => { 
             const markObj = termData[a.name]; 
             if (markObj && markObj.status === 'present') { termTotal += Number(markObj.obtained || 0); } 
-            termMax += a.maxMarks; 
+            termMax += getSubMax(a, subName); 
         });
         
         html += `<td><span class="score-text">${termTotal || '-'}</span> <span style="font-size:10px; color:#9ca3af;">/${termMax}</span></td>`;
@@ -1833,7 +1710,6 @@ function buildVisualReportCard(studentsChunk, selectedSubjectsList) {
       const subjGr = getGradeInfo(subjTotal, subjMax).g;
       const subjPerc = subjMax > 0 ? (subjTotal/subjMax)*100 : 0;
       
-      // Visual Bar HTML
       const barHtml = `<div class="bar-container"><div class="bar-fill" style="width:${subjPerc}%; background:${subjPerc > 80 ? '#10b981' : subjPerc > 40 ? '#3b82f6' : '#ef4444'};"></div></div>`;
       
       html += `<td><span class="score-text" style="color:#111;">${subjTotal || '-'}</span> <span style="font-size:10px; color:#9ca3af;">/${subjMax}</span></td>
@@ -1871,7 +1747,7 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
-                grandMax += a.maxMarks; 
+                grandMax += getSubMax(a, subName); 
             }); 
         }); 
     });
@@ -1907,9 +1783,8 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
               let termMaxTotal = 0; 
               setup.assessments.forEach(a => { 
                   html += `<th>${escH(a.name)}<br>(${a.maxMarks})</th>`; 
-                  termMaxTotal += a.maxMarks; 
               }); 
-              html += `<th>Total<br>(${termMaxTotal})</th><th>Gr</th>`; 
+              html += `<th>Total</th><th>Gr</th>`; 
           });
     html += `</tr></thead><tbody>`;
 
@@ -1920,17 +1795,18 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
         const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
         
         setup.assessments.forEach(a => {
+          const aMax = getSubMax(a, subName);
           const markObj = termData[a.name];
           if (markObj && markObj.status === 'present') { 
               const val = Number(markObj.obtained || 0); 
               termTotal += val; 
-              html += `<td>${val}</td>`; 
+              html += `<td>${val}${aMax !== a.maxMarks ? `<span style="font-size:10px; color:#888;">/${aMax}</span>` : ''}</td>`; 
           } else if (markObj) { 
               html += `<td>${markObj.status === 'absent' ? 'AB' : 'M'}</td>`; 
           } else { 
               html += `<td></td>`; 
           }
-          termMax += a.maxMarks;
+          termMax += aMax;
         });
         
         const gradeObj = getGradeInfo(termTotal, termMax); 
