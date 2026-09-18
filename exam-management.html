@@ -72,7 +72,7 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
 .chk-label:hover { border-color:var(--gold); background:rgba(212,168,67,0.05); }
 .chk-label input { width:16px; height:16px; cursor:pointer; accent-color:var(--gold); }
 
-/* NEW Template Selector Styles */
+/* Template Selector Styles */
 .tpl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
 .tpl-card { background: var(--panel); border: 2px solid var(--rim); border-radius: 10px; padding: 16px 12px; text-align: center; cursor: pointer; transition: .2s; position: relative; overflow: hidden; }
 .tpl-card::before { content:''; position:absolute; top:0; left:0; width:100%; height:4px; background:transparent; transition:.2s;}
@@ -195,7 +195,7 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
       <button class="sub-tab-btn" onclick="switchSubTab('sub-print', this)">🖨️ 4. Print Report Cards</button>
     </div>
 
-    <!-- SUB-TAB 1: EXAM SETUP -->
+    <!-- SUB-TAB 1: EXAM SETUP (NEW DUAL-CHECKBOX CLONE UI) -->
     <div id="sub-setup" class="sub-content active">
       
       <!-- DYNAMIC GRADING SCALE CARD -->
@@ -218,41 +218,75 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
         </div>
       </div>
 
+      <!-- CREATE / MANAGE TERMS CARD -->
       <div class="card">
-        <div class="card-title">⚙️ Create Exam Structure</div>
-        <div class="card-sub">Define terms and columns (e.g., "Term 1" -> PT1 (10), Notebook (5), Half Yearly (80)).</div>
+        <div class="card-title">⚙️ Manage Exam Structure</div>
+        <div class="card-sub">Select a class below to build or manage its exam terms.</div>
         
         <div class="grid2">
-          <div class="fg"><label>Class</label><select id="s-class-sel" onchange="loadExistingSetups()"><option value="">Select...</option></select></div>
-          <div class="fg"><label>Term Name (e.g., "Term-1(100 Marks)")</label><input type="text" id="s-term-name" placeholder="Term-1(100 Marks)"></div>
-        </div>
-        
-        <!-- COPY FEATURE UI -->
-        <div style="margin-bottom: 16px; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px dashed var(--rim);">
-          <label style="color:var(--silver); font-weight:600; margin-bottom:10px;">Duplicate Structure from Another Class (Optional)</label>
-          <div class="grid2">
-            <div class="fg" style="margin:0;">
-                <select id="copy-class-sel" onchange="loadCopySetups()"><option value="" disabled selected hidden>1. Select a Class...</option></select>
-            </div>
-            <div class="fg" style="margin:0;">
-                <select id="copy-term-sel" onchange="applyCopySetup()"><option value="" disabled selected hidden>2. Select a Term to Copy...</option></select>
-            </div>
+          <div class="fg">
+             <label>Select Class</label>
+             <select id="s-class-sel" onchange="loadExistingSetups()"><option value="">Select...</option></select>
           </div>
         </div>
 
-        <div id="s-cols-container" style="background:var(--panel); padding:16px; border-radius:10px; border:1px solid var(--rim); margin-bottom:16px;">
-          <label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>
-          <!-- Rows injected here -->
-        </div>
-        <button class="btn btn-ghost" onclick="addSetupColumn()" style="margin-bottom: 20px;">+ Add Assessment Column</button>
-        <div class="foot-actions" style="border-top:1px solid var(--rim); padding-top:16px;">
-          <button class="btn btn-gold" id="btn-save-setup" onclick="saveExamSetup()">💾 Save Structure</button>
+        <!-- Create/Edit Form Box -->
+        <div style="background:var(--panel); padding:16px; border-radius:10px; border:1px solid var(--rim); margin-bottom:20px;">
+            <div class="fg" style="margin-bottom:20px;">
+               <label>Term Name (e.g., "Term-1(100 Marks)")</label>
+               <input type="text" id="s-term-name" placeholder="Term-1(100 Marks)">
+            </div>
+
+            <div id="s-cols-container" style="margin-bottom:16px;">
+              <label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>
+              <!-- Rows injected here -->
+            </div>
+            
+            <button class="btn btn-ghost" onclick="addSetupColumn()" style="margin-bottom: 20px;">+ Add Assessment Column</button>
+            
+            <div class="foot-actions" style="border-top:1px solid var(--rim); padding-top:16px;">
+              <button class="btn btn-gold" id="btn-save-setup" onclick="saveExamSetup()">💾 Save Term</button>
+            </div>
         </div>
         
-        <div id="existing-setups-card" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--rim);">
-          <label style="color:var(--gold); font-size:14px; font-weight:600; margin-bottom:10px; display:block;">📋 Existing Structures for this Class</label>
-          <div id="s-list" style="font-size:13px;"></div>
+        <!-- Existing Terms & Master Clone Box -->
+        <div id="existing-setups-card" style="display:none;">
+          <label style="color:var(--gold); font-size:14px; font-weight:600; margin-bottom:10px; display:block;">📋 Existing Terms for this Class</label>
+          <div id="s-list" style="font-size:13px; margin-bottom: 20px;"></div>
+          
+          <!-- NEW MULTI-TERM / MULTI-CLASS CLONE BOX -->
+          <div style="padding: 16px; background: rgba(212,168,67,0.05); border-radius: 10px; border: 1px dashed var(--gold);">
+              <label style="color:var(--gold); font-weight:700; margin-bottom:10px; display:block; font-size:15px;">⚡ Clone Structures to Other Classes</label>
+              
+              <div class="grid2">
+                 <div>
+                    <label style="color:var(--silver); font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+                        1. Select Terms to Clone 
+                        <span style="color:var(--gold); cursor:pointer;" onclick="toggleCloneTerms()">Toggle All</span>
+                    </label>
+                    <div id="clone-term-container" style="max-height:120px; overflow-y:auto; background:var(--surface); border:1px solid var(--rim); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:6px;">
+                        <!-- Term checkboxes injected dynamically -->
+                    </div>
+                 </div>
+                 
+                 <div>
+                    <label style="color:var(--silver); font-size:12px; margin-bottom:8px; display:flex; justify-content:space-between;">
+                        2. Select Target Classes 
+                        <span style="color:var(--gold); cursor:pointer;" onclick="toggleCloneClasses()">Toggle All</span>
+                    </label>
+                    <div id="clone-class-container" style="max-height:120px; overflow-y:auto; background:var(--surface); border:1px solid var(--rim); border-radius:6px; padding:10px; display:flex; flex-direction:column; gap:6px;">
+                        <!-- Class checkboxes injected on load -->
+                    </div>
+                 </div>
+              </div>
+
+              <div style="margin-top:15px;">
+                  <button class="btn btn-gold" style="padding:8px 16px; font-size:13px;" onclick="cloneStructureToClasses()">⚡ Clone Selected Terms</button>
+              </div>
+          </div>
+
         </div>
+
       </div>
     </div>
 
@@ -321,46 +355,40 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
       </div>
     </div>
 
-    <!-- SUB-TAB 4: REPORT CARDS (UPGRADED TEMPLATE GALLERY) -->
+    <!-- SUB-TAB 4: REPORT CARDS -->
     <div id="sub-print" class="sub-content">
       
-      <!-- TEMPLATE GALLERY -->
+      <!-- TEMPLATE GALLERY (HIDDEN AS REQUESTED) -->
       <div class="card" style="display: none;">
         <div class="card-title">🎨 Select Report Card Design</div>
         <div class="card-sub">Choose a structural layout for your final printed report cards. Your original "Acme Classic" is available right here, alongside 5 brand new radical designs!</div>
         
         <div class="tpl-grid">
-          <!-- 1. The Original User Favorite -->
           <div class="tpl-card active" data-tpl="classic" onclick="selectTemplate(this)">
             <div class="tpl-icon">🏫</div>
             <div class="tpl-name">The Original Classic</div>
-            <div class="tpl-desc">The original maroon-themed landscape layout you loved.</div>
+            <div class="tpl-desc">The original maroon-themed landscape layout.</div>
           </div>
-          <!-- 2. Corporate Split -->
           <div class="tpl-card" data-tpl="split" onclick="selectTemplate(this)">
             <div class="tpl-icon">🏢</div>
             <div class="tpl-name">Corporate Split</div>
             <div class="tpl-desc">30/70 Left-Sidebar layout. Ultra premium.</div>
           </div>
-          <!-- 3. Ivy League -->
           <div class="tpl-card" data-tpl="ivy" onclick="selectTemplate(this)">
             <div class="tpl-icon">📜</div>
             <div class="tpl-name">Ivy League</div>
             <div class="tpl-desc">Portrait format, double borders, serif fonts.</div>
           </div>
-          <!-- 4. Dashboard -->
           <div class="tpl-card" data-tpl="dashboard" onclick="selectTemplate(this)">
             <div class="tpl-icon">💻</div>
             <div class="tpl-name">SaaS Dashboard</div>
             <div class="tpl-desc">Portrait format with modern KPI statistic cards.</div>
           </div>
-          <!-- 5. Visual -->
           <div class="tpl-card" data-tpl="visual" onclick="selectTemplate(this)">
             <div class="tpl-icon">📊</div>
             <div class="tpl-name">Visual Infographic</div>
             <div class="tpl-desc">Landscape format with live grade progress bars.</div>
           </div>
-          <!-- 6. Board Standard -->
           <div class="tpl-card" data-tpl="board" onclick="selectTemplate(this)">
             <div class="tpl-icon">📋</div>
             <div class="tpl-name">CBSE Standard</div>
@@ -407,11 +435,11 @@ input:disabled{opacity:0.5;cursor:not-allowed;}
         </div>
         
        <div class="grid2" style="grid-template-columns: 1fr 1fr 1fr 1fr; margin-top:16px;">
-  <div class="fg"><label>Academic Session</label><input type="text" id="rc-session-text" value="2026-27"></div>
-  <div class="fg"><label>Issue Date</label><input type="text" id="rc-date-text" value="___________"></div>
-  <div class="fg"><label>Promotion Text</label><input type="text" id="rc-promo-text" value="Promoted to Class ___________"></div>
-  <div class="fg"><label>Re-open Text</label><input type="text" id="rc-reopen-text" value="School reopens on ___________"></div>
-</div>
+          <div class="fg"><label>Academic Session</label><input type="text" id="rc-session-text" value="2026-27"></div>
+          <div class="fg"><label>Issue Date</label><input type="text" id="rc-date-text" value="___________"></div>
+          <div class="fg"><label>Promotion Text</label><input type="text" id="rc-promo-text" value="Promoted to Class ___________"></div>
+          <div class="fg"><label>Re-open Text</label><input type="text" id="rc-reopen-text" value="School reopens on ___________"></div>
+       </div>
 
         <div class="foot-actions" style="margin-top: 20px; border-top:1px solid var(--rim); padding-top:20px;">
           <button class="btn btn-gold" id="btn-rep-cards" style="width:100%; box-shadow:0 0 20px rgba(212,168,67,0.3);" onclick="generateReportCards()">🖨️ Generate PDF Report Cards</button>

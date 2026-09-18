@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   EXAM MANAGEMENT & REPORT CARDS (EXPANDED TEMPLATE ENGINE)
+   EXAM MANAGEMENT & REPORT CARDS (DUAL-CHECKBOX CLONE ENGINE)
    ───────────────────────────────────────────────────────────── */
 var HDR_BASE = 'examAdmitHeader';
 var hdrKey   = 'examAdmitHeader';
@@ -9,7 +9,6 @@ var currentClassName = '';
 var schoolLogoUrl = null;
 window.currentSession = '2026-27';
 var globalSetups = [];
-var copySourceSetups = [];
 var currentGridSetup = null;
 var currentEditSetupId = null;
 var cachedSubjectsForPrint = [];
@@ -42,7 +41,6 @@ var defaultScale = [
     if(el) el.addEventListener('input', saveHeader);
   });
   
-  // Feature: Excel-Style Arrow Navigation Listener
   document.addEventListener('keydown', handleGridArrowKeys);
 })();
 
@@ -89,7 +87,7 @@ function loadGradingScale() {
 }
 
 function renderGradingScale() {
-    gradingScale.sort((a, b) => b.min - a.min); // Sort Highest to Lowest
+    gradingScale.sort((a, b) => b.min - a.min); 
     const container = document.getElementById('grading-scale-list');
     
     if(container) {
@@ -109,7 +107,6 @@ function renderGradingScale() {
         }
     }
     
-    // Auto-update report card text field
     const textStr = gradingScale.map(g => `${g.min}-${g.max} : ${g.grade}`).join(' | ');
     const rcInput = document.getElementById('rc-scale-text');
     if(rcInput) rcInput.value = textStr;
@@ -141,12 +138,8 @@ function removeGradeRule(index) {
 function saveGradingScale() {
     renderGradingScale(); 
     apiPost(API_BASE_URL + '/exam-schedules/grading-scale/settings', { scale: gradingScale }, true)
-      .then(res => {
-          toast('Grading scale synced to cloud ☁️', 'success');
-      })
-      .catch(e => {
-          toast('Failed to sync grading scale: ' + e.message, 'err');
-      });
+      .then(res => { toast('Grading scale synced to cloud ☁️', 'success'); })
+      .catch(e => { toast('Failed to sync grading scale: ' + e.message, 'err'); });
 }
 
 function getGradeInfo(total, outOf) {
@@ -163,9 +156,7 @@ function getGradeInfo(total, outOf) {
       }
   }
   
-  // Fallback for math rounding (e.g., 100.1%)
   if (assignedGrade === '-' && perc > 100 && scale.length) assignedGrade = scale[0].grade; 
-  
   return {g: assignedGrade, p: perc};
 }
 
@@ -203,7 +194,7 @@ function loadClasses() {
   apiGet(API_ENDPOINTS.CLASSES, true).then(res => {
     let htmlTab1 = '<option value="">Select a class…</option><option value="all">All Classes (Entire School)</option>';
     let htmlStandard = '<option value="">Select a class…</option>';
-    let copyClassHtml = '<option value="" disabled selected hidden>1. Select a Class...</option>';
+    let cloneClassHtml = '';
     let rcClassHtml = '';
     
     (res.data || []).filter(c => c.isActive !== false).forEach(c => {
@@ -211,17 +202,34 @@ function loadClasses() {
       const opt = `<option value="${c._id}">${className}</option>`;
       htmlTab1 += opt; 
       htmlStandard += opt; 
-      copyClassHtml += opt;
+      
+      // Changed to clone-class-chk
+      cloneClassHtml += `<label class="chk-label clone-label" data-cid="${c._id}"><input type="checkbox" class="clone-class-chk" value="${c._id}"> ${className}</label>`;
       rcClassHtml += `<label class="chk-label"><input type="checkbox" class="rc-class-chk" value="${c._id}" data-name="${escAttr(c.className || c.name)}" onchange="loadReportCardOptions()"> ${className}</label>`;
     });
     
-    // Populate all Class dropdowns
     ['class-sel'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = htmlTab1; });
     ['s-class-sel', 'm-class-sel', 'tabu-class-sel'].forEach(id => { if(document.getElementById(id)) document.getElementById(id).innerHTML = htmlStandard; });
     
-    if(document.getElementById('copy-class-sel')) document.getElementById('copy-class-sel').innerHTML = copyClassHtml;
+    if(document.getElementById('clone-class-container')) document.getElementById('clone-class-container').innerHTML = cloneClassHtml;
     if(document.getElementById('rc-class-container')) document.getElementById('rc-class-container').innerHTML = rcClassHtml;
   });
+}
+
+function toggleCloneClasses() {
+    const visibleChks = Array.from(document.querySelectorAll('.clone-label'))
+                             .filter(lbl => lbl.style.display !== 'none')
+                             .map(lbl => lbl.querySelector('.clone-class-chk'));
+    if (!visibleChks.length) return;
+    const allChecked = visibleChks.every(c => c.checked);
+    visibleChks.forEach(c => c.checked = !allChecked);
+}
+
+function toggleCloneTerms() {
+    const chks = document.querySelectorAll('.clone-term-chk');
+    if(!chks.length) return;
+    const allChecked = Array.from(chks).every(c => c.checked);
+    chks.forEach(c => c.checked = !allChecked);
 }
 
 function rcSelectAllClasses() {
@@ -430,7 +438,7 @@ function buildAndPrintAdmit(list){
 
 
 /* =========================================================================
-   EXAM SETUP LOGIC
+   EXAM SETUP LOGIC (ULTRA CLEAN CLONING ENGINE)
    ========================================================================= */
 function addSetupColumn(name = '', max = '') {
   const container = document.getElementById('s-cols-container'); 
@@ -445,77 +453,9 @@ function addSetupColumn(name = '', max = '') {
   container.appendChild(div);
 }
 
-function loadCopySetups() {
-  const classId = getVal('copy-class-sel');
-  const termSel = document.getElementById('copy-term-sel');
-  if(!classId) { termSel.innerHTML = '<option value="" disabled selected hidden>2. Select a Term to Copy...</option>'; return; }
-  
-  termSel.innerHTML = '<option value="" disabled selected hidden>Loading terms...</option>';
-  apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => {
-      copySourceSetups = res.data || [];
-      if(!copySourceSetups.length) {
-          termSel.innerHTML = '<option value="" disabled selected hidden>No terms found in this class</option>';
-      } else {
-          let html = '<option value="" disabled selected hidden>2. Select a Term to Copy...</option>';
-          if(copySourceSetups.length > 1) { html += `<option value="ALL" style="font-weight:bold; color:#14b8a6;">⚡ Copy ALL Terms to Target Class</option>`; }
-          copySourceSetups.forEach(s => { html += `<option value="${s._id}">${escH(s.termName)}</option>`; });
-          termSel.innerHTML = html;
-      }
-  }).catch(() => { termSel.innerHTML = '<option value="" disabled selected hidden>Error loading</option>'; });
-}
-
-function applyCopySetup() {
-  const setupId = getVal('copy-term-sel');
-  if(!setupId) return;
-
-  const targetClassId = getVal('s-class-sel');
-  if(!targetClassId) {
-      toast('Please select a Target Class at the top first!', 'err');
-      document.getElementById('copy-term-sel').value = '';
-      return;
-  }
-
-  if (setupId === 'ALL') {
-      if(!confirm('This will instantly duplicate ALL terms from the source class into your target class. Proceed?')) {
-          document.getElementById('copy-term-sel').value = '';
-          return;
-      }
-      
-      const btn = document.getElementById('btn-save-setup');
-      const origText = btn.textContent;
-      btn.textContent = 'Copying All Terms...';
-      btn.disabled = true;
-
-      const promises = copySourceSetups.map(s => {
-          return apiPost(API_ENDPOINTS.EXAM_SETUP, { session: window.currentSession, classId: targetClassId, termName: s.termName, assessments: s.assessments }, true);
-      });
-
-      Promise.all(promises).then(() => {
-          toast('All Terms Copied Successfully!', 'success');
-          loadExistingSetups();
-          resetSetupForm();
-          document.getElementById('copy-term-sel').value = '';
-      }).catch(e => {
-          toast('Error copying some terms. Check if they already exist.', 'err');
-      }).finally(() => {
-          btn.textContent = origText;
-          btn.disabled = false;
-      });
-      return;
-  }
-
-  const setup = copySourceSetups.find(s => s._id === setupId);
-  if(!setup) return;
-  setVal('s-term-name', setup.termName);
-  const container = document.getElementById('s-cols-container');
-  container.innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>';
-  setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks));
-  document.getElementById('copy-term-sel').value = ''; 
-  toast('Structure & Name Copied! Click Save.', 'success');
-}
-
 function saveExamSetup() {
-  const classId = getVal('s-class-sel'), termName = getVal('s-term-name');
+  const classId = getVal('s-class-sel');
+  const termName = getVal('s-term-name');
   if (!classId || !termName) return toast('Class and Term Name are required', 'err');
   
   const rows = document.querySelectorAll('.setup-col-row'); 
@@ -536,12 +476,12 @@ function saveExamSetup() {
     apiPut(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${currentEditSetupId}`, { termName, assessments }, true)
     .then(res => { toast('Updated successfully!', 'success'); resetSetupForm(); loadExistingSetups(); })
     .catch(e => toast(e.message || 'Failed to update', 'err'))
-    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
+    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Term'; });
   } else {
     apiPost(API_ENDPOINTS.EXAM_SETUP, { session: window.currentSession, classId, termName, assessments }, true)
     .then(res => { toast('Created successfully!', 'success'); resetSetupForm(); loadExistingSetups(); })
     .catch(e => toast(e.message || 'Failed to create', 'err'))
-    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Structure'; });
+    .finally(() => { btn.disabled = false; btn.textContent = '💾 Save Term'; });
   }
 }
 
@@ -549,21 +489,36 @@ function resetSetupForm() {
   currentEditSetupId = null; 
   setVal('s-term-name', ''); 
   document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>'; 
-  document.getElementById('btn-save-setup').textContent = '💾 Save Structure';
+  document.getElementById('btn-save-setup').textContent = '💾 Save Term';
 }
 
 function loadExistingSetups() {
   const classId = getVal('s-class-sel');
+  
+  // Hide the currently selected class from the target clone list to prevent cloning to itself
+  document.querySelectorAll('.clone-label').forEach(lbl => {
+      if (lbl.getAttribute('data-cid') === classId) {
+          lbl.style.display = 'none';
+          lbl.querySelector('input').checked = false;
+      } else {
+          lbl.style.display = 'flex';
+      }
+  });
+
   if(!classId) {
     document.getElementById('existing-setups-card').style.display = 'none';
     return;
   }
+  
   apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => {
     const list = document.getElementById('s-list'); 
     globalSetups = res.data || [];
+    
     if (!globalSetups.length) {
       list.innerHTML = '<div style="color:var(--muted); padding:10px 0;">No structures created yet.</div>';
+      document.getElementById('clone-term-container').innerHTML = '<span style="color:var(--muted)">No terms available to clone.</span>';
     } else {
+      // Map existing setups to the view list
       list.innerHTML = globalSetups.map(s => {
         return `<div style="padding:14px; background:rgba(255,255,255,0.02); margin-bottom:12px; border-radius:8px; border:1px solid var(--rim); display:flex; justify-content:space-between; align-items:center;">
                   <div>
@@ -576,6 +531,11 @@ function loadExistingSetups() {
                   </div>
                 </div>`;
       }).join('');
+      
+      // Also map them into the Clone box checkboxes
+      document.getElementById('clone-term-container').innerHTML = globalSetups.map(s => 
+          `<label class="chk-label"><input type="checkbox" class="clone-term-chk" value="${s._id}" checked> ${escH(s.termName)}</label>`
+      ).join('');
     }
     document.getElementById('existing-setups-card').style.display = 'block';
   });
@@ -588,7 +548,7 @@ function editSetup(id) {
   setVal('s-term-name', setup.termName);
   document.getElementById('s-cols-container').innerHTML = '<label style="color:var(--gold); margin-bottom:10px;">Assessments for this Term</label>';
   setup.assessments.forEach(a => addSetupColumn(a.name, a.maxMarks)); 
-  document.getElementById('btn-save-setup').textContent = '💾 Update Structure'; 
+  document.getElementById('btn-save-setup').textContent = '💾 Update Term'; 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -597,6 +557,57 @@ function deleteSetup(id) {
   apiDelete(`${API_ENDPOINTS.EXAM_SETUP_ACTION}/${id}`, true)
     .then(res => { toast('Deleted successfully', 'success'); resetSetupForm(); loadExistingSetups(); })
     .catch(e => toast(e.message || 'Failed to delete', 'err'));
+}
+
+function cloneStructureToClasses() {
+    const sourceClassId = getVal('s-class-sel');
+    if (!sourceClassId || globalSetups.length === 0) return toast('No structure to clone', 'err');
+    
+    // 1. Get Selected Terms
+    const termChks = document.querySelectorAll('.clone-term-chk:checked');
+    if (termChks.length === 0) return toast('Select at least one term to clone', 'err');
+    const selectedTermIds = Array.from(termChks).map(c => c.value);
+    const termsToClone = globalSetups.filter(s => selectedTermIds.includes(s._id));
+
+    // 2. Get Selected Target Classes
+    const targetChks = document.querySelectorAll('.clone-class-chk:checked');
+    if (targetChks.length === 0) return toast('Select at least one target class', 'err');
+    const targetClassIds = Array.from(targetChks).map(c => c.value);
+    
+    // 3. Confirm & Execute
+    if (!confirm(`This will copy ${termsToClone.length} term(s) to ${targetClassIds.length} class(es). Proceed?`)) return;
+    
+    const btn = document.querySelector('button[onclick="cloneStructureToClasses()"]');
+    const origText = btn.textContent;
+    btn.textContent = 'Cloning...';
+    btn.disabled = true;
+    
+    let promises = [];
+    targetClassIds.forEach(targetCid => {
+        termsToClone.forEach(setup => {
+            promises.push(
+                apiPost(API_ENDPOINTS.EXAM_SETUP, {
+                    session: window.currentSession,
+                    classId: targetCid,
+                    termName: setup.termName,
+                    assessments: setup.assessments
+                }, true)
+            );
+        });
+    });
+    
+    Promise.all(promises)
+        .then(() => {
+            toast('Structure successfully cloned to all selected classes!', 'success');
+            targetChks.forEach(c => c.checked = false); // Uncheck targets so they don't accidentally click twice
+        })
+        .catch(e => {
+            toast('Some terms failed to copy (they may already exist in those classes).', 'err');
+        })
+        .finally(() => {
+            btn.textContent = origText;
+            btn.disabled = false;
+        });
 }
 
 /* =========================================================================
@@ -1329,7 +1340,7 @@ function getReportCardCSSAndHeader(templateId) {
              .signatures div { width: 180px; border-top: 1px dashed #000; text-align: center; padding-top: 5px; }`;
   }
   else {
-      // THE ORIGINAL CLASSIC ACME TEMPLATE (Identical to your favorite one)
+      // THE ORIGINAL CLASSIC ACME TEMPLATE (Default)
       css = `@page { size: A4 landscape; margin: 8mm; }
              body { font-family: Arial, sans-serif; font-size: 13px; color: #000; margin:0; padding:0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact;}
              .rc-page { width: 100%; height: 185mm; page-break-after: always; padding: 0; box-sizing: border-box; display: block; position: relative; overflow: hidden;}
@@ -1358,7 +1369,7 @@ function getReportCardCSSAndHeader(templateId) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Report Card</title><style>${css}</style></head><body>`;
 }
 
-// ─── ENGINE 1: ORIGINAL CLASSIC ACME (The default you loved) ───
+// ─── ENGINE 1: ORIGINAL CLASSIC ACME ───
 function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
   const schName = getVal('sch-name') || 'Your School Name';
   const schAddr = getVal('sch-addr') || 'School Address';
