@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────
-   EXAM MANAGEMENT & REPORT CARDS (SUBJECT OVERRIDE ENGINE)
+   EXAM MANAGEMENT & REPORT CARDS (WITH PARENT DISAMBIGUATION)
    ───────────────────────────────────────────────────────────── */
 var HDR_BASE = 'examAdmitHeader';
 var hdrKey   = 'examAdmitHeader';
@@ -29,6 +29,9 @@ var defaultScale = [
 (function boot(){
   var token = localStorage.getItem('token') || localStorage.getItem('institutionToken');
   if (!token) { window.location.href = 'login.html'; return; }
+  
+  enforceStaffPermissions();
+  
   loadHeader(); 
   loadClasses(); 
   loadGradingScale();
@@ -42,6 +45,53 @@ var defaultScale = [
 })();
 
 function goDashboard(){ window.location.href = 'dashboard.html'; }
+
+/* ================= ACCESS CONTROL ================= */
+function enforceStaffPermissions() {
+  var userType = localStorage.getItem('userType');
+  if (userType !== 'staff') return; 
+
+  var perms = {};
+  try {
+    perms = JSON.parse(localStorage.getItem('examPermissions') || '{}');
+  } catch (e) {
+    perms = {};
+  }
+
+  var admitTabBtn = document.querySelector('button[onclick*="tab-admit"]');
+  if (admitTabBtn && !perms.admit) admitTabBtn.style.display = 'none';
+
+  var setupBtn = document.querySelector('button[onclick*="sub-setup"]');
+  if (setupBtn && !perms.setup) setupBtn.style.display = 'none';
+
+  var marksBtn = document.querySelector('button[onclick*="sub-marks"]');
+  if (marksBtn && !perms.marks) marksBtn.style.display = 'none';
+
+  var tabuBtn = document.querySelector('button[onclick*="sub-tabulation"]');
+  if (tabuBtn && !perms.tabulation) tabuBtn.style.display = 'none';
+
+  var printBtn = document.querySelector('button[onclick*="sub-print"]');
+  if (printBtn && !perms.reports) printBtn.style.display = 'none';
+
+  var hasAnyExamSubTab = perms.setup || perms.marks || perms.tabulation || perms.reports;
+  var reportTabBtn = document.querySelector('button[onclick*="tab-report"]');
+  if (reportTabBtn && !hasAnyExamSubTab) reportTabBtn.style.display = 'none';
+
+  if (!perms.admit && hasAnyExamSubTab) {
+    if (reportTabBtn) reportTabBtn.click();
+    if (perms.marks && marksBtn) marksBtn.click();
+    else if (perms.setup && setupBtn) setupBtn.click();
+    else if (perms.tabulation && tabuBtn) tabuBtn.click();
+    else if (perms.reports && printBtn) printBtn.click();
+  } else if (!perms.admit && !hasAnyExamSubTab) {
+    document.querySelector('.main').innerHTML = `
+      <div class="card" style="text-align:center; padding:40px 20px;">
+        <div style="font-size:40px; margin-bottom:10px;">🔒</div>
+        <div class="card-title" style="justify-content:center;">Access Restricted</div>
+        <div class="card-sub">You do not have permission to access any examination modules. Please contact the administrator.</div>
+      </div>`;
+  }
+}
 
 /* =========================================================================
    TEMPLATE SELECTOR LOGIC
@@ -336,7 +386,7 @@ function buildAndPrintAdmit(list){
 
 
 /* =========================================================================
-   EXAM SETUP LOGIC (WITH SUBJECT OVERRIDES)
+   EXAM SETUP LOGIC
    ========================================================================= */
 function addSetupColumn(name = '', max = '', overridesStr = '{}') {
   const container = document.getElementById('s-cols-container'); 
@@ -357,7 +407,6 @@ function addSetupColumn(name = '', max = '', overridesStr = '{}') {
   container.appendChild(div);
 }
 
-// Subject Override Modal Logic
 let currentOverrideRow = null;
 
 function openOverrideModal(btn) {
@@ -596,7 +645,6 @@ function loadClassSubjectsForEntry() {
   }).catch(e => { if(sel) sel.innerHTML = '<option value="">Error loading subjects</option>'; });
 }
 
-// Global helper to get the specific max marks for a subject
 function getSubMax(a, subName) {
     return (a.overrides && a.overrides[subName] !== undefined) ? Number(a.overrides[subName]) : Number(a.maxMarks);
 }
@@ -621,10 +669,11 @@ function loadMarksGrid() {
   .finally(() => { if(btn) { btn.disabled = false; btn.textContent = originalText; } });
 }
 
+// 🚨 UPDATED: Parent Disambiguation in Marks Grid 🚨
 function renderDynamicGrid(students, setup, subjectName) {
   const thead = document.getElementById('marks-thead'), tbody = document.getElementById('marks-tbody');
   let totalMax = 0; 
-  let thHtml = '<tr><th style="width:15%;">Roll No</th><th style="width:40%;">Student Name</th>';
+  let thHtml = '<tr><th style="width:12%;">Roll No</th><th style="width:43%;">Student Name</th>';
   
   setup.assessments.forEach(a => { 
       const aMax = getSubMax(a, subjectName);
@@ -644,9 +693,13 @@ function renderDynamicGrid(students, setup, subjectName) {
   }
   
   if(tbody) tbody.innerHTML = students.map(s => {
-    let tr = `<tr class="m-row" data-sid="${s.studentId}">
-                <td style="font-family:'IBM Plex Mono',monospace;">${escH(s.rollNo)}</td>
-                <td style="font-weight:600;">${escH(s.name)}</td>`;
+    // Father Name added here to avoid identical name confusion
+    let tr = `<tr class="m-row" data-sid="${s.studentId}" data-stuname="${escAttr(s.name)}">
+                <td style="font-family:'IBM Plex Mono',monospace;">${escH(s.rollNo || '-')}</td>
+                <td>
+                   <div style="font-weight:600;">${escH(s.name)}</div>
+                   <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escH(s.fatherName ? 'D/o, S/o: ' + s.fatherName : '')}</div>
+                </td>`;
     setup.assessments.forEach(a => {
       const aMax = getSubMax(a, subjectName);
       const markData = s.marks[a.name] || { status: 'present', obtained: '' };
@@ -747,7 +800,7 @@ function showAnalytics() {
     let studentsData = []; let classTotalObtained = 0; let validStudentCount = 0;
     
     rows.forEach(r => {
-        const name = r.cells[1].textContent; 
+        const name = r.getAttribute('data-stuname'); 
         let stuTotal = 0; let hasValidMark = false;
         r.querySelectorAll('.dyn-mark').forEach(inp => {
             const val = inp.value.trim().toUpperCase();
@@ -787,6 +840,7 @@ function showAnalytics() {
 
 function closeAnalytics() { document.getElementById('analytics-modal').style.display = 'none'; }
 
+// 🚨 UPDATED: Excel Offline Template 🚨
 function downloadExcelTemplate() {
   if (!currentGridSetup) return toast('Load the grid first to generate template', 'err');
   const rows = document.querySelectorAll('.m-row'); 
@@ -796,7 +850,11 @@ function downloadExcelTemplate() {
   const subjectName = sSelect.options[sSelect.selectedIndex].text;
   
   const data = Array.from(rows).map(r => {
-    const obj = { "Student ID (DO NOT EDIT)": r.getAttribute('data-sid'), "Roll No": r.cells[0].textContent, "Student Name": r.cells[1].textContent };
+    const obj = { 
+        "Student ID (DO NOT EDIT)": r.getAttribute('data-sid'), 
+        "Roll No": r.cells[0].textContent, 
+        "Student Name": r.getAttribute('data-stuname') 
+    };
     r.querySelectorAll('.dyn-mark').forEach(inp => { obj[`${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`] = inp.value; }); return obj;
   });
   
@@ -919,7 +977,8 @@ function loadTabulation() {
             }); 
             
             const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0; 
-            return { id: stu._id, rollNo: stu.rollNo, name: stu.name, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing }; 
+            // Also mapping Father's Name for the broadsheet!
+            return { id: stu._id, rollNo: stu.rollNo, name: stu.name, fatherName: stu.fatherName, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing }; 
         }); 
         
         processed.sort((a, b) => b.grandTotal - a.grandTotal); 
@@ -932,6 +991,7 @@ function loadTabulation() {
     }); 
 }
 
+// 🚨 UPDATED: Parent Disambiguation in Tabulation Broadsheet 🚨
 function renderTabulationGrid() { 
     const panel = document.getElementById('tabu-grid-panel'); 
     const { setups, students } = currentTabuData; 
@@ -954,7 +1014,12 @@ function renderTabulationGrid() {
     html += ths2 + `</thead><tbody>`; 
     
     students.forEach(s => { 
-        let tds = `<td>${escH(s.rollNo || '-')}</td><td style="text-align:left; font-weight:600;">${escH(s.name)}</td>`; 
+        // Showing Father's Name in Tabulation Grid too!
+        let tds = `<td>${escH(s.rollNo || '-')}</td>
+                   <td style="text-align:left;">
+                       <div style="font-weight:600;">${escH(s.name)}</div>
+                       <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escH(s.fatherName ? 'D/o, S/o: ' + s.fatherName : '')}</div>
+                   </td>`; 
         currentTabuSubjs.forEach(sub => { 
             const st = s.subTotals[sub]; 
             setups.forEach(setup => { tds += `<td class="${st.terms[setup._id] === 'AB' ? 'cell-missing' : ''}">${st.terms[setup._id]}</td>`; }); 
@@ -977,7 +1042,8 @@ function exportTabulationExcel() {
   const className = cSelect.options[cSelect.selectedIndex].text;
   
   const data = students.map(s => {
-      let obj = { "Roll No": s.rollNo || '-', "Student Name": s.name };
+      // Offline Excel export also gets Father's Name for total clarity
+      let obj = { "Roll No": s.rollNo || '-', "Student Name": s.name, "Father Name": s.fatherName || '-' };
       currentTabuSubjs.forEach(sub => { 
           if (setups.length > 1) { 
               setups.forEach(setup => { 
@@ -1007,7 +1073,6 @@ function printTabulationPDF() {
     let tableHtml = document.querySelector('.tabu-table').outerHTML.replace(/var\(--gold\)/g, '#000').replace(/var\(--rim\)/g, '#000'); 
     printWin.document.write(`<html><head><style>@page{size:landscape;} table{width:100%; border-collapse:collapse; font-size:10px; text-align:center;} th,td{border:1px solid #000; padding:3px;}</style></head><body><h2>Tabulation</h2>${tableHtml}<script>setTimeout(()=>window.print(), 500);</script></body></html>`); 
 }
-
 
 /* =========================================================================
    TAB 4: REPORT CARDS
@@ -1101,7 +1166,6 @@ function generateReportCards() {
 /* =========================================================================
    TEMPLATE ENGINES (CSS & HTML BUILDERS)
    ========================================================================= */
-
 function getReportCardCSSAndHeader(templateId) {
   let css = '';
   
@@ -1458,7 +1522,7 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
          <table class="rc-table"><thead><tr><th class="subj-col">Subjects</th>`;
           sortedSetups.forEach(setup => { html += `<th colspan="${setup.assessments.length + 2}">${escH(setup.termName)}</th>`; });
     html += `</tr><tr><th></th>`;
-          sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}<br>(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
+          sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
     html += `</tr></thead><tbody>`;
 
     selectedSubjectsList.forEach(subName => {
