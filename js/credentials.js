@@ -1,4 +1,4 @@
-// credentials.js - SIMPLIFIED VERSION
+// credentials.js - UPDATED WITH EXAM MANAGEMENT PERMISSIONS
 
 let staffData = [];
 let credentialsData = [];
@@ -85,22 +85,14 @@ function checkRequiredElements() {
 function setupEventListeners() {
     console.log('🎯 Setting up event listeners...');
     
-    // Form submission
     const form = document.getElementById('create-credentials-form');
     if (form) {
         form.addEventListener('submit', handleCreateCredentials);
-        console.log('✅ Form submit listener added');
-    } else {
-        console.error('❌ Form not found');
     }
     
-    // Staff selection
     const staffSelect = document.getElementById('staff-select');
     if (staffSelect) {
         staffSelect.addEventListener('change', handleStaffSelection);
-        console.log('✅ Staff select listener added');
-    } else {
-        console.error('❌ Staff select not found');
     }
 }
 
@@ -121,11 +113,6 @@ async function loadCredentialsData() {
         staffData = staffResponse.data || [];
         credentialsData = credentialsResponse.data || [];
         
-        console.log('✅ Data loaded:', {
-            staff: staffData.length,
-            credentials: credentialsData.length
-        });
-        
         isDataLoaded = true;
         hideLoading();
         
@@ -143,27 +130,15 @@ async function loadCredentialsData() {
 // SETUP FORM
 // ===============================
 function setupCredentialForm() {
-    console.log('🛠️ Setting up credential form...');
-    
     if (!isDataLoaded) return;
     
-    // Populate staff dropdown
     const staffSelect = document.getElementById('staff-select');
-    if (!staffSelect) {
-        console.error('❌ Staff select not found');
-        return;
-    }
+    if (!staffSelect) return;
     
-    // Filter staff without credentials
     const staffWithoutCredentials = staffData.filter(staff => {
-        return !credentialsData.some(cred => 
-            cred.staff && cred.staff._id === staff._id
-        );
+        return !credentialsData.some(cred => cred.staff && cred.staff._id === staff._id);
     });
     
-    console.log(`📊 Staff: ${staffWithoutCredentials.length} without credentials`);
-    
-    // Populate dropdown
     staffSelect.innerHTML = '<option value="">-- Choose Staff --</option>';
     
     if (staffWithoutCredentials.length === 0) {
@@ -181,15 +156,12 @@ function setupCredentialForm() {
     });
     
     staffSelect.disabled = false;
-    console.log(`✅ Populated ${staffWithoutCredentials.length} staff`);
 }
 
 // ===============================
 // HANDLE STAFF SELECTION
 // ===============================
 function handleStaffSelection(e) {
-    console.log('👤 Staff selected');
-    
     const staffId = e.target.value;
     const loginDisplay = document.getElementById('loginid-display');
     
@@ -198,12 +170,8 @@ function handleStaffSelection(e) {
     const selectedOption = e.target.options[e.target.selectedIndex];
     const mobile = selectedOption.dataset.mobile;
     
-    if (mobile) {
-        loginDisplay.textContent = mobile;
-        console.log('📱 Login ID:', mobile);
-    } else {
-        loginDisplay.textContent = 'Select a staff member first';
-    }
+    if (mobile) loginDisplay.textContent = mobile;
+    else loginDisplay.textContent = 'Select a staff member first';
 }
 
 // ===============================
@@ -211,78 +179,55 @@ function handleStaffSelection(e) {
 // ===============================
 async function handleCreateCredentials(e) {
     e.preventDefault();
-    console.log('📝 Creating credentials...');
     
-    // Get form values
     const staffId = document.getElementById('staff-select').value;
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     
-    console.log('📋 Form values:', {
-        staffId,
-        passwordLength: password?.length
-    });
+    if (!staffId) return showError('Please select a staff member');
+    if (!password || password.trim() === '') return showError('Please enter a password');
+    if (password.length < 6) return showError('Password must be at least 6 characters long');
+    if (password !== confirmPassword) return showError('Passwords do not match');
     
-    // Validation
-    if (!staffId) {
-        showError('Please select a staff member');
-        return;
-    }
-    
-    if (!password || password.trim() === '') {
-        showError('Please enter a password');
-        return;
-    }
-    
-    if (password.length < 6) {
-        showError('Password must be at least 6 characters long');
-        return;
-    }
-    
-    if (password !== confirmPassword) {
-        showError('Passwords do not match');
-        return;
-    }
-    
-    // Check if credentials already exist
     const existingCred = credentialsData.find(c => c.staff && c.staff._id === staffId);
-    if (existingCred) {
-        showError('Credentials already exist for this staff member');
-        return;
-    }
+    if (existingCred) return showError('Credentials already exist for this staff member');
     
     try {
         showLoading('Creating credentials...');
         
-       var feeToggle = document.getElementById('fee-access-toggle');
-const requestData = {
-    staffId: staffId,
-    password: password,
-    canAccessFeeManagement: feeToggle ? feeToggle.checked : false
-};
-        
-        console.log('📤 Request:', requestData);
+        var feeToggle = document.getElementById('fee-access-toggle');
+        var examToggle = document.getElementById('exam-access-toggle');
+        var isExamActive = examToggle ? examToggle.checked : false;
+
+        const requestData = {
+            staffId: staffId,
+            password: password,
+            canAccessFeeManagement: feeToggle ? feeToggle.checked : false,
+            canAccessAdmitCards: isExamActive ? document.getElementById('perm-admit').checked : false,
+            canAccessExamSetup: isExamActive ? document.getElementById('perm-setup').checked : false,
+            canAccessMarksEntry: isExamActive ? document.getElementById('perm-marks').checked : false,
+            canAccessTabulation: isExamActive ? document.getElementById('perm-tabulation').checked : false,
+            canAccessReportCards: isExamActive ? document.getElementById('perm-reports').checked : false
+        };
         
         const response = await apiPost(API_ENDPOINTS.CREDENTIALS, requestData, true);
-        
-        console.log('📨 Response:', response);
-        
         hideLoading();
         
         if (response.success) {
             showSuccess(response.message || 'Credentials created successfully!');
-            
-            // Reset form
             document.getElementById('create-credentials-form').reset();
             document.getElementById('loginid-display').textContent = 'Select a staff member first';
             
-            console.log('✅ Form reset, reloading data...');
+            // Reset Exam visuals
+            document.getElementById('exam-toggle-slider').style.background = '#e2e8f0';
+            document.getElementById('exam-toggle-knob').style.transform = 'translateX(0)';
+            document.getElementById('exam-sub-options').style.display = 'none';
+
             await loadCredentialsData();
         } else {
             showError(response.message || 'Failed to create credentials');
         }
     } catch (error) {
-        console.error('❌ Error:', error);
         hideLoading();
         showError(error.message || 'An error occurred');
     }
@@ -292,71 +237,45 @@ const requestData = {
 // DISPLAY CREDENTIALS TABLE
 // ===============================
 function displayCredentials() {
-    console.log('📊 Displaying credentials...');
-    
     const tbody = document.querySelector('#credentials-table tbody');
-    if (!tbody) {
-        console.error('❌ Table tbody not found');
-        return;
-    }
+    if (!tbody) return;
     
     tbody.innerHTML = '';
     
     if (credentialsData.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="5" class="empty-state">
-                    <p>📭 No credentials created yet</p>
-                    <small>Create your first staff credential above</small>
-                </td>
-            </tr>
-        `;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><p>📭 No credentials created yet</p><small>Create your first staff credential above</small></td></tr>`;
         return;
     }
     
-    console.log(`📋 Displaying ${credentialsData.length} credentials`);
-    
     credentialsData.forEach(cred => {
         const row = tbody.insertRow();
+        const lastLogin = cred.lastLogin ? new Date(cred.lastLogin).toLocaleString() : '<em style="color: var(--gray-400);">Never</em>';
+        const statusBadge = cred.isActive ? '<span class="status-badge status-active">Active</span>' : '<span class="status-badge status-inactive">Inactive</span>';
         
-        // Last login
-        const lastLogin = cred.lastLogin ? 
-            new Date(cred.lastLogin).toLocaleString() : 
-            '<em style="color: var(--gray-400);">Never</em>';
+        // Extract permissions safely
+        const addAccess = cred.additionalAccess || {};
+        const hasFee = !!addAccess.canAccessFeeManagement;
+        const hasExam = !!(addAccess.canAccessAdmitCards || addAccess.canAccessExamSetup || addAccess.canAccessMarksEntry || addAccess.canAccessTabulation || addAccess.canAccessReportCards);
         
-        // Status badge
-        const statusBadge = cred.isActive ? 
-            '<span class="status-badge status-active">Active</span>' : 
-            '<span class="status-badge status-inactive">Inactive</span>';
-        
+        let badgesHtml = '';
+        if (hasFee) badgesHtml += '<span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:2px 6px;font-weight:700;margin-right:4px;">💰 Fee</span>';
+        if (hasExam) badgesHtml += '<span style="font-size:10px;background:#fffbeb;color:#d97706;border-radius:4px;padding:2px 6px;font-weight:700;">📝 Exam</span>';
+
         row.innerHTML = `
             <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
             <td>
-  <strong>${cred.staff?.name || '-'}</strong>
-  ${cred.additionalAccess?.canAccessFeeManagement 
-    ? '<br><span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:1px 6px;font-weight:700">💰 Fee Access</span>' 
-    : ''}
-</td>
+              <strong>${cred.staff?.name || '-'}</strong>
+              ${badgesHtml ? `<div style="margin-top:4px;">${badgesHtml}</div>` : ''}
+            </td>
             <td>${statusBadge}</td>
             <td>${lastLogin}</td>
             <td style="white-space: nowrap;">
-                <button onclick="updateCredential('${cred._id}')" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; font-size: 12px;">
-                    ✏️ Update
-                </button>
-                <button onclick="toggleCredentialStatus('${cred._id}', ${!cred.isActive})" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: ${cred.isActive ? '#ffc107' : '#28a745'}; color: white; border: none; border-radius: 3px; font-size: 12px;">
-                    ${cred.isActive ? '⏸️ Disable' : '▶️ Enable'}
-                </button>
-                <button onclick="deleteCredential('${cred._id}')" 
-                        style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 3px; font-size: 12px;">
-                    🗑️ Delete
-                </button>
+                <button onclick="updateCredential('${cred._id}')" style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 3px; font-size: 12px;">✏️ Update</button>
+                <button onclick="toggleCredentialStatus('${cred._id}', ${!cred.isActive})" style="padding: 5px 10px; margin: 2px; cursor: pointer; background: ${cred.isActive ? '#ffc107' : '#28a745'}; color: white; border: none; border-radius: 3px; font-size: 12px;">${cred.isActive ? '⏸️ Disable' : '▶️ Enable'}</button>
+                <button onclick="deleteCredential('${cred._id}')" style="padding: 5px 10px; margin: 2px; cursor: pointer; background: #dc3545; color: white; border: none; border-radius: 3px; font-size: 12px;">🗑️ Delete</button>
             </td>
         `;
     });
-    
-    console.log('✅ Table populated');
 }
 
 // ===============================
@@ -365,31 +284,43 @@ function displayCredentials() {
 var _updateCredentialId = null;
 
 function updateCredential(id) {
-    var cred = credentialsData.find(function(c) { return c._id === id; });
-    if (!cred) { showError('Credential not found'); return; }
+    var cred = credentialsData.find(c => c._id === id);
+    if (!cred) return showError('Credential not found');
 
     _updateCredentialId = id;
-
-    // Set subtitle
-    document.getElementById('update-modal-sub').textContent =
-        'Updating: ' + (cred.staff?.name || 'Staff Member');
-
-    // Clear password field
+    document.getElementById('update-modal-sub').textContent = 'Updating: ' + (cred.staff?.name || 'Staff Member');
     document.getElementById('update-password').value = '';
 
-    // Set fee toggle to current value
-    var hasFee = !!(cred.additionalAccess?.canAccessFeeManagement);
-    var toggle = document.getElementById('update-fee-toggle');
-    var slider = document.getElementById('update-fee-slider');
-    var knob   = document.getElementById('update-fee-knob');
+    var addAccess = cred.additionalAccess || {};
+    
+    // Fee logic
+    var hasFee = !!addAccess.canAccessFeeManagement;
+    var feeToggle = document.getElementById('update-fee-toggle');
+    feeToggle.checked = hasFee;
+    document.getElementById('update-fee-slider').style.background = hasFee ? '#6366f1' : '#e2e8f0';
+    document.getElementById('update-fee-knob').style.transform = hasFee ? 'translateX(20px)' : 'translateX(0)';
 
-    toggle.checked          = hasFee;
-    slider.style.background = hasFee ? '#6366f1' : '#e2e8f0';
-    knob.style.transform    = hasFee ? 'translateX(20px)' : 'translateX(0)';
+    // Exam logic
+    var hasAdmit = !!addAccess.canAccessAdmitCards;
+    var hasSetup = !!addAccess.canAccessExamSetup;
+    var hasMarks = !!addAccess.canAccessMarksEntry;
+    var hasTabu = !!addAccess.canAccessTabulation;
+    var hasReports = !!addAccess.canAccessReportCards;
+    var hasAnyExam = hasAdmit || hasSetup || hasMarks || hasTabu || hasReports;
 
-    // Show modal
-    var modal = document.getElementById('update-modal');
-    modal.style.display = 'flex';
+    var examToggle = document.getElementById('update-exam-toggle');
+    examToggle.checked = hasAnyExam;
+    document.getElementById('update-exam-slider').style.background = hasAnyExam ? '#d97706' : '#e2e8f0';
+    document.getElementById('update-exam-knob').style.transform = hasAnyExam ? 'translateX(20px)' : 'translateX(0)';
+    document.getElementById('update-exam-sub-options').style.display = hasAnyExam ? 'block' : 'none';
+
+    document.getElementById('update-perm-admit').checked = hasAdmit;
+    document.getElementById('update-perm-setup').checked = hasSetup;
+    document.getElementById('update-perm-marks').checked = hasMarks;
+    document.getElementById('update-perm-tabulation').checked = hasTabu;
+    document.getElementById('update-perm-reports').checked = hasReports;
+
+    document.getElementById('update-modal').style.display = 'flex';
 }
 
 function closeUpdateModal() {
@@ -400,33 +331,30 @@ function closeUpdateModal() {
 async function saveUpdatedCredential() {
     if (!_updateCredentialId) return;
 
-    var password   = document.getElementById('update-password').value.trim();
-    var feeAccess  = document.getElementById('update-fee-toggle').checked;
-    var btn        = document.getElementById('update-save-btn');
+    var password = document.getElementById('update-password').value.trim();
+    var feeAccess = document.getElementById('update-fee-toggle').checked;
+    var examAccess = document.getElementById('update-exam-toggle').checked;
+    var btn = document.getElementById('update-save-btn');
 
-    // Validate password only if provided
-    if (password && password.length < 6) {
-        showError('Password must be at least 6 characters');
-        return;
-    }
+    if (password && password.length < 6) return showError('Password must be at least 6 characters');
 
     var updateData = {
-        additionalAccess: { canAccessFeeManagement: feeAccess }
+        additionalAccess: { 
+            canAccessFeeManagement: feeAccess,
+            canAccessAdmitCards: examAccess ? document.getElementById('update-perm-admit').checked : false,
+            canAccessExamSetup: examAccess ? document.getElementById('update-perm-setup').checked : false,
+            canAccessMarksEntry: examAccess ? document.getElementById('update-perm-marks').checked : false,
+            canAccessTabulation: examAccess ? document.getElementById('update-perm-tabulation').checked : false,
+            canAccessReportCards: examAccess ? document.getElementById('update-perm-reports').checked : false
+        }
     };
     if (password) updateData.password = password;
 
-    btn.disabled    = true;
-    btn.textContent = '...';
+    btn.disabled = true; btn.textContent = '...';
 
     try {
         showLoading('Saving changes...');
-
-        var response = await apiPut(
-            API_ENDPOINTS.CREDENTIALS + '/' + _updateCredentialId,
-            updateData,
-            true
-        );
-
+        var response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + _updateCredentialId, updateData, true);
         hideLoading();
 
         if (response.success) {
@@ -440,8 +368,7 @@ async function saveUpdatedCredential() {
         hideLoading();
         showError(error.message);
     } finally {
-        btn.disabled    = false;
-        btn.textContent = '💾 Save Changes';
+        btn.disabled = false; btn.textContent = '💾 Save Changes';
     }
 }
 
@@ -459,11 +386,7 @@ async function toggleCredentialStatus(id, newStatus) {
     
     try {
         showLoading(`${action === 'enable' ? 'Enabling' : 'Disabling'} credentials...`);
-        
-        const response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + id, {
-            isActive: newStatus
-        }, true);
-        
+        const response = await apiPut(API_ENDPOINTS.CREDENTIALS + '/' + id, { isActive: newStatus }, true);
         hideLoading();
         
         if (response.success) {
@@ -491,9 +414,7 @@ async function deleteCredential(id) {
     
     try {
         showLoading('Deleting credential...');
-        
         const response = await apiDelete(API_ENDPOINTS.CREDENTIALS + '/' + id, true);
-        
         hideLoading();
         
         if (response.success) {
@@ -509,85 +430,42 @@ async function deleteCredential(id) {
 }
 
 // ===============================
-// UI HELPERS - WITH OVERLAY
+// UI HELPERS
 // ===============================
 function showLoading(message = 'Loading...') {
     const loading = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loading) {
-        loading.textContent = message;
-        loading.classList.add('show');
-    }
-    
-    if (overlay) {
-        overlay.classList.add('show');
-    }
+    if (loading) { loading.textContent = message; loading.classList.add('show'); }
+    if (overlay) { overlay.classList.add('show'); }
 }
 
 function hideLoading() {
     const loading = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
-    
-    if (loading) {
-        loading.classList.remove('show');
-    }
-    
-    if (overlay) {
-        overlay.classList.remove('show');
-    }
+    if (loading) loading.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
 }
 
 function showError(message) {
-    console.error('❌', message);
     hideMessages();
-    
     const errorDiv = document.getElementById('error-message');
     const overlay = document.getElementById('message-overlay');
-    
     if (errorDiv) {
-        errorDiv.textContent = message;
-        errorDiv.classList.add('show');
-        
-        if (overlay) {
-            overlay.classList.add('show');
-        }
-        
-        setTimeout(() => {
-            errorDiv.classList.remove('show');
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
-        }, 5000);
-    } else {
-        alert('Error: ' + message);
-    }
+        errorDiv.textContent = message; errorDiv.classList.add('show');
+        if (overlay) overlay.classList.add('show');
+        setTimeout(() => { errorDiv.classList.remove('show'); if (overlay) overlay.classList.remove('show'); }, 5000);
+    } else alert('Error: ' + message);
 }
 
 function showSuccess(message) {
-    console.log('✅', message);
     hideMessages();
-    
     const successDiv = document.getElementById('success-message');
     const overlay = document.getElementById('message-overlay');
-    
     if (successDiv) {
-        successDiv.textContent = message;
-        successDiv.classList.add('show');
-        
-        if (overlay) {
-            overlay.classList.add('show');
-        }
-        
-        setTimeout(() => {
-            successDiv.classList.remove('show');
-            if (overlay) {
-                overlay.classList.remove('show');
-            }
-        }, 3000);
-    } else {
-        alert(message);
-    }
+        successDiv.textContent = message; successDiv.classList.add('show');
+        if (overlay) overlay.classList.add('show');
+        setTimeout(() => { successDiv.classList.remove('show'); if (overlay) overlay.classList.remove('show'); }, 3000);
+    } else alert(message);
 }
 
 function hideMessages() {
@@ -595,22 +473,15 @@ function hideMessages() {
     const successDiv = document.getElementById('success-message');
     const loading = document.getElementById('loading');
     const overlay = document.getElementById('message-overlay');
-    
-
     if (errorDiv) errorDiv.classList.remove('show');
     if (successDiv) successDiv.classList.remove('show');
     if (loading) loading.classList.remove('show');
     if (overlay) overlay.classList.remove('show');
 }
 
-// ===============================
-// LOGOUT
-// ===============================
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
         localStorage.clear();
         window.location.href = 'login.html';
     }
 }
-
-console.log('✅ credentials.js loaded successfully!');
