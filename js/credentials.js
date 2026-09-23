@@ -1,4 +1,4 @@
-// credentials.js - UPDATED WITH EXAM MANAGEMENT PERMISSIONS
+// credentials.js - UPDATED WITH EXAM & 7 FEE TAB PERMISSIONS
 
 let staffData = [];
 let credentialsData = [];
@@ -196,17 +196,30 @@ async function handleCreateCredentials(e) {
         showLoading('Creating credentials...');
         
         var feeToggle = document.getElementById('fee-access-toggle');
+        var isFeeActive = feeToggle ? feeToggle.checked : false;
+        
         var examToggle = document.getElementById('exam-access-toggle');
         var isExamActive = examToggle ? examToggle.checked : false;
 
         const requestData = {
             staffId: staffId,
             password: password,
-            canAccessFeeManagement: feeToggle ? feeToggle.checked : false,
-            canAccessAdmitCards: isExamActive ? document.getElementById('perm-admit').checked : false,
-            canAccessExamSetup: isExamActive ? document.getElementById('perm-setup').checked : false,
-            canAccessMarksEntry: isExamActive ? document.getElementById('perm-marks').checked : false,
-            canAccessTabulation: isExamActive ? document.getElementById('perm-tabulation').checked : false,
+            
+            // 🚨 7 FEE TABS 🚨
+            canAccessFeeManagement: isFeeActive,
+            canAccessFeeTab1: isFeeActive ? document.getElementById('perm-fee-tab1').checked : false,
+            canAccessFeeTab2: isFeeActive ? document.getElementById('perm-fee-tab2').checked : false,
+            canAccessFeeTab3: isFeeActive ? document.getElementById('perm-fee-tab3').checked : false,
+            canAccessFeeTab4: isFeeActive ? document.getElementById('perm-fee-tab4').checked : false,
+            canAccessFeeTab5: isFeeActive ? document.getElementById('perm-fee-tab5').checked : false,
+            canAccessFeeTab6: isFeeActive ? document.getElementById('perm-fee-tab6').checked : false,
+            canAccessFeeTab7: isFeeActive ? document.getElementById('perm-fee-tab7').checked : false,
+            
+            // 🚨 EXAM TABS 🚨
+            canAccessAdmitCards:  isExamActive ? document.getElementById('perm-admit').checked : false,
+            canAccessExamSetup:   isExamActive ? document.getElementById('perm-setup').checked : false,
+            canAccessMarksEntry:  isExamActive ? document.getElementById('perm-marks').checked : false,
+            canAccessTabulation:  isExamActive ? document.getElementById('perm-tabulation').checked : false,
             canAccessReportCards: isExamActive ? document.getElementById('perm-reports').checked : false
         };
         
@@ -218,6 +231,11 @@ async function handleCreateCredentials(e) {
             document.getElementById('create-credentials-form').reset();
             document.getElementById('loginid-display').textContent = 'Select a staff member first';
             
+            // Reset Fee visuals
+            document.getElementById('fee-toggle-slider').style.background = '#e2e8f0';
+            document.getElementById('fee-toggle-knob').style.transform = 'translateX(0)';
+            document.getElementById('fee-sub-options').style.display = 'none';
+
             // Reset Exam visuals
             document.getElementById('exam-toggle-slider').style.background = '#e2e8f0';
             document.getElementById('exam-toggle-knob').style.transform = 'translateX(0)';
@@ -258,8 +276,8 @@ function displayCredentials() {
         const hasExam = !!(addAccess.canAccessAdmitCards || addAccess.canAccessExamSetup || addAccess.canAccessMarksEntry || addAccess.canAccessTabulation || addAccess.canAccessReportCards);
         
         let badgesHtml = '';
-        if (hasFee) badgesHtml += '<span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:2px 6px;font-weight:700;margin-right:4px;">💰 Fee</span>';
-        if (hasExam) badgesHtml += '<span style="font-size:10px;background:#fffbeb;color:#d97706;border-radius:4px;padding:2px 6px;font-weight:700;">📝 Exam</span>';
+        if (hasFee) badgesHtml += '<span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:2px 6px;font-weight:700;margin-right:4px;">💰 Fee Management</span>';
+        if (hasExam) badgesHtml += '<span style="font-size:10px;background:#fffbeb;color:#d97706;border-radius:4px;padding:2px 6px;font-weight:700;">📝 Exam Management</span>';
 
         row.innerHTML = `
             <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
@@ -293,12 +311,21 @@ function updateCredential(id) {
 
     var addAccess = cred.additionalAccess || {};
     
-    // Fee logic
+    // Fee logic (7 tabs)
     var hasFee = !!addAccess.canAccessFeeManagement;
     var feeToggle = document.getElementById('update-fee-toggle');
     feeToggle.checked = hasFee;
     document.getElementById('update-fee-slider').style.background = hasFee ? '#6366f1' : '#e2e8f0';
     document.getElementById('update-fee-knob').style.transform = hasFee ? 'translateX(20px)' : 'translateX(0)';
+    document.getElementById('update-fee-sub-options').style.display = hasFee ? 'block' : 'none';
+
+    document.getElementById('update-perm-fee-tab1').checked = !!addAccess.canAccessFeeTab1;
+    document.getElementById('update-perm-fee-tab2').checked = !!addAccess.canAccessFeeTab2;
+    document.getElementById('update-perm-fee-tab3').checked = !!addAccess.canAccessFeeTab3;
+    document.getElementById('update-perm-fee-tab4').checked = !!addAccess.canAccessFeeTab4;
+    document.getElementById('update-perm-fee-tab5').checked = !!addAccess.canAccessFeeTab5;
+    document.getElementById('update-perm-fee-tab6').checked = !!addAccess.canAccessFeeTab6;
+    document.getElementById('update-perm-fee-tab7').checked = !!addAccess.canAccessFeeTab7;
 
     // Exam logic
     var hasAdmit = !!addAccess.canAccessAdmitCards;
@@ -340,11 +367,21 @@ async function saveUpdatedCredential() {
 
     var updateData = {
         additionalAccess: { 
+            // 🚨 7 FEE TABS 🚨
             canAccessFeeManagement: feeAccess,
-            canAccessAdmitCards: examAccess ? document.getElementById('update-perm-admit').checked : false,
-            canAccessExamSetup: examAccess ? document.getElementById('update-perm-setup').checked : false,
-            canAccessMarksEntry: examAccess ? document.getElementById('update-perm-marks').checked : false,
-            canAccessTabulation: examAccess ? document.getElementById('update-perm-tabulation').checked : false,
+            canAccessFeeTab1: feeAccess ? document.getElementById('update-perm-fee-tab1').checked : false,
+            canAccessFeeTab2: feeAccess ? document.getElementById('update-perm-fee-tab2').checked : false,
+            canAccessFeeTab3: feeAccess ? document.getElementById('update-perm-fee-tab3').checked : false,
+            canAccessFeeTab4: feeAccess ? document.getElementById('update-perm-fee-tab4').checked : false,
+            canAccessFeeTab5: feeAccess ? document.getElementById('update-perm-fee-tab5').checked : false,
+            canAccessFeeTab6: feeAccess ? document.getElementById('update-perm-fee-tab6').checked : false,
+            canAccessFeeTab7: feeAccess ? document.getElementById('update-perm-fee-tab7').checked : false,
+            
+            // 🚨 EXAM TABS 🚨
+            canAccessAdmitCards:  examAccess ? document.getElementById('update-perm-admit').checked : false,
+            canAccessExamSetup:   examAccess ? document.getElementById('update-perm-setup').checked : false,
+            canAccessMarksEntry:  examAccess ? document.getElementById('update-perm-marks').checked : false,
+            canAccessTabulation:  examAccess ? document.getElementById('update-perm-tabulation').checked : false,
             canAccessReportCards: examAccess ? document.getElementById('update-perm-reports').checked : false
         }
     };
