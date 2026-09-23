@@ -87,18 +87,50 @@ var pendingMonthDelete = null;
   Promise.all([loadFeeHeads(), loadClasses(), loadTransportRoutes()]);
 })();
 
-(function restrictStaffTabs() {
-  var userType = localStorage.getItem('userType') || '';
-  if (userType !== 'staff') return;
+(function enforceStaffPermissions() {
+  var userType = localStorage.getItem('userType');
+  if (userType !== 'staff') return; // Admins get everything
 
-  // Hide tabs 1, 2, 3 buttons
-  ['tab1-btn', 'tab2-btn', 'tab3-btn'].forEach(function(id) {
-    var btn = document.getElementById(id);
-    if (btn) btn.style.display = 'none';
-  });
+  var perms = {};
+  try {
+    perms = JSON.parse(localStorage.getItem('feePermissions') || '{}');
+  } catch (e) {
+    perms = {};
+  }
 
-  // Jump straight to Tab 4 (Fee Status)
-  switchTab(4);
+  // 1. Hide tabs directly based on their specific permission
+  if (!perms.tab1) { var t1 = document.getElementById('tab1-btn'); if (t1) t1.style.display = 'none'; }
+  if (!perms.tab2) { var t2 = document.getElementById('tab2-btn'); if (t2) t2.style.display = 'none'; }
+  if (!perms.tab3) { var t3 = document.getElementById('tab3-btn'); if (t3) t3.style.display = 'none'; }
+  if (!perms.tab4) { var t4 = document.getElementById('tab4-btn'); if (t4) t4.style.display = 'none'; }
+  if (!perms.tab5) { var t5 = document.getElementById('tab5-btn'); if (t5) t5.style.display = 'none'; }
+  if (!perms.tab6) { var t6 = document.getElementById('tab6-btn'); if (t6) t6.style.display = 'none'; }
+  if (!perms.tab7) { var t7 = document.getElementById('tab7-btn'); if (t7) t7.style.display = 'none'; }
+
+  // 2. Auto-route to the first available tab
+  if (perms.tab4) switchTab(4); // Priority: Fee Collection
+  else if (perms.tab5) switchTab(5);
+  else if (perms.tab6) switchTab(6);
+  else if (perms.tab7) switchTab(7);
+  else if (perms.tab1) switchTab(1);
+  else if (perms.tab2) switchTab(2);
+  else if (perms.tab3) switchTab(3);
+  else {
+    // 3. Absolute fallback: No tabs checked
+    var tabsBar = document.querySelector('.fm-tabs');
+    if (tabsBar) tabsBar.style.display = 'none';
+    [1,2,3,4,5,6,7].forEach(function(i) {
+      var t = document.getElementById('tab' + i);
+      if (t) t.style.display = 'none';
+    });
+    
+    document.querySelector('.fm-container').innerHTML += 
+      '<div class="fm-card" style="text-align:center; padding:40px 20px; margin-top:20px;">' +
+        '<div style="font-size:40px; margin-bottom:10px;">🔒</div>' +
+        '<div class="fm-card-title" style="justify-content:center;">Access Restricted</div>' +
+        '<div class="fm-card-sub">You do not have permission to access any Fee modules. Please contact the administrator.</div>' +
+      '</div>';
+  }
 })();
 
 function applySession(s) {
