@@ -650,6 +650,9 @@ function getSubMax(a, subName) {
 }
 
 function loadMarksGrid() {
+  // Force save any pending changes before destroying the current grid
+  if (autoSaveTimeout) { clearTimeout(autoSaveTimeout); silentSaveMarks(); }
+
   const classId = getVal('m-class-sel'), subjectId = getVal('m-subject-sel'), examSetupId = getVal('m-setup-sel');
   if (!classId || !subjectId || !examSetupId) return toast('Select Class, Subject, and Term', 'err');
   
@@ -662,6 +665,8 @@ function loadMarksGrid() {
   apiGet(`${API_ENDPOINTS.MARKS_GRID}?session=${window.currentSession}&classId=${classId}&subjectId=${subjectId}&examSetupId=${examSetupId}`, true)
   .then(res => { 
       currentGridSetup = res.setup; 
+      // LOCK IN METADATA SO AUTO-SAVES DON'T GRAB THE WRONG DROPDOWN LATER
+      window.activeGridMeta = { classId, subjectId, examSetupId };
       renderDynamicGrid(res.data, res.setup, subjectName); 
       document.getElementById('marks-grid-panel').style.display = 'block'; 
   })
@@ -750,9 +755,9 @@ function triggerAutoSave() {
 }
 
 function silentSaveMarks() {
-    if (!currentGridSetup) return;
+    if (!currentGridSetup || !window.activeGridMeta) return Promise.resolve();
     const rows = document.querySelectorAll('.m-row'); 
-    if (!rows.length) return; 
+    if (!rows.length) return Promise.resolve(); 
     let hasFatalError = false;
     
     const marksData = Array.from(rows).map(r => {
@@ -771,19 +776,38 @@ function silentSaveMarks() {
     if (hasFatalError) { 
         const status = document.getElementById('auto-save-text'); 
         if(status) { status.textContent = '⚠️ Fix red boxes to sync'; status.style.color = 'var(--danger)'; } 
-        return; 
+        return Promise.reject(new Error('Validation Error')); 
     }
     
-    apiPost(API_ENDPOINTS.MARKS_BULK, { session: window.currentSession, classId: getVal('m-class-sel'), subjectId: getVal('m-subject-sel'), examSetupId: getVal('m-setup-sel'), marksData }, true)
+    // USE LOCKED METADATA INSTEAD OF LIVE DROPDOWNS
+    return apiPost(API_ENDPOINTS.MARKS_BULK, { 
+        session: window.currentSession, 
+        classId: window.activeGridMeta.classId, 
+        subjectId: window.activeGridMeta.subjectId, 
+        examSetupId: window.activeGridMeta.examSetupId, 
+        marksData 
+    }, true)
       .then(() => { const status = document.getElementById('auto-save-text'); if(status) { status.textContent = '☁️ Cloud Sync Active'; status.style.color = 'var(--silver)'; } })
-      .catch(() => { const status = document.getElementById('auto-save-text'); if(status) { status.textContent = '⚠️ Sync failed'; status.style.color = 'var(--danger)'; } });
+      .catch(() => { const status = document.getElementById('auto-save-text'); if(status) { status.textContent = '⚠️ Sync failed'; status.style.color = 'var(--danger)'; } throw new Error('Sync failed'); });
 }
 
 function saveMarksGrid() {
   const btn = document.getElementById('btn-save-marks'); 
   const originalText = btn.textContent; btn.disabled = true; btn.textContent = 'Saving...';
-  silentSaveMarks(); 
-  setTimeout(() => { toast('Marks saved to cloud', 'success'); btn.disabled = false; btn.textContent = originalText; }, 800);
+  
+  // WAIT FOR THE PROMISE TO RESOLVE BEFORE SHOWING SUCCESS
+  const savePromise = silentSaveMarks();
+  if (savePromise) {
+      savePromise.then(() => {
+          toast('Marks saved to cloud', 'success');
+      }).catch(() => {
+          toast('Failed to save marks', 'err');
+      }).finally(() => {
+          btn.disabled = false; btn.textContent = originalText;
+      });
+  } else {
+      btn.disabled = false; btn.textContent = originalText;
+  }
 }
 
 function showAnalytics() {
@@ -874,21 +898,23 @@ function handleExcelUpload(event) {
       const data = new Uint8Array(e.target.result); const wb = XLSX.read(data, {type: 'array'}); 
       const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       let matchCount = 0;
-      json.forEach(row => {
-        const sid = row["Student ID (DO NOT EDIT)"]; if (!sid) return;
-        const tr = document.querySelector(`.m-row[data-sid="${sid}"]`);
-        if (tr) {
-          tr.querySelectorAll('.dyn-mark').forEach(inp => {
-            const key = `${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`;
-            if (row[key] !== undefined) { inp.value = row[key]; validateMark(inp); }
-          }); 
-          matchCount++;
-        }
-      }); 
-      toast(`Mapped ${matchCount} students from Excel.`, 'success'); 
-      triggerAutoSave(); 
-    } catch(err) { toast('Error reading Excel file.', 'err'); }
-    event.target.value = "";
+      // Inside handleExcelUpload reader.onload:
+              json.forEach(row => {
+                const sid = row["Student ID (DO NOT EDIT)"]; if (!sid) return;
+                const tr = document.querySelector(`.m-row[data-sid="${sid}"]`);
+                if (tr) {
+                  tr.querySelectorAll('.dyn-mark').forEach(inp => {
+                    const key = `${inp.getAttribute('data-name')} (Max: ${inp.getAttribute('data-max')})`;
+                    if (row[key] !== undefined) { inp.value = row[key]; validateMark(inp); }
+                  }); 
+                  matchCount++;
+                }
+              }); 
+              // FORCE INSTANT SAVE INSTEAD OF DELAYED AUTO-SAVE
+              toast(`Mapped ${matchCount} students from Excel. Saving...`, 'success'); 
+              silentSaveMarks(); 
+            } catch(err) { toast('Error reading Excel file.', 'err'); }
+            event.target.value = "";
   }; 
   reader.readAsArrayBuffer(file);
 }
