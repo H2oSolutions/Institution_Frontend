@@ -710,7 +710,7 @@ function renderDynamicGrid(students, setup, subjectName) {
       const markData = s.marks[a.name] || { status: 'present', obtained: '' };
       const val = markData.status === 'present' ? (markData.obtained ?? '') : markData.status.toUpperCase();
       tr += `<td style="text-align:center;">
-                <input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${aMax}" value="${val}" placeholder="0-${aMax} / AB" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();">
+                <input type="text" class="m-input dyn-mark" data-name="${escAttr(a.name)}" data-max="${aMax}" value="${val}" placeholder="0-${aMax} / AB / NA" onblur="validateMark(this)" oninput="validateMark(this); triggerAutoSave();">
              </td>`;
     });
     tr += '</tr>'; 
@@ -739,8 +739,8 @@ function validateMark(el) {
   const max = Number(el.getAttribute('data-max'));
   el.classList.remove('fail', 'err');
   
-  if (val === '' || val === 'AB' || val === 'ABSENT' || val === 'M' || val === 'MEDICAL') { return; }
-  
+if (val === '' || val === 'AB' || val === 'ABSENT' || val === 'M' || val === 'MEDICAL' || val === 'NA') { return; }
+
   const num = Number(val); 
   if (isNaN(num) || num < 0 || num > max) { el.classList.add('err'); } 
   else if (num < (max * 0.33)) { el.classList.add('fail'); }
@@ -766,9 +766,11 @@ function silentSaveMarks() {
       r.querySelectorAll('.dyn-mark').forEach(inp => {
         if (inp.classList.contains('err')) hasFatalError = true;
         const name = inp.getAttribute('data-name'), val = inp.value.trim().toUpperCase();
-        if (val === 'AB' || val === 'ABSENT') marksObj[name] = { status: 'absent', obtained: null };
-        else if (val === 'M' || val === 'MEDICAL') marksObj[name] = { status: 'medical', obtained: null };
-        else { const numVal = val === '' ? null : Number(val); marksObj[name] = { status: 'present', obtained: numVal }; }
+       
+if (val === 'AB' || val === 'ABSENT') marksObj[name] = { status: 'absent', obtained: null };
+else if (val === 'M' || val === 'MEDICAL') marksObj[name] = { status: 'medical', obtained: null };
+else if (val === 'NA') marksObj[name] = { status: 'na', obtained: null }; // <--- ADD THIS LINE
+else { const numVal = val === '' ? null : Number(val); marksObj[name] = { status: 'present', obtained: numVal }; }
       }); 
       return { studentId, marks: marksObj };
     });
@@ -975,32 +977,40 @@ function loadTabulation() {
                 let sMax = 0;
                 let termVals = {}; 
                 let hasAnyMarks = false; 
+                let completelyNA = true; // Track if the subject is NA
                 
                 setups.forEach(setup => { 
                     const termData = item.subjects[sub]?.[setup._id]; 
                     let tTotal = 0; 
                     let tHasMarks = false; 
+                    let tHasNA = false;
                     
                     setup.assessments.forEach(a => { 
-                        sMax += getSubMax(a, sub);
-                        if (termData) { 
-                            const m = termData[a.name]; 
+                        const m = termData ? termData[a.name] : null;
+                        if (m && m.status === 'na') {
+                            tHasNA = true;
+                        } else {
+                            completelyNA = false; 
+                            sMax += getSubMax(a, sub); // Only add max marks if NOT 'na'
                             if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') { 
                                 tTotal += Number(m.obtained); tHasMarks = true; hasAnyMarks = true; 
                             } 
                         }
                     }); 
-                    termVals[setup._id] = tHasMarks ? tTotal : 'AB'; 
+                    termVals[setup._id] = tHasNA ? 'NA' : (tHasMarks ? tTotal : 'AB'); 
                     sTotal += tTotal; 
                 }); 
                 
-                if (sTotal < (sMax * 0.33)) failCount++; 
-                if (!hasAnyMarks) anyMissing = true; 
-                
-                subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', max: sMax, missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (sMax * 0.33)) }; 
-                if(hasAnyMarks) grandTotal += sTotal;
-                maxPossible += sMax;
-            }); 
+                if (completelyNA) {
+                    subTotals[sub] = { terms: termVals, val: 'NA', max: 0, missing: false, fail: false };
+                } else {
+                    if (sTotal < (sMax * 0.33)) failCount++; 
+                    if (!hasAnyMarks) anyMissing = true; 
+                    subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', max: sMax, missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (sMax * 0.33)) }; 
+                    if(hasAnyMarks) grandTotal += sTotal;
+                    maxPossible += sMax;
+                }
+            });
             
             const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0; 
             // Also mapping Father's Name for the broadsheet!
@@ -1123,6 +1133,19 @@ function loadReportCardOptions() {
       termsContainer.innerHTML = Array.from(uniqueTerms.values()).map(tName => `<label class="chk-label"><input type="checkbox" class="rc-term-chk" value="${escAttr(tName)}" checked> ${escH(tName)}</label>`).join('') || 'No terms found.';
       subjectsContainer.innerHTML = Array.from(uniqueSubjs.values()).map(sName => `<label class="chk-label"><input type="checkbox" class="rc-subj-chk" value="${escAttr(sName)}" checked> ${escH(sName)}</label>`).join('') || 'No subjects mapped.';
   });
+}
+
+function getStudentActiveSubjects(stuItem, allSubjects) {
+    return allSubjects.filter(subName => {
+        let isNA = false;
+        stuItem.matchedSetups.forEach(setup => {
+            const termData = stuItem.subjects[subName]?.[setup._id];
+            setup.assessments.forEach(a => {
+                if (termData && termData[a.name] && termData[a.name].status === 'na') isNA = true;
+            });
+        });
+        return !isNA; // If it's NA, drop it from the list
+    });
 }
 
 function generateReportCards() {
@@ -1399,7 +1422,8 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
           });
     html += `</tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       
       sortedSetups.forEach(setup => {
@@ -1501,7 +1525,8 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
     const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
     
     let grandTotal = 0; let grandMax = 0;
-    selectedSubjectsList.forEach(subName => {
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => {
         sortedSetups.forEach(setup => {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => {
@@ -1551,7 +1576,7 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
           sortedSetups.forEach(setup => { setup.assessments.forEach(a => { html += `<th>${escH(a.name)}(${a.maxMarks})</th>`; }); html += `<th>Total</th><th>Grade</th>`; });
     html += `</tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       sortedSetups.forEach(setup => {
         let termTotal = 0, termMax = 0; const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
@@ -1593,8 +1618,9 @@ function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
     const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
     
     let grandTotal = 0; let grandMax = 0;
-    selectedSubjectsList.forEach(subName => { 
-        sortedSetups.forEach(setup => { 
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => { 
+        sortedSetups.forEach(setup => {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
@@ -1632,7 +1658,7 @@ function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
           sortedSetups.forEach(() => { html += `<th>Score</th><th>Grade</th>`; });
     html += `</tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       let subjTotal = 0; let subjMax = 0;
       
@@ -1683,8 +1709,9 @@ function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
     const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
     
     let grandTotal = 0; let grandMax = 0;
-    selectedSubjectsList.forEach(subName => { 
-        sortedSetups.forEach(setup => { 
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => { 
+        sortedSetups.forEach(setup => {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
@@ -1723,7 +1750,7 @@ function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
           sortedSetups.forEach(setup => { html += `<th colspan="2">${escH(setup.termName)}</th>`; });
     html += `<th>Final Total</th><th>Grade</th></tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       let subjTotal = 0; let subjMax = 0;
       
@@ -1779,7 +1806,8 @@ function buildVisualReportCard(studentsChunk, selectedSubjectsList) {
           sortedSetups.forEach(setup => { html += `<th>${escH(setup.termName)}</th>`; });
     html += `<th>Cumulative Score</th><th>Progress Bar</th><th>Grade</th></tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       let subjTotal = 0; let subjMax = 0;
       
@@ -1831,9 +1859,10 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
     const stu = item.student, subjectsDict = item.subjects, className = item.className;
     const sortedSetups = item.matchedSetups.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
     
-    let grandTotal = 0; let grandMax = 0;
-    selectedSubjectsList.forEach(subName => { 
-        sortedSetups.forEach(setup => { 
+   let grandTotal = 0; let grandMax = 0;
+    const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    activeSubjects.forEach(subName => { 
+        sortedSetups.forEach(setup => {
             const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
             setup.assessments.forEach(a => { 
                 if (termData[a.name] && termData[a.name].status === 'present') { grandTotal += Number(termData[a.name].obtained || 0); } 
@@ -1878,7 +1907,7 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
           });
     html += `</tr></thead><tbody>`;
 
-    selectedSubjectsList.forEach(subName => {
+    activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       sortedSetups.forEach(setup => {
         let termTotal = 0, termMax = 0; 
