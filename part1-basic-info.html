@@ -1035,6 +1035,11 @@
                 <h3>🔍 Search Students</h3>
                 <div class="search-container">
                     <input type="text" id="search-student" placeholder="🔍 Search by name, father name, class, or mobile...">
+                    <select id="student-status-filter" onchange="loadStudents()" style="padding: var(--space-4) var(--space-6); border-radius: var(--radius-lg); border: 2px solid var(--gray-300); background: white; font-weight: 600; color: var(--gray-700);">
+                        <option value="true">🟢 Active Students Only</option>
+                        <option value="false">🔴 Inactive Students Only</option>
+                        <option value="all">⚪ All Students (Active & Inactive)</option>
+                    </select>
                     <button onclick="searchStudents()">Search</button>
                     <button onclick="loadAllStudents()">Show All</button>
                 </div>
@@ -1051,7 +1056,7 @@
                                 <th>Class</th>
                                 <th>Mobile No</th>
                                 <th>DOB</th>
-                                <th>Address</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>

@@ -661,14 +661,17 @@ async function deleteSubject(id) {
 
 // ===================================
 // 5. STUDENTS MANAGEMENT
-// ✅ FIX: isActive=true filter on all student fetches
 // ===================================
 
 async function loadStudents() {
     try {
         showLoading('Loading students...');
-        // ✅ FIX: isActive=true ensures graduated/transferred-out students never appear here
-        const response = await apiGet(API_ENDPOINTS.STUDENTS + '?limit=100&isActive=true', true);
+        
+        const statusFilter = document.getElementById('student-status-filter').value;
+        // 🚨 FIX: ALWAYS send the filter value to the backend, even if it is 'all'
+        let url = API_ENDPOINTS.STUDENTS + '?limit=100&isActive=' + statusFilter;
+
+        const response = await apiGet(url, true);
         hideLoading();
         if (response.success) {
             studentsData = response.data;
@@ -682,7 +685,31 @@ async function loadStudents() {
 
 async function loadAllStudents() {
     document.getElementById('search-student').value = '';
-    loadStudents(); // uses isActive=true by default
+    // 🚨 FIX: Make the "Show All" button actually change the dropdown to "All Students"
+    document.getElementById('student-status-filter').value = 'all'; 
+    loadStudents(); 
+}
+
+async function searchStudents() {
+    const searchTerm = document.getElementById('search-student').value.trim();
+    const statusFilter = document.getElementById('student-status-filter').value;
+    
+    try {
+        showLoading('Searching...');
+        
+        // 🚨 FIX: ALWAYS send the filter value alongside the search term
+        let url = API_ENDPOINTS.STUDENTS + '?search=' + encodeURIComponent(searchTerm) + '&isActive=' + statusFilter;
+
+        const response = await apiGet(url, true);
+        hideLoading();
+        if (response.success) { 
+            studentsData = response.data; 
+            displayStudents(); 
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
 }
 
 function displayStudents() {
@@ -692,7 +719,7 @@ function displayStudents() {
     tbody.innerHTML = '';
 
     if (studentsData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center">No students found. Add one above.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center">No students found matching the criteria.</td></tr>';
         return;
     }
 
@@ -703,21 +730,61 @@ function displayStudents() {
             try { return new Date(dateString).toLocaleDateString('en-IN'); }
             catch { return '-'; }
         };
+
+        // UI Logic for Status Badges & Buttons
+        const isActive = student.isActive !== false; // defaults to true
+        const statusBadge = isActive 
+            ? '<span class="status-badge status-active">Active</span>' 
+            : '<span class="status-badge status-inactive">Inactive</span>';
+            
+        const toggleBtnText = isActive ? 'Deactivate' : 'Activate';
+        const toggleBtnStyle = isActive 
+            ? 'background: #f59e0b; color: white; border: none;' 
+            : 'background: #10b981; color: white; border: none;';
+
         row.innerHTML = `
             <td>${index + 1}</td>
-            <td>${student.name}</td>
-            <td>${student.fatherName}</td>
-            <td>${student.motherName || '-'}</td>
-            <td>${student.classId?.className || '-'}</td>
-            <td>${student.mobileNo}</td>
-            <td>${formatDate(student.dateOfBirth)}</td>
-            <td>${student.simpleAddress || '-'}</td>
-            <td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}"><strong>${student.name}</strong></td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}">${student.fatherName}</td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}">${student.motherName || '-'}</td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}"><strong>${student.classId?.className || '-'}</strong></td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}">${student.mobileNo}</td>
+            <td style="${!isActive ? 'opacity: 0.6;' : ''}">${formatDate(student.dateOfBirth)}</td>
+            <td>${statusBadge}</td>
+            <td style="white-space: nowrap;">
                 <button onclick="editStudent('${student._id}')">Edit</button>
-                <button onclick="deleteStudent('${student._id}')">Delete</button>
+                <button onclick="toggleStudentStatus('${student._id}', ${isActive})" style="${toggleBtnStyle}">${toggleBtnText}</button>
+                <button onclick="deleteStudent('${student._id}')" style="background: #ef4444; color: white; border: none;">Delete</button>
             </td>
         `;
     });
+}
+
+
+
+// 🚨 NEW FUNCTION: Safely Activate/Deactivate Student 🚨
+async function toggleStudentStatus(id, currentStatus) {
+    const actionText = currentStatus ? 'deactivate' : 'activate';
+    
+    if (!confirm(`Are you sure you want to ${actionText} this student?\n\n${currentStatus ? 'They will be hidden from attendance, fee reports, and exam rosters.' : 'They will be restored to all active rosters.'}`)) {
+        return;
+    }
+
+    try {
+        showLoading(`${currentStatus ? 'Deactivating' : 'Activating'} student...`);
+        const response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + id, { isActive: !currentStatus }, true);
+        hideLoading();
+        
+        if (response.success) {
+            showSuccess(`Student ${actionText}d successfully`);
+            await loadStudents();
+            await loadClasses(); // Refresh counts
+            await loadClassStatistics();
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
+    }
 }
 
 async function handleAddStudent(e) {
@@ -805,24 +872,6 @@ async function handleAddStudent(e) {
     }
 }
 
-async function searchStudents() {
-    const searchTerm = document.getElementById('search-student').value.trim();
-    if (!searchTerm) { loadStudents(); return; }
-
-    try {
-        showLoading('Searching...');
-        // ✅ FIX: keep isActive=true in search too
-        const response = await apiGet(
-            API_ENDPOINTS.STUDENTS + '?isActive=true&search=' + encodeURIComponent(searchTerm),
-            true
-        );
-        hideLoading();
-        if (response.success) { studentsData = response.data; displayStudents(); }
-    } catch (error) {
-        hideLoading();
-        showError(error.message);
-    }
-}
 
 async function editStudent(id) {
     const student = studentsData.find(s => s._id === id);
