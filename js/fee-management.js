@@ -3330,7 +3330,7 @@ function buildMonthEvents(stu, monthIndex, type) {
       var hist = (m.history && m.history.length)
         ? m.history
         : (m.paidAmount > 0 ? [{ paidAmount: m.paidAmount, waiverAmount: 0, lateFee: 0, paymentSource: m.paymentSource, paidAt: m.paidAt, bulkGroupId: m.bulkGroupId }] : []);
-      hist.forEach(function(t) { txns.push({ txn: t }); });
+            hist.forEach(function(t, hIdx) { txns.push({ txn: t, paymentId: m.paymentId, historyIndex: (m.history && m.history.length) ? hIdx : null }); });
     });
   } else if (stu.transport && stu.transport.months) {
     var mt = stu.transport.months.find(function(mo) { return mo.monthIndex === monthIndex; });
@@ -3343,18 +3343,19 @@ function buildMonthEvents(stu, monthIndex, type) {
       var thist = (mt.history && mt.history.length)
         ? mt.history
         : (mt.paidAmount > 0 ? [{ paidAmount: mt.paidAmount, waiverAmount: 0, lateFee: 0, paymentSource: mt.paymentSource, paidAt: mt.paidAt, bulkGroupId: mt.bulkGroupId }] : []);
-      thist.forEach(function(t) { txns.push({ txn: t }); });
+            thist.forEach(function(t, hIdx) { txns.push({ txn: t, paymentId: mt.paymentId, historyIndex: (mt.history && mt.history.length) ? hIdx : null }); });
     }
   }
 
   var map = {}, order = [];
   txns.forEach(function(row) {
     var key = row.txn.bulkGroupId ? ('bg:' + row.txn.bulkGroupId) : ('at:' + new Date(row.txn.paidAt).getTime());
-    if (!map[key]) { map[key] = { key: key, bulkGroupId: row.txn.bulkGroupId || null, paidAt: row.txn.paidAt, paid: 0, waiver: 0, lateFee: 0, source: row.txn.paymentSource, remark: row.txn.remark }; order.push(key); }
+        if (!map[key]) { map[key] = { key: key, bulkGroupId: row.txn.bulkGroupId || null, paidAt: row.txn.paidAt, paid: 0, waiver: 0, lateFee: 0, source: row.txn.paymentSource, remark: row.txn.remark, parts: [] }; order.push(key); }
     var ev = map[key];
     ev.paid    += (row.txn.paidAmount   || 0);
     ev.waiver  += (row.txn.waiverAmount || 0);
     ev.lateFee += (row.txn.lateFee      || 0);
+    ev.parts.push({ paymentId: row.paymentId || null, historyIndex: row.historyIndex });
     if (new Date(row.txn.paidAt) < new Date(ev.paidAt)) ev.paidAt = row.txn.paidAt;
     if (!ev.remark && row.txn.remark) ev.remark = row.txn.remark;
   });
@@ -4994,10 +4995,21 @@ function _buildAndPrintGroupReceipt(stu, groupPayments, bulkGroupId, printWin) {
         }
       }
 
-      var base    = mData && mData.baseAmount != null ? mData.baseAmount : (p.amount || 0);
+            var base    = mData && mData.baseAmount != null ? mData.baseAmount : (p.amount || 0);
       var waiver  = mData ? (mData.waiverAmount || 0) : (p.waiverAmount || 0);
       var lateFee = mData ? (mData.lateFee || 0) : (p.lateFee || 0);
-      var paidAmt = mData ? (mData.paidAmount || 0) : (p.paidAmount || 0);
+
+      // Only count what was paid under THIS bulk group — not the record's
+      // current running total, which may include a later top-up made under
+      // a different bulkGroupId on a different date.
+      var paidAmt = 0;
+      if (p.history && p.history.length) {
+        p.history.forEach(function(h) {
+          if (h.bulkGroupId === bulkGroupId) paidAmt += (h.paidAmount || 0);
+        });
+      } else {
+        paidAmt = p.paidAmount || 0;
+      }
 
       var rawCredit = mData ? (mData.previousCredit || 0) : 0;
       var rawCarry  = mData && mData.previousDue != null ? mData.previousDue : (mData ? (mData.carryDue || 0) : 0);
@@ -7824,7 +7836,8 @@ function rptReprintReceipt(paymentId) {
   if (!printWin) { toast('Please allow popups to print', 'error'); return; }
   printWin.document.write('<div style="font-family:sans-serif;text-align:center;padding:40px;color:#666;">Loading receipt...</div>');
 
-  var type = r.type;
+   var type = r.type;                                      // 'regular' | 'transport' (report-row format)
+  var evType = (r.type === 'transport') ? 'trn' : 'reg';  // format Tab 4's receipt functions expect
   var session = r.session || currentSession;
 
   // 1. Check if we already have the full student ledger in Tab 4's cache
@@ -7846,7 +7859,10 @@ function rptReprintReceipt(paymentId) {
       // Cache it for next time
       if (!existing) feeStatusData.push(stu);
 
-      if (r.bulkGroupId) {
+            // A bulk payment covering just ONE month must look exactly like Tab 4's receipt,
+      // so only genuine multi-month bulk groups use the group receipt.
+      var bulkMonthCount = r.bulkGroupId ? buildBulkMonths(stu, r.bulkGroupId, evType).length : 0;
+      if (r.bulkGroupId && bulkMonthCount !== 1) {
           // Bulk payment -> Multi-month receipt
           apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(r.bulkGroupId), true)
             .then(function(groupRes) {
@@ -7858,21 +7874,30 @@ function rptReprintReceipt(paymentId) {
             });
       } else {
           // Single month -> Let Tab 4's logic handle the exact math (Installment vs Full)
-          var info = buildMonthEvents(stu, r.monthIndex, type);
+                    var info = buildMonthEvents(stu, r.monthIndex, evType);
           var events = info.events;
           
-          // Find the exact event using timestamp or amount
-          var targetTime = new Date(r.paidAt).getTime();
-          var eventIdx = events.findIndex(function(ev) { 
-              return new Date(ev.paidAt).getTime() === targetTime; 
+                   // Match the exact record + installment first — reliable even when
+          // two installments share a timestamp or amount.
+          var eventIdx = events.findIndex(function(ev) {
+              return ev.parts && ev.parts.some(function(part) {
+                  return part.paymentId === r.paymentId && part.historyIndex === r.historyIndex;
+              });
           });
-          
+
+          // Fallbacks for older records that predate paymentId/historyIndex tracking
+          if (eventIdx === -1) {
+              var targetTime = new Date(r.paidAt).getTime();
+              eventIdx = events.findIndex(function(ev) { 
+                  return new Date(ev.paidAt).getTime() === targetTime; 
+              });
+          }
           if (eventIdx === -1) {
               eventIdx = events.findIndex(function(ev) { return ev.paid === r.paidAmount; });
           }
           
           if (eventIdx > -1) {
-              printMonthEventReceipt(stu.studentId, r.monthIndex, type, eventIdx, printWin);
+                            printMonthEventReceipt(stu.studentId, r.monthIndex, evType, eventIdx, printWin);
           } else {
               // Absolute fallback
               if (type === 'transport') {
