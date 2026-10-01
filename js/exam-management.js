@@ -1186,7 +1186,22 @@ function generateReportCards() {
       });
       
       if(allStudents.length === 0) { btn.disabled = false; btn.textContent = originalText; return toast('No students found.', 'err'); }
-      if(missingCount > 0) { if(!confirm(`⚠️ Warning: ${missingCount} student(s) have missing marks. Generate anyway?`)) { btn.disabled = false; btn.textContent = originalText; return; } }
+      // 1. Sort students alphabetically by Class Name, then by Student Name
+      allStudents.sort((a, b) => {
+          if (a.className !== b.className) return a.className.localeCompare(b.className);
+          return (a.student.name || '').localeCompare(b.student.name || '');
+      });
+
+      // 2. Assign sequential serial number (1, 2, 3...) per class
+      let currentClassTrack = '';
+      let currentSerial = 1;
+      allStudents.forEach(item => {
+          if (item.className !== currentClassTrack) {
+              currentClassTrack = item.className;
+              currentSerial = 1;
+          }
+          item.student.autoSerial = currentSerial++;
+      });
 
       let oldFrame = document.getElementById('report-iframe'); if (oldFrame) oldFrame.remove();
       let iframe = document.createElement('iframe'); iframe.id = 'report-iframe'; iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;'; document.body.appendChild(iframe);
@@ -1395,7 +1410,7 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
         <div class="info-col">
           <table>
             <tr><td>Class</td><td>: &nbsp;${escH(className)}</td></tr>
-            <tr><td>Serial Number</td><td>: &nbsp;${escH(stu.rollNo || '________________')}</td></tr>
+            <tr><td>Serial Number</td><td>: &nbsp;${escH(stu.autoSerial || stu.rollNo || '________________')}</td></tr>
             <tr><td>Date of Birth.</td><td>: &nbsp;${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}).replace(/ /g, '-') : '________________'}</td></tr>
           </table>
         </div>
@@ -1548,7 +1563,7 @@ function buildSplitReportCard(studentsChunk, selectedSubjectsList) {
              
              <div class="stu-info">
                  <strong>${escH(stu.name)}</strong>
-                 <p>Class: ${escH(className)} &nbsp;|&nbsp; Roll No: ${escH(stu.rollNo || '—')}</p>
+                 <p>Class: ${escH(className)} &nbsp;|&nbsp; Roll No: ${escH(stu.autoSerial || stu.rollNo || '—')}</p>
                  <p>D.O.B: ${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB') : '—'}</p>
                  <p>Parent: ${escH(stu.fatherName || stu.motherName || '—')}</p>
              </div>
@@ -1648,7 +1663,7 @@ function buildIvyReportCard(studentsChunk, selectedSubjectsList) {
           </div>
           <div style="text-align:right;">
               <span><strong>Class:</strong> ${escH(className)}</span>
-              <span><strong>Student ID / Roll No:</strong> ${escH(stu.rollNo || '—')}</span>
+              <span><strong>Student ID / Roll No:</strong> ${escH(stu.autoSerial || stu.rollNo || '—')}</span>
           </div>
       </div>
 
@@ -1735,7 +1750,7 @@ function buildDashboardReportCard(studentsChunk, selectedSubjectsList) {
           ${photoHtml}
           <div class="stu-meta">
               <h2>${escH(stu.name)}</h2>
-              <p>Class: ${escH(className)} &nbsp;•&nbsp; Roll No: ${escH(stu.rollNo || '—')} &nbsp;•&nbsp; Parent: ${escH(stu.fatherName || '—')}</p>
+              <p>Class: ${escH(className)} &nbsp;•&nbsp; Roll No: ${escH(stu.autoSerial || stu.rollNo || '—')} &nbsp;•&nbsp; Parent: ${escH(stu.fatherName || '—')}</p>
           </div>
       </div>
 
@@ -1799,7 +1814,7 @@ function buildVisualReportCard(studentsChunk, selectedSubjectsList) {
       <div class="info-strip">
           <div>STUDENT: <span style="color:#3b82f6;">${escH(stu.name)}</span></div>
           <div>CLASS: <span style="color:#3b82f6;">${escH(className)}</span></div>
-          <div>ROLL NO: <span style="color:#3b82f6;">${escH(stu.rollNo || '—')}</span></div>
+          <div>ROLL NO: <span style="color:#3b82f6;">${escH(stu.autoSerial || stu.rollNo || '—')}</span></div>
       </div>
 
       <table class="rc-table"><thead><tr><th class="subj-col">Subject Analysis</th>`;
@@ -1890,7 +1905,7 @@ function buildBoardReportCard(studentsChunk, selectedSubjectsList) {
         </div>
         <div style="flex:1; text-align:right;">
             CLASS/SEC: ${escH(className)}<br><br>
-            ROLL NO: ${escH(stu.rollNo || '—')}<br><br>
+            ROLL NO: ${escH(stu.autoSerial || stu.rollNo || '—')}<br><br>
             D.O.B: ${stu.dateOfBirth ? new Date(stu.dateOfBirth).toLocaleDateString('en-GB') : '—'}
         </div>
       </div>
