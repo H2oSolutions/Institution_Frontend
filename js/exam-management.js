@@ -939,168 +939,232 @@ function onTabuClassChange() {
 var currentTabuData = null; 
 var currentTabuSubjs = [];
 
-function loadTabulation() { 
+/* =========================================================================
+   TABULATION REGISTER LOGIC (DYNAMIC SUBJECT OVERRIDES APPLIED)
+   ========================================================================= */
+
+function onTabuClassChange() { 
     const classId = getVal('tabu-class-sel'); 
-    const termChks = document.querySelectorAll('.tabu-term-chk:checked'); 
-    if (!classId || termChks.length===0) return; 
+    const container = document.getElementById('tabu-terms-container'); 
+    if (!classId) return; 
     
-    const selectedTermIds = Array.from(termChks).map(c => c.value); 
-    Promise.all([ 
-        apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${classId}`, true), 
-        apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`, true) 
-    ]).then(results => { 
-        const res = results[0]; 
-        const activeSubjectNames = (results[1].data || []).map(s => s.subjectName); 
-        const setups = res.setups.filter(s => selectedTermIds.includes(s._id)); 
-        const studentsData = res.data || []; 
-        
-        let subjectsSet = new Set(); 
-        studentsData.forEach(item => { 
-            Object.keys(item.subjects).forEach(sub => { 
-                if (activeSubjectNames.includes(sub)) subjectsSet.add(sub); 
-            }); 
-        }); 
-        
-        const subjects = Array.from(subjectsSet).sort(); 
-        currentTabuSubjs = subjects; 
-        
-        let processed = studentsData.map(item => { 
-            const stu = item.student; 
-            let grandTotal = 0; 
+    apiGet(`${API_ENDPOINTS.EXAM_SETUP}?session=${window.currentSession}&classId=${classId}`, true).then(res => { 
+        const setups = res.data || []; 
+        container.innerHTML = setups.map(s => `<label class="chk-label"><input type="checkbox" class="tabu-term-chk" value="${s._id}" checked> ${escH(s.termName)}</label>`).join(''); 
+    }); 
+}
+
+var currentTabuData = null; 
+var currentTabuSubjs = [];
+
+function loadTabulation() {
+    const classId = getVal('tabu-class-sel');
+    const termChks = document.querySelectorAll('.tabu-term-chk:checked');
+    if (!classId || termChks.length===0) return;
+
+    const selectedTermIds = Array.from(termChks).map(c => c.value);
+    Promise.all([
+        apiGet(`${API_ENDPOINTS.REPORT_CARDS}?session=${window.currentSession}&classId=${classId}`, true),
+        apiGet(API_ENDPOINTS.EXAM_SETUP.replace('/setup', '/class-subjects') + `?classId=${classId}`, true)
+    ]).then(results => {
+        const res = results[0];
+        const activeSubjectNames = (results[1].data || []).map(s => s.subjectName);
+        const setups = res.setups.filter(s => selectedTermIds.includes(s._id));
+        const studentsData = res.data || [];
+
+        let subjectsSet = new Set();
+        studentsData.forEach(item => {
+            Object.keys(item.subjects).forEach(sub => {
+                if (activeSubjectNames.includes(sub)) subjectsSet.add(sub);
+            });
+        });
+
+        const subjects = Array.from(subjectsSet).sort();
+        currentTabuSubjs = subjects;
+
+        let processed = studentsData.map(item => {
+            const stu = item.student;
+            let grandTotal = 0;
             let maxPossible = 0;
-            let subTotals = {}; 
-            let failCount = 0; 
-            let anyMissing = false; 
-            
-            subjects.forEach(sub => { 
-                let sTotal = 0; 
+            let subTotals = {};
+            let failCount = 0;
+            let anyMissing = false;
+
+            subjects.forEach(sub => {
+                let sTotal = 0;
                 let sMax = 0;
-                let termVals = {}; 
-                let hasAnyMarks = false; 
-                let completelyNA = true; // Track if the subject is NA
-                
-                setups.forEach(setup => { 
-                    const termData = item.subjects[sub]?.[setup._id]; 
-                    let tTotal = 0; 
-                    let tHasMarks = false; 
+                let termVals = {};
+                let hasAnyMarks = false;
+                let completelyNA = true;
+
+                setups.forEach(setup => {
+                    const termData = item.subjects[sub]?.[setup._id];
+                    let tTotal = 0;
+                    let tHasMarks = false;
                     let tHasNA = false;
-                    
-                    setup.assessments.forEach(a => { 
+                    let assVals = {}; // Stores individual assessment marks
+
+                    setup.assessments.forEach(a => {
                         const m = termData ? termData[a.name] : null;
                         if (m && m.status === 'na') {
                             tHasNA = true;
+                            assVals[a.name] = 'NA';
                         } else {
-                            completelyNA = false; 
-                            sMax += getSubMax(a, sub); // Only add max marks if NOT 'na'
-                            if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') { 
-                                tTotal += Number(m.obtained); tHasMarks = true; hasAnyMarks = true; 
-                            } 
+                            completelyNA = false;
+                            sMax += getSubMax(a, sub);
+                            if (m && m.status === 'present' && m.obtained !== null && m.obtained !== '') {
+                                tTotal += Number(m.obtained);
+                                tHasMarks = true;
+                                hasAnyMarks = true;
+                                assVals[a.name] = Number(m.obtained);
+                            } else if (m) {
+                                assVals[a.name] = m.status === 'absent' ? 'AB' : (m.status === 'medical' ? 'M' : '-');
+                            } else {
+                                assVals[a.name] = '-';
+                            }
                         }
-                    }); 
-                    termVals[setup._id] = tHasNA ? 'NA' : (tHasMarks ? tTotal : 'AB'); 
-                    sTotal += tTotal; 
-                }); 
-                
+                    });
+                    
+                    termVals[setup._id] = { 
+                        val: tHasNA ? 'NA' : (tHasMarks ? tTotal : 'AB'), 
+                        assessments: assVals 
+                    };
+                    sTotal += tTotal;
+                });
+
                 if (completelyNA) {
                     subTotals[sub] = { terms: termVals, val: 'NA', max: 0, missing: false, fail: false };
                 } else {
-                    if (sTotal < (sMax * 0.33)) failCount++; 
-                    if (!hasAnyMarks) anyMissing = true; 
-                    subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', max: sMax, missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (sMax * 0.33)) }; 
+                    if (sTotal < (sMax * 0.33)) failCount++;
+                    if (!hasAnyMarks) anyMissing = true;
+                    subTotals[sub] = { terms: termVals, val: hasAnyMarks ? sTotal : 'AB', max: sMax, missing: !hasAnyMarks, fail: (hasAnyMarks && sTotal < (sMax * 0.33)) };
                     if(hasAnyMarks) grandTotal += sTotal;
                     maxPossible += sMax;
                 }
             });
-            
-            const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0; 
-            // Also mapping Father's Name for the broadsheet!
-            return { id: stu._id, rollNo: stu.rollNo, name: stu.name, fatherName: stu.fatherName, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing }; 
-        }); 
-        
-        processed.sort((a, b) => b.grandTotal - a.grandTotal); 
-        let currentRank = 1; 
-        processed.forEach((p, i) => { if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1; p.rank = currentRank; }); 
-        processed.sort((a, b) => { const ra = parseInt(a.rollNo) || 9999; const rb = parseInt(b.rollNo) || 9999; if (ra !== rb) return ra - rb; return a.name.localeCompare(b.name); }); 
-        
-        currentTabuData = { setups, students: processed, selectedTermNames: setups.map(s => s.termName).join(' + ') }; 
-        renderTabulationGrid(); 
-    }); 
+
+            const perc = maxPossible > 0 ? ((grandTotal / maxPossible) * 100) : 0;
+            return { id: stu._id, rollNo: stu.rollNo, name: stu.name, fatherName: stu.fatherName, subTotals, grandTotal, perc, failCount, maxPossible, anyMissing };
+        });
+
+        processed.sort((a, b) => b.grandTotal - a.grandTotal);
+        let currentRank = 1;
+        processed.forEach((p, i) => { if (i > 0 && p.grandTotal < processed[i-1].grandTotal) currentRank = i + 1; p.rank = currentRank; });
+        processed.sort((a, b) => { const ra = parseInt(a.rollNo) || 9999; const rb = parseInt(b.rollNo) || 9999; if (ra !== rb) return ra - rb; return a.name.localeCompare(b.name); });
+
+        currentTabuData = { setups, students: processed, selectedTermNames: setups.map(s => s.termName).join(' + ') };
+        renderTabulationGrid();
+    });
 }
 
-// 🚨 UPDATED: Parent Disambiguation in Tabulation Broadsheet 🚨
-function renderTabulationGrid() { 
-    const panel = document.getElementById('tabu-grid-panel'); 
-    const { setups, students } = currentTabuData; 
-    let html = `<table class="marks-table tabu-table"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" style="text-align:left;">Student Name</th>`; 
-    let ths2 = `<tr>`; 
-    
-    currentTabuSubjs.forEach(sub => { 
-        html += `<th colspan="${setups.length + 1}" style="color:var(--gold); border-bottom:1px solid var(--rim);">${escH(sub)}</th>`; 
+function renderTabulationGrid() {
+    const panel = document.getElementById('tabu-grid-panel');
+    const { setups, students } = currentTabuData;
+    let html = `<table class="marks-table tabu-table"><thead><tr><th rowspan="2">Roll</th><th rowspan="2" style="text-align:left;">Student Name</th>`;
+    let ths2 = `<tr>`;
+
+    currentTabuSubjs.forEach(sub => {
+        let subjColspan = 0;
         let subTotalMax = 0;
-        setups.forEach(setup => { 
-            const tMax = setup.assessments.reduce((s, a) => s + getSubMax(a, sub), 0); 
+        let subThs2 = '';
+
+        setups.forEach(setup => {
+            let tMax = 0;
+            setup.assessments.forEach(a => {
+                const aMax = getSubMax(a, sub);
+                tMax += aMax;
+                subThs2 += `<th><span style="font-size:10px; color:var(--muted); font-weight:normal;">${escH(setup.termName.substring(0,8))}</span><br>${escH(a.name)}<br><small>(${aMax})</small></th>`;
+                subjColspan++;
+            });
             subTotalMax += tMax;
-            ths2 += `<th>${escH(setup.termName.substring(0, 8))}..<br><small>(${tMax})</small></th>`; 
-        }); 
-        ths2 += `<th style="color:var(--gold);">Total<br><small>(${subTotalMax})</small></th>`; 
-    }); 
-    
-    html += `<th rowspan="2" style="color:var(--gold);">Grand Total</th><th rowspan="2" style="color:var(--gold);">%</th><th rowspan="2" style="color:var(--gold);">Grade</th><th rowspan="2" style="color:var(--gold);">Rank</th></tr>`; 
-    ths2 += `</tr>`; 
-    html += ths2 + `</thead><tbody>`; 
-    
-    students.forEach(s => { 
-        // Showing Father's Name in Tabulation Grid too!
+            subThs2 += `<th style="background:rgba(212,168,67,0.05); color:var(--gold);">Term Total<br><small>(${tMax})</small></th>`;
+            subjColspan++;
+        });
+
+        // Only show overall subject total if they selected multiple terms
+        if (setups.length > 1) {
+            subThs2 += `<th style="background:rgba(212,168,67,0.15); color:var(--gold);">Subj Total<br><small>(${subTotalMax})</small></th>`;
+            subjColspan++;
+        }
+
+        html += `<th colspan="${subjColspan}" style="color:var(--gold); border-bottom:1px solid var(--rim);">${escH(sub)}</th>`;
+        ths2 += subThs2;
+    });
+
+    html += `<th rowspan="2" style="color:var(--gold);">Grand Total</th><th rowspan="2" style="color:var(--gold);">%</th><th rowspan="2" style="color:var(--gold);">Grade</th><th rowspan="2" style="color:var(--gold);">Rank</th></tr>`;
+    ths2 += `</tr>`;
+    html += ths2 + `</thead><tbody>`;
+
+    students.forEach(s => {
         let tds = `<td>${escH(s.rollNo || '-')}</td>
                    <td style="text-align:left;">
                        <div style="font-weight:600;">${escH(s.name)}</div>
                        <div style="font-size:11px; color:var(--muted); margin-top:2px;">${escH(s.fatherName ? 'D/o, S/o: ' + s.fatherName : '')}</div>
-                   </td>`; 
-        currentTabuSubjs.forEach(sub => { 
-            const st = s.subTotals[sub]; 
-            setups.forEach(setup => { tds += `<td class="${st.terms[setup._id] === 'AB' ? 'cell-missing' : ''}">${st.terms[setup._id]}</td>`; }); 
-            tds += `<td class="${st.fail ? 'cell-fail' : ''}" style="font-weight:bold; background:rgba(212,168,67,0.1);">${st.val}</td>`; 
-        }); 
-        let grade = getGradeInfo(s.grandTotal, s.maxPossible).g; 
-        tds += `<td style="font-weight:bold;">${s.grandTotal} <span style="font-size:10px; color:var(--silver);">/${s.maxPossible}</span></td><td style="font-weight:bold;">${s.perc.toFixed(1)}%</td><td style="font-weight:bold;">${grade}</td><td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`; 
-        html += `<tr>${tds}</tr>`; 
-    }); 
-    
-    html += `</tbody></table>`; 
-    panel.innerHTML = html; panel.style.display = 'block'; 
+                   </td>`;
+        currentTabuSubjs.forEach(sub => {
+            const st = s.subTotals[sub];
+            setups.forEach(setup => {
+                const tData = st.terms[setup._id];
+                
+                // Print individual assessments
+                setup.assessments.forEach(a => {
+                    const aVal = tData.assessments[a.name];
+                    tds += `<td class="${aVal === 'AB' || aVal === 'M' ? 'cell-missing' : ''}">${aVal !== undefined ? aVal : '-'}</td>`;
+                });
+                
+                // Print term total
+                tds += `<td class="${tData.val === 'AB' ? 'cell-missing' : ''}" style="font-weight:bold; background:rgba(212,168,67,0.05);">${tData.val}</td>`;
+            });
+            
+            if (setups.length > 1) {
+                tds += `<td class="${st.fail ? 'cell-fail' : ''}" style="font-weight:bold; background:rgba(212,168,67,0.15);">${st.val}</td>`;
+            }
+        });
+        let grade = getGradeInfo(s.grandTotal, s.maxPossible).g;
+        tds += `<td style="font-weight:bold;">${s.grandTotal} <span style="font-size:10px; color:var(--silver);">/${s.maxPossible}</span></td><td style="font-weight:bold;">${s.perc.toFixed(1)}%</td><td style="font-weight:bold;">${grade}</td><td style="font-weight:bold; color:var(--gold);">${s.rank}</td>`;
+        html += `<tr>${tds}</tr>`;
+    });
+
+    html += `</tbody></table>`;
+    panel.innerHTML = html; panel.style.display = 'block';
     document.getElementById('btn-export-tabu-pdf').style.display = 'inline-block'; document.getElementById('btn-export-tabu-excel').style.display = 'inline-block';
 }
 
 function exportTabulationExcel() {
-  if (!currentTabuData) return; 
-  const { setups, students } = currentTabuData; 
-  const cSelect = document.getElementById('tabu-class-sel'); 
+  if (!currentTabuData) return;
+  const { setups, students } = currentTabuData;
+  const cSelect = document.getElementById('tabu-class-sel');
   const className = cSelect.options[cSelect.selectedIndex].text;
-  
+
   const data = students.map(s => {
-      // Offline Excel export also gets Father's Name for total clarity
       let obj = { "Roll No": s.rollNo || '-', "Student Name": s.name, "Father Name": s.fatherName || '-' };
-      currentTabuSubjs.forEach(sub => { 
-          if (setups.length > 1) { 
-              setups.forEach(setup => { 
-                  const tMax = setup.assessments.reduce((acc, a) => acc + getSubMax(a, sub), 0); 
-                  obj[`${sub} - ${setup.termName} (${tMax})`] = s.subTotals[sub].terms[setup._id]; 
-              }); 
-              obj[`${sub} Total (${s.subTotals[sub].max})`] = s.subTotals[sub].val; 
-          } else { 
-              obj[`${sub} (${s.subTotals[sub].max})`] = s.subTotals[sub].val; 
+      currentTabuSubjs.forEach(sub => {
+          setups.forEach(setup => {
+              const tMax = setup.assessments.reduce((acc, a) => acc + getSubMax(a, sub), 0);
+              
+              // Export individual assessments
+              setup.assessments.forEach(a => {
+                  const aMax = getSubMax(a, sub);
+                  obj[`${sub} - ${setup.termName} - ${a.name} (${aMax})`] = s.subTotals[sub].terms[setup._id].assessments[a.name];
+              });
+              
+              // Export term total
+              obj[`${sub} - ${setup.termName} Total (${tMax})`] = s.subTotals[sub].terms[setup._id].val;
+          });
+          if (setups.length > 1) {
+              obj[`${sub} OVERALL Total (${s.subTotals[sub].max})`] = s.subTotals[sub].val;
           }
       });
       let grade = getGradeInfo(s.grandTotal, s.maxPossible).g;
-      obj[`Grand Total (${s.maxPossible})`] = s.grandTotal; 
-      obj["Percentage"] = s.perc.toFixed(1) + '%'; 
-      obj["Grade"] = grade; 
-      obj["Rank"] = s.rank; 
+      obj[`Grand Total (${s.maxPossible})`] = s.grandTotal;
+      obj["Percentage"] = s.perc.toFixed(1) + '%';
+      obj["Grade"] = grade;
+      obj["Rank"] = s.rank;
       return obj;
   });
-  
-  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new(); 
-  XLSX.utils.book_append_sheet(wb, ws, "Tabulation"); 
+
+  const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Tabulation");
   XLSX.writeFile(wb, `Tabulation_${className}.xlsx`);
 }
 
