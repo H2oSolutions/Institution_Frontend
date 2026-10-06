@@ -1502,6 +1502,16 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
     html += `</tr></thead><tbody>`;
 
     const activeSubjects = getStudentActiveSubjects(item, selectedSubjectsList);
+    
+    // 1. Setup variables to track the Grand Totals AND Dynamic Max for each term and assessment
+    let termGrandTotals = {};
+    sortedSetups.forEach(setup => { 
+        termGrandTotals[setup._id] = { obtained: 0, max: 0, assessments: {} };
+        setup.assessments.forEach(a => {
+            termGrandTotals[setup._id].assessments[a.name] = { obtained: 0, max: 0 }; 
+        });
+    });
+
     activeSubjects.forEach(subName => {
       html += `<tr><td class="subj-col">${escH(subName)}</td>`;
       
@@ -1510,11 +1520,20 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
         const termData = subjectsDict[subName] ? (subjectsDict[subName][setup._id] || {}) : {}; 
         
         setup.assessments.forEach(a => {
-          const aMax = getSubMax(a, subName);
+          const aMax = getSubMax(a, subName); // This grabs the real max, respecting any overrides
           const markObj = termData[a.name];
+          
+          // Dynamically add this subject's max to the grand total maxes
+          termGrandTotals[setup._id].assessments[a.name].max += aMax;
+          termMax += aMax;
+
           if (markObj && markObj.status === 'present') {
             const val = Number(markObj.obtained || 0);
             termTotal += val;
+            
+            // Add this specific mark to the assessment's obtained total
+            termGrandTotals[setup._id].assessments[a.name].obtained += val;
+            
             if (aMax !== a.maxMarks) html += `<td>${val} <span style="font-size:10px; color:#555;">/${aMax}</span></td>`;
             else html += `<td>${val}</td>`;
           } else if (markObj) {
@@ -1522,14 +1541,37 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
           } else {
             html += `<td></td>`;
           }
-          termMax += aMax;
         });
         
+        // Add this subject's term total to the overall Grand Total for this term
+        termGrandTotals[setup._id].obtained += termTotal;
+        termGrandTotals[setup._id].max += termMax;
+
         const gradeObj = getGradeInfo(termTotal, termMax);
         html += `<td class="bold-cell">${termTotal || ''}</td><td class="bold-cell">${termTotal ? gradeObj.g : ''}</td>`;
       });
       html += `</tr>`;
     });
+
+    // 3. Inject the new GRAND TOTAL row with dynamic MAX scores for every single column
+    html += `<tr style="background-color: rgba(0,0,0,0.04);">
+        <td class="subj-col" style="font-weight:bold;">GRAND TOTAL</td>`;
+    
+    sortedSetups.forEach(setup => {
+        const termData = termGrandTotals[setup._id];
+        const overallGradeObj = getGradeInfo(termData.obtained, termData.max);
+        
+        // Print the calculated sum AND dynamic max for each individual assessment (e.g. 42 / 50)
+        setup.assessments.forEach(a => {
+            const aData = termData.assessments[a.name];
+            html += `<td class="bold-cell">${aData.obtained} <span style="font-size:10px; color:#555;">/${aData.max}</span></td>`;
+        });
+        
+        // Print the Grand Total WITH the dynamic max and Overall Grade (e.g. 460 / 500)
+        html += `<td class="bold-cell" style="font-size:14px;">${termData.obtained} <span style="font-size:10px; color:#555;">/${termData.max}</span></td>
+                 <td class="bold-cell" style="font-size:14px; color:#8b0000;">${termData.obtained ? overallGradeObj.g : ''}</td>`;
+    });
+    html += `</tr>`;
 
     html += `<tr class="empty-row">
         <td class="subj-col sign-text left-align" style="height: 35px;">Class Teacher's Signature</td>`;
@@ -1546,30 +1588,30 @@ function buildClassicReportCard(studentsChunk, selectedSubjectsList) {
     });
     html += `</tr>`;
 
-    html += `<tr><td class="subj-col sign-text left-align" style="height: 30px;">Class Teacher's<br>Remarks</td>`;
-    sortedSetups.forEach((setup, index) => {
-      const totalCols = setup.assessments.length + 2;
-      if (index === 0) {
-          html += `<td colspan="${totalCols}"></td>`;
-      } else {
-          const splitCols = Math.floor(totalCols / 2);
-          const remainCols = totalCols - splitCols;
-          html += `<td colspan="${splitCols}" class="sign-text left-align" style="position:relative;">Overall Scholastic Grade</td>
-                   <td colspan="${remainCols}" class="sign-text left-align" style="position:relative;">Overall Co-scholastic Grade</td>`;
-      }
-    });
-    html += `</tr>`;
+    // 1. Calculate total columns across all terms dynamically
+    let totalColsAllTerms = 0;
+    sortedSetups.forEach(setup => { totalColsAllTerms += (setup.assessments.length + 2); });
 
-    html += `<tr><td class="subj-col sign-text left-align" style="height: 35px;">Principal's Signature</td>`;
-    sortedSetups.forEach((setup, index) => {
-      const totalCols = setup.assessments.length + 2;
-      if (index === 0) {
-        html += `<td colspan="${totalCols}" class="sign-text left-align">Parent's Signature</td>`;
-      } else {
-        html += `<td colspan="${totalCols}"></td>`;
-      }
-    });
-    html += `</tr>`;
+    // 2. Distribute remaining columns perfectly for the Remarks row (3 even sections)
+    let remChunk1 = Math.floor(totalColsAllTerms / 3);
+    let remChunk2 = Math.floor((totalColsAllTerms - remChunk1) / 2);
+    let remChunk3 = totalColsAllTerms - remChunk1 - remChunk2;
+
+    html += `<tr>
+        <td class="subj-col sign-text left-align" style="height: 35px;">Class Teacher's<br>Remarks</td>
+        <td colspan="${remChunk1}"></td>
+        <td colspan="${remChunk2}" class="sign-text" style="text-align: center; vertical-align: middle;">Overall Scholastic Grade</td>
+        <td colspan="${remChunk3}" class="sign-text" style="text-align: center; vertical-align: middle;">Overall Co-scholastic Grade</td>
+    </tr>`;
+
+    // 3. Create a perfectly balanced final signature row
+    let sigLeft = Math.floor(totalColsAllTerms / 2);
+    let sigRight = totalColsAllTerms - sigLeft;
+
+    html += `<tr>
+        <td colspan="${sigLeft + 1}" class="sign-text left-align" style="height: 45px; border-right: none;">Principal's Signature</td>
+        <td colspan="${sigRight}" class="sign-text" style="border-left: none; text-align: right; padding-right: 50px;">Parent's Signature</td>
+    </tr>`;
 
     html += `</tbody></table></div>
       
