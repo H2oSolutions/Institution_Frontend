@@ -11,7 +11,78 @@ var API_TRANSPORT_ASSIGN = API_BASE_URL + '/transport/assign';
 var API_TRANSPORT_STATS  = API_BASE_URL + '/transport/route-stats';
 var API_TRANSPORT_ROSTER = API_BASE_URL + '/transport/bus-roster';
 var API_FEE_CONCESSIONS  = API_BASE_URL + '/fee/concessions';
+var API_FEE_DELETE_PROTECTION_STATUS = API_BASE_URL + '/fee/delete-protection/status';
+var API_FEE_DELETE_PROTECTION        = API_BASE_URL + '/fee/delete-protection';
 
+
+// ══════════════════════════════════════════════
+//  FEE DELETE/EDIT PROTECTION
+// ══════════════════════════════════════════════
+var _deleteCodeCache     = undefined; // undefined = not fetched yet, null = protection off, string = cached code
+var _deleteCodeCachedAt  = 0;
+var DELETE_CODE_CACHE_MS = 15 * 60 * 1000; // re-ask every 15 minutes
+
+function checkDeleteProtectionStatus() {
+  return apiGet(API_FEE_DELETE_PROTECTION_STATUS, true)
+    .then(function(res) { return !!(res.success && res.data.enabled); })
+    .catch(function() { return false; }); // fail-open if the status check itself errors
+}
+
+// Resolves with the code string if protection is on, or null if it's off.
+// Rejects only if the user cancels. Caches the entered code for 15 minutes
+// so staff aren't re-prompted on every single edit/delete.
+function getDeleteProtectionCode() {
+  if (_deleteCodeCache !== undefined && (Date.now() - _deleteCodeCachedAt) < DELETE_CODE_CACHE_MS) {
+    return Promise.resolve(_deleteCodeCache);
+  }
+  return checkDeleteProtectionStatus().then(function(isOn) {
+    if (!isOn) { _deleteCodeCache = null; _deleteCodeCachedAt = Date.now(); return null; }
+    return new Promise(function(resolve, reject) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(17,24,39,.55);display:flex;align-items:center;justify-content:center;padding:20px;';
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:16px;max-width:360px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Inter,sans-serif;">' +
+          '<div style="font-weight:800;font-size:1.1rem;color:#1f2937;margin-bottom:6px;">\ud83d\udd12 Delete Protection</div>' +
+          '<div style="font-size:.85rem;color:#6b7280;margin-bottom:16px;">Enter the code to edit or delete this fee receipt.</div>' +
+          '<input type="text" id="dpc-input" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 14px;border:2px solid #e5e7eb;border-radius:10px;font-size:1rem;letter-spacing:.1em;margin-bottom:16px;">' +
+          '<div style="display:flex;gap:10px;">' +
+            '<button id="dpc-cancel" style="flex:1;padding:10px;border-radius:10px;border:none;background:#f3f4f6;color:#374151;font-weight:700;cursor:pointer;">Cancel</button>' +
+            '<button id="dpc-submit" style="flex:1;padding:10px;border-radius:10px;border:none;background:#4f46e5;color:#fff;font-weight:700;cursor:pointer;">Confirm</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      var input = overlay.querySelector('#dpc-input');
+      setTimeout(function() { input.focus(); }, 50);
+      function cleanup() { document.body.removeChild(overlay); }
+      overlay.querySelector('#dpc-cancel').onclick = function() { cleanup(); reject(new Error('Cancelled')); };
+      overlay.querySelector('#dpc-submit').onclick = function() {
+        var val = input.value.trim();
+        if (!val) { input.focus(); return; }
+        _deleteCodeCache = val; _deleteCodeCachedAt = Date.now();
+        cleanup(); resolve(val);
+      };
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') overlay.querySelector('#dpc-submit').click(); });
+    });
+  });
+}
+
+// Thin wrappers around apiDelete/apiPut for fee-payment calls specifically —
+// auto-clear the cached code if the server says it was wrong, so the NEXT
+// attempt re-prompts instead of silently failing again for 15 minutes.
+function apiDeleteFeePayment(url, code) {
+  return apiDelete(url, true, code ? {'x-delete-code': code} : {})
+    .catch(function(e) {
+      if (e && (e.message === 'Incorrect code' || e.message === 'DELETE_CODE_REQUIRED')) _deleteCodeCache = undefined;
+      throw e;
+    });
+}
+function apiPutFeePayment(url, body, code) {
+  var b = Object.assign({}, body, { deleteCode: code });
+  return apiPut(url, b, true).catch(function(e) {
+    if (e && (e.message === 'Incorrect code' || e.message === 'DELETE_CODE_REQUIRED')) _deleteCodeCache = undefined;
+    throw e;
+  });
+}
 
 var MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 var SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -2606,7 +2677,9 @@ function saveTransportEditPayment() {
   setLoading(btn, true);
 
   // Delete old record then re-create with new values
-  apiDelete(API_FEE_PAY + '/' + ctx.pid, true)
+  getDeleteProtectionCode().then(function(code) {
+    return apiDeleteFeePayment(API_FEE_PAY + '/' + ctx.pid, code);
+  })
     .then(function() {
       return apiPost(API_FEE_PAY, { allowAdvance: true,
         studentId:    ctx.sid,
@@ -2886,11 +2959,12 @@ function confirmMonthEdit() {
   var btn = document.getElementById('mem-confirm-btn');
   setLoading(btn, true);
 
-  var deletePromises = d.items
-    .filter(function(i) { return i.month.paymentId; })
-    .map(function(i) { return apiDelete(API_FEE_PAY + '/' + i.month.paymentId, true); });
-
-  Promise.all(deletePromises)
+  getDeleteProtectionCode().then(function(code) {
+    var deletePromises = d.items
+      .filter(function(i) { return i.month.paymentId; })
+      .map(function(i) { return apiDeleteFeePayment(API_FEE_PAY + '/' + i.month.paymentId, code); });
+    return Promise.all(deletePromises);
+  })
     .then(function() {
       var remaining = newTotal;
       var payments  = d.items.map(function(item) {
@@ -2988,15 +3062,17 @@ function confirmMonthDelete() {
 
   if (bulkGroupId) {
     // Fetch full group then delete all payments in it
-    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
-      .then(function(res) {
-        var groupPayments = res.data || [];
-        var allIds = groupPayments.map(function(p) { return p._id; });
-        paymentIds.forEach(function(pid) { if (allIds.indexOf(pid) === -1) allIds.push(pid); });
-        return Promise.all(allIds.map(function(pid) {
-          return apiDelete(API_FEE_PAY + '/' + pid, true);
-        }));
-      })
+    getDeleteProtectionCode().then(function(code) {
+      return apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+        .then(function(res) {
+          var groupPayments = res.data || [];
+          var allIds = groupPayments.map(function(p) { return p._id; });
+          paymentIds.forEach(function(pid) { if (allIds.indexOf(pid) === -1) allIds.push(pid); });
+          return Promise.all(allIds.map(function(pid) {
+            return apiDeleteFeePayment(API_FEE_PAY + '/' + pid, code);
+          }));
+        });
+    })
       .then(function() {
         // Collect month names that were part of this bulk group
         var bMIs = [];
@@ -3018,9 +3094,11 @@ function confirmMonthDelete() {
       .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
 
   } else {
-    Promise.all(paymentIds.map(function(pid) {
-      return apiDelete(API_FEE_PAY + '/' + pid, true);
-    }))
+    getDeleteProtectionCode().then(function(code) {
+      return Promise.all(paymentIds.map(function(pid) {
+        return apiDeleteFeePayment(API_FEE_PAY + '/' + pid, code);
+      }));
+    })
       .then(function() {
         toast(SHORT_MONTHS[d.monthIndex] + ' payments deleted \u2014 month reverted to unpaid');
         closeModal('month-delete-modal');
@@ -3991,15 +4069,17 @@ function confirmTransportMonthDelete() {
   var bulkGroupId = tMonth.bulkGroupId || null;
 
   if (bulkGroupId) {
-    apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
-      .then(function(res) {
-        var groupPayments = res.data || [];
-        var allIds = groupPayments.map(function(p) { return p._id; });
-        if (allIds.indexOf(tMonth.paymentId) === -1) allIds.push(tMonth.paymentId);
-        return Promise.all(allIds.map(function(pid) {
-          return apiDelete(API_FEE_PAY + '/' + pid, true);
-        }));
-      })
+    getDeleteProtectionCode().then(function(code) {
+      return apiGet(API_FEE_PAY + '/group/' + encodeURIComponent(bulkGroupId), true)
+        .then(function(res) {
+          var groupPayments = res.data || [];
+          var allIds = groupPayments.map(function(p) { return p._id; });
+          if (allIds.indexOf(tMonth.paymentId) === -1) allIds.push(tMonth.paymentId);
+          return Promise.all(allIds.map(function(pid) {
+            return apiDeleteFeePayment(API_FEE_PAY + '/' + pid, code);
+          }));
+        });
+    })
       .then(function() {
         var bMIs = [];
         (stu.transport.months || []).forEach(function(m) {
@@ -4023,7 +4103,9 @@ function confirmTransportMonthDelete() {
       .catch(function(e) { toast(e.message, 'error'); })
       .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete All'; });
   } else {
-    apiDelete(API_FEE_PAY + '/' + tMonth.paymentId, true)
+    getDeleteProtectionCode().then(function(code) {
+      return apiDeleteFeePayment(API_FEE_PAY + '/' + tMonth.paymentId, code);
+    })
       .then(function() {
         toast(SHORT_MONTHS[d.monthIndex] + ' transport payment deleted \u2014 reverted to unpaid');
         closeModal('month-delete-modal');
@@ -4787,7 +4869,9 @@ function saveEditPayment() {
   if (amount < 1) { toast('Enter valid amount', 'error'); return; }
   var btn = document.getElementById('epm-save-btn');
   setLoading(btn, true);
-  apiPut(API_FEE_PAY + '/' + id, {amount: amount, remark: remark}, true)
+  getDeleteProtectionCode().then(function(code) {
+    return apiPutFeePayment(API_FEE_PAY + '/' + id, {amount: amount, remark: remark}, code);
+  })
     .then(function() { toast('Payment updated'); closeModal('edit-pay-modal'); return loadFeeStatus(); })
     .catch(function(e) { toast(e.message, 'error'); })
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Save'; });
@@ -4803,7 +4887,9 @@ function confirmDeletePayment() {
   var id  = document.getElementById('dpm-id').value;
   var btn = document.getElementById('dpm-confirm-btn');
   setLoading(btn, true);
-  apiDelete(API_FEE_PAY + '/' + id, true)
+  getDeleteProtectionCode().then(function(code) {
+    return apiDeleteFeePayment(API_FEE_PAY + '/' + id, code);
+  })
     .then(function() { toast('Payment deleted'); closeModal('del-pay-modal'); return loadFeeStatus(); })
     .catch(function(e) { toast(e.message, 'error'); })
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Yes, Delete'; });

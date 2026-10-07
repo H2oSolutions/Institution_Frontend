@@ -264,10 +264,11 @@ async function apiPut(endpoint, body, requiresAuth = false) {
 // ===============================
 // DELETE REQUEST - FIXED
 // ===============================
-async function apiDelete(endpoint, requiresAuth = false) {
+async function apiDelete(endpoint, requiresAuth = false, extraHeaders = {}) {
     try {
         const headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            ...extraHeaders
         };
         
         if (requiresAuth) {

@@ -183,6 +183,56 @@
         }
         .banner-btn:hover { background: #d97706; transform: translateY(-1px); }
 
+               #security-banner {
+            display: flex; background: linear-gradient(135deg,#eef2ff,#e0e7ff);
+            border: 2px solid #6366f1; border-radius: 16px;
+            padding: 16px 24px; margin: var(--space-6) 0;
+            align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+        }
+        .banner-text.indigo { color: #3730a3; }
+        .banner-sub.indigo  { color: #4338ca; }
+        .banner-btn.indigo  { background: #4f46e5; }
+        .banner-btn.indigo:hover { background: #4338ca; }
+
+        #security-modal {
+            display: none; position: fixed; inset: 0; z-index: 1000;
+            background: rgba(17,24,39,0.55); align-items: center; justify-content: center; padding: 20px;
+        }
+        #security-modal.show { display: flex; }
+        .sm-box {
+            background: white; border-radius: 20px; max-width: 420px; width: 100%;
+            padding: 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative;
+        }
+        .sm-box h3 { margin: 0 0 6px; color: var(--gray-900); font-size: 1.3rem; }
+        .sm-box p.sm-desc { color: var(--gray-600); font-size: 0.9rem; margin: 0 0 20px; line-height: 1.5; }
+        .sm-close { position: absolute; top: 18px; right: 18px; cursor: pointer; font-size: 1.2rem; color: var(--gray-400); }
+        .sm-close:hover { color: var(--gray-700); }
+        .sm-field { margin-bottom: 16px; }
+        .sm-field label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--gray-700); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .sm-field input {
+            width: 100%; padding: 10px 14px; border: 2px solid var(--gray-200); border-radius: 10px;
+            font-size: 1rem; font-family: 'Inter',sans-serif; letter-spacing: 0.1em; box-sizing: border-box;
+        }
+        .sm-field input:focus { outline: none; border-color: #6366f1; }
+        .sm-gen-btn {
+            background: none; border: none; color: #4f46e5; font-size: 0.8rem; font-weight: 700;
+            cursor: pointer; padding: 0; margin-top: 6px;
+        }
+        .sm-gen-btn:hover { text-decoration: underline; }
+        .sm-actions { display: flex; gap: 10px; margin-top: 24px; }
+        .sm-btn-primary, .sm-btn-secondary, .sm-btn-danger {
+            flex: 1; padding: 11px; border-radius: 10px; font-weight: 700; font-size: 0.9rem;
+            cursor: pointer; border: none; font-family: 'Inter',sans-serif;
+        }
+        .sm-btn-primary { background: #4f46e5; color: white; }
+        .sm-btn-primary:hover { background: #4338ca; }
+        .sm-btn-secondary { background: var(--gray-100); color: var(--gray-700); }
+        .sm-btn-secondary:hover { background: var(--gray-200); }
+        .sm-btn-danger { background: #fef2f2; color: #b91c1c; flex: none; padding: 11px 16px; }
+        .sm-btn-danger:hover { background: #fee2e2; }
+        .sm-error { color: #dc2626; font-size: 0.85rem; margin-top: -8px; margin-bottom: 16px; display: none; }
+        .sm-error.show { display: block; }
+
         /* Navigation */
         #navigation-section { margin: var(--space-10) 0; }
         #navigation-section h2 { text-align: center; margin-bottom: var(--space-8); font-size: var(--text-4xl); color: var(--gray-900); }
@@ -367,6 +417,52 @@
                 <p><strong>Mobile 2</strong><span id="inst-mobile2">-</span></p>
                 <p><strong>Email</strong><span id="inst-email">-</span></p>
                 <p><strong>Last Login</strong><span id="inst-last-login">-</span></p>
+            </div>
+        </div>
+
+                <!-- Fee Delete/Edit Protection -->
+        <div id="security-banner">
+            <div>
+                <div class="banner-text indigo">🔒 <span id="sec-status-headline">Loading protection status…</span></div>
+                <div class="banner-sub indigo" id="sec-status-sub"></div>
+            </div>
+            <button class="banner-btn indigo" id="sec-action-btn" onclick="openSecurityModal()" style="display:none;">Set Code</button>
+        </div>
+
+        <!-- Security Modal -->
+        <div id="security-modal">
+            <div class="sm-box">
+                <div class="sm-close" onclick="closeSecurityModal()">✕</div>
+                <h3 id="sm-title">🔒 Fee Delete Protection</h3>
+                <p class="sm-desc" id="sm-desc">
+                    Set a code your staff must enter before they can edit or delete any fee payment receipt.
+                    Only you (logged in as the institution) can set or change it.
+                </p>
+
+                <div class="sm-field" id="sm-current-field" style="display:none;">
+                    <label id="sm-current-label">Current Code</label>
+                    <input type="text" id="sm-current-code" maxlength="20" autocomplete="off" placeholder="Enter your current code">
+                    <button type="button" class="sm-gen-btn" id="sm-forgot-toggle" onclick="toggleForgotCode()">Forgot your code? Use your login password instead</button>
+                </div>
+
+                <div class="sm-field">
+                    <label id="sm-new-label">New Code</label>
+                    <input type="text" id="sm-new-code" maxlength="20" autocomplete="off" placeholder="e.g. a 6-digit code">
+                    <button type="button" class="sm-gen-btn" onclick="generateRandomDeleteCode()">🎲 Generate a random code</button>
+                </div>
+
+                <div class="sm-field">
+                    <label>Confirm New Code</label>
+                    <input type="text" id="sm-confirm-code" maxlength="20" autocomplete="off" placeholder="Re-enter the new code">
+                </div>
+
+                <div class="sm-error" id="sm-error"></div>
+
+                <div class="sm-actions">
+                    <button class="sm-btn-secondary" onclick="closeSecurityModal()">Cancel</button>
+                    <button class="sm-btn-primary" id="sm-save-btn" onclick="submitSecurityCode()">Save Code</button>
+                    <button class="sm-btn-danger" id="sm-disable-btn" onclick="disableSecurityCode()" style="display:none;">Turn Off</button>
+                </div>
             </div>
         </div>
 
@@ -612,7 +708,8 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
     loadYearStats();
     loadSubscriptionStatus();
-    loadPaymentSetupStatus();
+        loadPaymentSetupStatus();
+    loadDeleteProtectionStatus();
 });
 
 // ══════════════════════════════════════════════════════════
@@ -895,13 +992,139 @@ function hideMessages() { ['error-message','success-message','loading'].forEach(
 function checkAuth() { if(!localStorage.getItem('token')){window.location.href='login.html';return false;} return true; }
 function logout() { if(confirm('Are you sure you want to logout?')){ localStorage.removeItem('token'); localStorage.removeItem('userType'); localStorage.removeItem('institutionCode'); window.location.href='index.html'; } }
 
+// ══════════════════════════════════════════════════════════
+//  FEE DELETE/EDIT PROTECTION
+// ══════════════════════════════════════════════════════════
+let secProtectionEnabled = false;
+let secForgotMode = false;
+
+async function loadDeleteProtectionStatus() {
+    try {
+        const res = await apiGet(API_ENDPOINTS.FEE_DELETE_PROTECTION_STATUS, true);
+        if (!res.success) throw new Error(res.message);
+        secProtectionEnabled = !!res.data.enabled;
+        const headline = document.getElementById('sec-status-headline');
+        const sub      = document.getElementById('sec-status-sub');
+        const btn      = document.getElementById('sec-action-btn');
+        if (secProtectionEnabled) {
+            headline.textContent = 'Fee Delete Protection is ON';
+            const when = res.data.updatedAt ? new Date(res.data.updatedAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '';
+            sub.textContent = when ? `Staff need the code to edit or delete a receipt · code last changed ${when}` : 'Staff need the code to edit or delete a receipt';
+            btn.textContent = 'Change Code';
+        } else {
+            headline.textContent = 'Fee Delete Protection is OFF';
+            sub.textContent = 'Anyone with fee access can edit or delete receipts. Set a code to require it first.';
+            btn.textContent = 'Set Code';
+        }
+        btn.style.display = 'inline-block';
+    } catch (e) {
+        console.error('loadDeleteProtectionStatus:', e);
+        document.getElementById('sec-status-headline').textContent = 'Fee Delete Protection';
+        document.getElementById('sec-status-sub').textContent = 'Could not load status — try refreshing.';
+    }
+}
+
+function openSecurityModal() {
+    document.getElementById('sm-error').classList.remove('show');
+    document.getElementById('sm-current-code').value = '';
+    document.getElementById('sm-new-code').value = '';
+    document.getElementById('sm-confirm-code').value = '';
+    document.getElementById('sm-current-field').style.display = secProtectionEnabled ? 'block' : 'none';
+    document.getElementById('sm-disable-btn').style.display   = secProtectionEnabled ? 'inline-block' : 'none';
+    document.getElementById('sm-new-label').textContent = secProtectionEnabled ? 'New Code' : 'Set a Code';
+    document.getElementById('sm-save-btn').textContent  = secProtectionEnabled ? 'Update Code' : 'Turn On Protection';
+    secForgotMode = false;
+    applyForgotModeUI();
+    document.getElementById('security-modal').classList.add('show');
+}
+
+function closeSecurityModal() {
+    document.getElementById('security-modal').classList.remove('show');
+}
+
+function toggleForgotCode() {
+    secForgotMode = !secForgotMode;
+    applyForgotModeUI();
+}
+
+function applyForgotModeUI() {
+    document.getElementById('sm-current-code').value = '';
+    document.getElementById('sm-current-code').type = secForgotMode ? 'password' : 'text';
+    document.getElementById('sm-current-code').placeholder = secForgotMode ? 'Enter your institution login password' : 'Enter your current code';
+    document.getElementById('sm-current-label').textContent = secForgotMode ? 'Login Password' : 'Current Code';
+    document.getElementById('sm-forgot-toggle').textContent = secForgotMode ? 'Have your code? Use it instead' : "Forgot your code? Use your login password instead";
+}
+
+function generateRandomDeleteCode() {
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+    document.getElementById('sm-new-code').value = code;
+    document.getElementById('sm-confirm-code').value = code;
+}
+
+function showSecurityModalError(msg) {
+    const el = document.getElementById('sm-error');
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+async function submitSecurityCode() {
+    const currentInput = document.getElementById('sm-current-code').value.trim();
+    const newCode      = document.getElementById('sm-new-code').value.trim();
+    const confirmCode  = document.getElementById('sm-confirm-code').value.trim();
+
+    document.getElementById('sm-error').classList.remove('show');
+
+    if (secProtectionEnabled && !currentInput) {
+        return showSecurityModalError(secForgotMode ? 'Enter your login password.' : 'Enter your current code.');
+    }
+    if (!newCode || newCode.length < 4) return showSecurityModalError('New code must be at least 4 characters.');
+    if (newCode !== confirmCode) return showSecurityModalError('New code and confirmation do not match.');
+
+    try {
+        const body = { newCode };
+        if (secProtectionEnabled) {
+            if (secForgotMode) body.loginPassword = currentInput;
+            else body.currentCode = currentInput;
+        }
+        const res = await apiPut(API_ENDPOINTS.FEE_DELETE_PROTECTION, body, true);
+        if (!res.success) throw new Error(res.message || 'Could not save code');
+        closeSecurityModal();
+        showSuccess(secProtectionEnabled ? 'Code updated.' : 'Delete protection turned on.');
+        loadDeleteProtectionStatus();
+    } catch (e) {
+        showSecurityModalError(e.message || 'Something went wrong. Please try again.');
+    }
+}
+
+async function disableSecurityCode() {
+    const currentInput = document.getElementById('sm-current-code').value.trim();
+    document.getElementById('sm-error').classList.remove('show');
+    if (!currentInput) {
+        return showSecurityModalError(secForgotMode ? 'Enter your login password to turn protection off.' : 'Enter your current code to turn protection off.');
+    }
+    if (!confirm('Turn off fee delete protection? Staff will be able to edit or delete receipts without a code.')) return;
+
+    try {
+        const body = { action: 'disable' };
+        if (secForgotMode) body.loginPassword = currentInput;
+        else body.currentCode = currentInput;
+        const res = await apiPut(API_ENDPOINTS.FEE_DELETE_PROTECTION, body, true);
+        if (!res.success) throw new Error(res.message || 'Could not turn off protection');
+        closeSecurityModal();
+        showSuccess('Delete protection turned off.');
+        loadDeleteProtectionStatus();
+    } catch (e) {
+        showSecurityModalError(e.message || 'Something went wrong. Please try again.');
+    }
+}
+
 document.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&e.key==='1'){e.preventDefault();goToPart1();}
     if((e.ctrlKey||e.metaKey)&&e.key==='2'){e.preventDefault();goToPart2();}
     if((e.ctrlKey||e.metaKey)&&e.key==='3'){e.preventDefault();goToPart3();}
 });
 
-Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout});
+Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout,openSecurityModal,closeSecurityModal,generateRandomDeleteCode,submitSecurityCode,disableSecurityCode,toggleForgotCode});
 console.log('✅ Dashboard loaded');
 </script>
 </body>
