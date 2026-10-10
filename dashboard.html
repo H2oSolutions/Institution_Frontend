@@ -194,6 +194,34 @@
         .banner-btn.indigo  { background: #4f46e5; }
         .banner-btn.indigo:hover { background: #4338ca; }
 
+        /* Security banner state colours — green = protected, red = unprotected */
+        #security-banner.sec-loading { background: linear-gradient(135deg,#f3f4f6,#e5e7eb); border-color: #9ca3af; }
+        #security-banner.sec-loading .banner-text,
+        #security-banner.sec-loading .banner-sub { color: #4b5563; }
+
+        #security-banner.sec-on  { background: linear-gradient(135deg,#d1fae5,#a7f3d0); border-color: #10b981; }
+        #security-banner.sec-on .banner-text { color: #065f46; }
+        #security-banner.sec-on .banner-sub  { color: #047857; }
+        #security-banner.sec-on .banner-btn  { background: #059669; }
+        #security-banner.sec-on .banner-btn:hover { background: #047857; }
+        #security-banner.sec-on #sec-history { color: #065f46; }
+
+        #security-banner.sec-off { background: linear-gradient(135deg,#fee2e2,#fecaca); border-color: #ef4444; }
+        #security-banner.sec-off .banner-text { color: #991b1b; }
+        #security-banner.sec-off .banner-sub  { color: #b91c1c; }
+        #security-banner.sec-off .banner-btn  { background: #dc2626; }
+        #security-banner.sec-off .banner-btn:hover { background: #b91c1c; }
+        #security-banner.sec-off #sec-history { color: #7f1d1d; }
+
+        /* Change history inside the banner */
+        #sec-history { border-top: 1px solid rgba(0,0,0,0.12); padding-top: 12px; font-size: 0.85rem; }
+        .sec-hist-title { font-weight: 700; margin-bottom: 6px; }
+        .sec-hist-row { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; padding: 5px 0; }
+        .sec-hist-when { font-weight: 600; min-width: 175px; }
+        .sec-hist-chip { background: rgba(255,255,255,0.7); border-radius: 999px; padding: 2px 10px; font-weight: 700; font-size: 0.78rem; }
+        .sec-hist-note { opacity: 0.8; }
+        .sec-hist-more { background: none; border: none; font-weight: 700; cursor: pointer; padding: 6px 0 0; font-family: inherit; color: inherit; text-decoration: underline; }
+
         #security-modal {
             display: none; position: fixed; inset: 0; z-index: 1000;
             background: rgba(17,24,39,0.55); align-items: center; justify-content: center; padding: 20px;
@@ -421,12 +449,13 @@
         </div>
 
                 <!-- Fee Delete/Edit Protection -->
-        <div id="security-banner">
+        <div id="security-banner" class="sec-loading">
             <div>
                 <div class="banner-text indigo">🔒 <span id="sec-status-headline">Loading protection status…</span></div>
                 <div class="banner-sub indigo" id="sec-status-sub"></div>
             </div>
             <button class="banner-btn indigo" id="sec-action-btn" onclick="openSecurityModal()" style="display:none;">Set Code</button>
+            <div id="sec-history" style="flex-basis:100%; display:none;"></div>
         </div>
 
         <!-- Security Modal -->
@@ -1017,11 +1046,78 @@ async function loadDeleteProtectionStatus() {
             btn.textContent = 'Set Code';
         }
         btn.style.display = 'inline-block';
+        renderSecurityBanner(res.data);
     } catch (e) {
         console.error('loadDeleteProtectionStatus:', e);
         document.getElementById('sec-status-headline').textContent = 'Fee Delete Protection';
         document.getElementById('sec-status-sub').textContent = 'Could not load status — try refreshing.';
     }
+}
+
+// ── Security banner: state colour + change history ──
+let secLastData = null;
+let secShowAllHistory = false;
+
+function secFormatDateTime(d) {
+    return new Date(d).toLocaleString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+}
+
+// Wording only — the actual codes are never stored or shown anywhere.
+const SEC_ACTION_TEXT = {
+    enabled:      { label: 'Protection turned ON',  change: 'OFF → ON' },
+    code_changed: { label: 'Code changed',          change: 'Old code → New code' },
+    disabled:     { label: 'Protection turned OFF', change: 'ON → OFF' },
+};
+const SEC_METHOD_TEXT = {
+    first_setup:    'first-time setup',
+    current_code:   'confirmed with current code',
+    login_password: 'confirmed with login password (forgot-code recovery)',
+};
+
+function renderSecurityBanner(data) {
+    secLastData = data;
+    const banner = document.getElementById('security-banner');
+    banner.classList.remove('sec-loading', 'sec-on', 'sec-off');
+    banner.classList.add(data.enabled ? 'sec-on' : 'sec-off');
+
+    if (data.enabled && data.updatedAt) {
+        document.getElementById('sec-status-sub').textContent =
+            `Staff need the code to edit or delete a receipt · last changed ${secFormatDateTime(data.updatedAt)}`;
+    }
+
+    let rows = Array.isArray(data.history) ? data.history : [];
+    if (!rows.length && data.enabled && data.updatedAt) {
+        rows = [{ legacy: true, at: data.updatedAt }]; // protection was set before history tracking existed
+    }
+
+    let html = '<div class="sec-hist-title">📜 Recent activity</div>';
+    if (!rows.length) {
+        html += '<div class="sec-hist-row"><span class="sec-hist-note">No changes recorded yet.</span></div>';
+    } else {
+        const visible = secShowAllHistory ? rows : rows.slice(0, 5);
+        visible.forEach(h => {
+            const t    = h.legacy ? { label: 'Code set', change: 'Protection ON' } : (SEC_ACTION_TEXT[h.action] || { label: 'Change', change: '' });
+            const note = h.legacy ? 'recorded before change history was added' : (SEC_METHOD_TEXT[h.method] || '');
+            html += '<div class="sec-hist-row">' +
+                        '<span class="sec-hist-when">' + secFormatDateTime(h.at) + '</span>' +
+                        '<span>' + t.label + '</span>' +
+                        (t.change ? '<span class="sec-hist-chip">' + t.change + '</span>' : '') +
+                        (note ? '<span class="sec-hist-note">· ' + note + '</span>' : '') +
+                    '</div>';
+        });
+        if (rows.length > 5) {
+            html += '<button type="button" class="sec-hist-more" onclick="toggleSecHistory()">' +
+                    (secShowAllHistory ? 'Show less' : 'Show all (' + rows.length + ')') + '</button>';
+        }
+    }
+    const box = document.getElementById('sec-history');
+    box.innerHTML = html;
+    box.style.display = 'block';
+}
+
+function toggleSecHistory() {
+    secShowAllHistory = !secShowAllHistory;
+    if (secLastData) renderSecurityBanner(secLastData);
 }
 
 function openSecurityModal() {
@@ -1124,7 +1220,7 @@ document.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&e.key==='3'){e.preventDefault();goToPart3();}
 });
 
-Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout,openSecurityModal,closeSecurityModal,generateRandomDeleteCode,submitSecurityCode,disableSecurityCode,toggleForgotCode});
+Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout,openSecurityModal,closeSecurityModal,generateRandomDeleteCode,submitSecurityCode,disableSecurityCode,toggleForgotCode,toggleSecHistory});
 console.log('✅ Dashboard loaded');
 </script>
 </body>

@@ -668,8 +668,8 @@ async function loadStudents() {
         showLoading('Loading students...');
         
         const statusFilter = document.getElementById('student-status-filter').value;
-        // 🚨 FIX: ALWAYS send the filter value to the backend, even if it is 'all'
-        let url = API_ENDPOINTS.STUDENTS + '?limit=100&isActive=' + statusFilter;
+        // 🚨 FIX: Added a timestamp (&_t=...) to completely bypass Chrome's aggressive GET cache
+        let url = API_ENDPOINTS.STUDENTS + '?limit=100&isActive=' + statusFilter + '&_t=' + new Date().getTime();
 
         const response = await apiGet(url, true);
         hideLoading();
@@ -680,6 +680,35 @@ async function loadStudents() {
     } catch (error) {
         hideLoading();
         showError('Failed to load students: ' + error.message);
+    }
+}
+
+async function loadAllStudents() {
+    document.getElementById('search-student').value = '';
+    // 🚨 FIX: Make the "Show All" button actually change the dropdown to "All Students"
+    document.getElementById('student-status-filter').value = 'all'; 
+    loadStudents(); 
+}
+
+async function searchStudents() {
+    const searchTerm = document.getElementById('search-student').value.trim();
+    const statusFilter = document.getElementById('student-status-filter').value;
+    
+    try {
+        showLoading('Searching...');
+        
+        // 🚨 FIX: Added cache buster here too
+        let url = API_ENDPOINTS.STUDENTS + '?search=' + encodeURIComponent(searchTerm) + '&isActive=' + statusFilter + '&_t=' + new Date().getTime();
+
+        const response = await apiGet(url, true);
+        hideLoading();
+        if (response.success) { 
+            studentsData = response.data; 
+            displayStudents(); 
+        }
+    } catch (error) {
+        hideLoading();
+        showError(error.message);
     }
 }
 
@@ -733,9 +762,30 @@ function displayStudents() {
 
         // UI Logic for Status Badges & Buttons
         const isActive = student.isActive !== false; // defaults to true
-        const statusBadge = isActive 
-            ? '<span class="status-badge status-active">Active</span>' 
-            : '<span class="status-badge status-inactive">Inactive</span>';
+        
+        let statusBadge = '';
+        if (isActive) {
+            statusBadge = '<span class="status-badge status-active">Active</span>';
+        } else {
+            let inactiveDetails = '';
+            // If the student has tracking info, format it into a small block under the badge
+            if (student.deactivatedBy && student.deactivatedAt) {
+                const deactDate = new Date(student.deactivatedAt).toLocaleString('en-IN', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                inactiveDetails = `
+                    <div style="font-size: 11px; color: #ef4444; margin-top: 6px; line-height: 1.3;">
+                        <strong>By:</strong> ${student.deactivatedBy}<br>
+                        <strong>On:</strong> ${deactDate}
+                    </div>`;
+            }
+            statusBadge = `
+                <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                    <span class="status-badge status-inactive">Inactive</span>
+                    ${inactiveDetails}
+                </div>`;
+        }
             
         const toggleBtnText = isActive ? 'Deactivate' : 'Activate';
         const toggleBtnStyle = isActive 
@@ -772,7 +822,29 @@ async function toggleStudentStatus(id, currentStatus) {
 
     try {
         showLoading(`${currentStatus ? 'Deactivating' : 'Activating'} student...`);
-        const response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + id, { isActive: !currentStatus }, true);
+        
+        // Safely decode the token to get the user's name without assumptions
+        let actorName = 'Admin';
+        const token = localStorage.getItem('token');
+        if (token && !currentStatus) { // Only need to decode if we are deactivating
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.type === 'staff' && payload.name) {
+                    actorName = payload.name;
+                } else if (payload.type === 'institution') {
+                    actorName = 'Institution Admin';
+                }
+            } catch (e) {
+                console.warn('Could not decode token for user name');
+            }
+        }
+        
+        const payload = { 
+            isActive: !currentStatus,
+            deactivatedBy: !currentStatus ? actorName : null 
+        };
+
+        const response = await apiPut(API_ENDPOINTS.STUDENTS + '/' + id, payload, true);
         hideLoading();
         
         if (response.success) {
