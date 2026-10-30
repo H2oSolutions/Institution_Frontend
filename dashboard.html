@@ -632,6 +632,14 @@
                                 </div>
                                 <div class="pf-pill-price">Open →</div>
                             </div>
+                            <div class="pf-pill" id="pf-pill-expense" onclick="event.stopPropagation();goToExpenseManagement()" style="cursor:pointer">
+                                <div class="pf-pill-icon">🧾</div>
+                                <div class="pf-pill-text">
+                                    <span class="pf-pill-name">Expense Management</span>
+                                    <span class="pf-pill-sub">Payees, dues, payments &amp; ledgers</span>
+                                </div>
+                                <div class="pf-pill-price">Free · Open →</div>
+                            </div>
                         </div>
                         <div class="premium-card-bottom">
                             <!-- <small>Activate within 2 hours of payment · No hidden charges</small> -->
@@ -704,6 +712,13 @@
                 <div class="pm-feat-name">Exam Management</div>
                 <div class="pm-feat-desc">Generate examination admit cards — class-wise, 2 per page. More exam tools coming soon.</div>
                 <div class="pm-feat-price">₹799 <span>/ year</span></div>
+            </div>
+            <div class="pm-feat" onclick="goToExpenseManagement()">
+                <div class="pm-feat-tag">Free</div>
+                <div class="pm-feat-icon">🧾</div>
+                <div class="pm-feat-name">Expense Management</div>
+                <div class="pm-feat-desc">Track salaries, advances and bills with a ledger for every payee, and see who recorded each entry.</div>
+                <div class="pm-feat-price">Free</div>
             </div>
         </div>
         <div class="pm-bundle" onclick="goToFeature('bundle')">
@@ -996,6 +1011,7 @@ function goToPart3()          { window.location.href='part3-credentials.html'; }
 function goToPromotion()      { window.location.href='promotion.html'; }
 function goToDataManagement() { window.location.href='data-management.html'; }
 function goToPaymentSetup()   { window.location.href='payment-setup.html'; }
+function goToExpenseManagement() { closePremiumModal(); window.location.href='expense-management.html'; }
 async function goToExamManagement() {
     closePremiumModal();
     try {
@@ -1220,7 +1236,7 @@ document.addEventListener('keydown',function(e){
     if((e.ctrlKey||e.metaKey)&&e.key==='3'){e.preventDefault();goToPart3();}
 });
 
-Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,openPremiumModal,closePremiumModal,goToFeature,logout,openSecurityModal,closeSecurityModal,generateRandomDeleteCode,submitSecurityCode,disableSecurityCode,toggleForgotCode,toggleSecHistory});
+Object.assign(window,{goToPart1,goToPart2,goToPart3,goToPromotion,goToDataManagement,goToPaymentSetup,goToExamManagement,goToExpenseManagement,openPremiumModal,closePremiumModal,goToFeature,logout,openSecurityModal,closeSecurityModal,generateRandomDeleteCode,submitSecurityCode,disableSecurityCode,toggleForgotCode,toggleSecHistory});
 console.log('✅ Dashboard loaded');
 </script>
 </body>

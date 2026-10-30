@@ -1,4 +1,4 @@
-// staff-dashboard.js - SECURE EXAM & 7 TAB FEE INJECTION
+// staff-dashboard.js - SECURE EXAM, 7 TAB FEE & EXPENSE INJECTION
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Staff Dashboard initializing...');
@@ -138,6 +138,24 @@ function displayStaffProfile(data) {
         addExamPermission(canAdmit, canSetup, canMarks, canTabu, canReports);
         addExamActionCard();
     }
+
+    // 3. Expense Permissions (master switch must be on, then each tab independently)
+    const expMaster = !!addAccess.canAccessExpenseManagement;
+    const expPerms = {
+        tab1: expMaster && !!addAccess.canAccessExpenseTab1,
+        tab2: expMaster && !!addAccess.canAccessExpenseTab2,
+        tab3: expMaster && !!addAccess.canAccessExpenseTab3,
+        tab4: expMaster && !!addAccess.canAccessExpenseTab4,
+        all:  expMaster && !!addAccess.canAccessExpenseAllEntries
+    };
+
+    // Handoff for expense-management.html (the server re-checks every request anyway)
+    localStorage.setItem('expensePermissions', JSON.stringify(expPerms));
+
+    if (expPerms.tab1 || expPerms.tab2 || expPerms.tab3 || expPerms.tab4) {
+        addExpensePermission(expPerms);
+        addExpenseActionCard();
+    }
 }
 
 function displayAssignedClassesAndSubjects(assignedClasses) {
@@ -263,6 +281,35 @@ function addExamActionCard() {
     card.style.borderColor = '#fde68a';
     card.innerHTML = '<span class="action-icon">📝</span><h4 style="color:#b45309">Exam Management</h4><p>Access your permitted exam & grading modules</p>';
     card.onclick = function() { window.location.href = 'exam-management.html'; };
+    grid.appendChild(card);
+}
+
+function addExpensePermission(p) {
+    var container = document.getElementById('permissions-list');
+    if (!container) return;
+
+    var details = [];
+    if (p.tab1) details.push('Heads & Payees');
+    if (p.tab2) details.push('Due');
+    if (p.tab3) details.push('Paid');
+    if (p.tab4) details.push('Ledger');
+
+    var item = document.createElement('div');
+    item.className = 'permission-item';
+    item.style.border = '2px solid #a7f3d0';
+    item.style.background = '#ecfdf5';
+    item.innerHTML = '<span class="permission-icon">🧾</span><span class="permission-text" style="color:#059669">Expense Management: ' + details.join(', ') + '</span>';
+    container.appendChild(item);
+}
+
+function addExpenseActionCard() {
+    var grid = document.querySelector('.actions-grid');
+    if (!grid) return;
+    var card = document.createElement('div');
+    card.className = 'action-card';
+    card.style.borderColor = '#a7f3d0';
+    card.innerHTML = '<span class="action-icon">🧾</span><h4 style="color:#059669">Expense Management</h4><p>Record payments and view ledgers</p>';
+    card.onclick = function() { window.location.href = 'expense-management.html'; };
     grid.appendChild(card);
 }
 

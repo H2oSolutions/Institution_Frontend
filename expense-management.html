@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expense Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brand:#059669;--brand2:#0d9488;--brand-grad:linear-gradient(135deg,#059669,#0d9488);
+  --brand-soft:#ecfdf5;--brand-line:#a7f3d0;--brand-ink:#047857;
+  --bg:#f1f5f9;--surface:#fff;--surface2:#f8fafc;--border:#e2e8f0;--border2:#cbd5e1;
+  --text:#0f172a;--text2:#475569;--text3:#64748b;
+  --red:#dc2626;--red-bg:#fef2f2;--amber:#b45309;--amber-bg:#fffbeb;--blue:#1d4ed8;--blue-bg:#eff6ff;
+  --shadow:0 2px 14px rgba(15,23,42,.06);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid #34d399;outline-offset:2px}
+[hidden]{display:none!important}
+
+/* header */
+.xh{background:var(--brand-grad);color:#fff;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(5,150,105,.35)}
+.xh-l,.xh-r{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.xh h1{font-size:clamp(1rem,2.4vw,1.3rem);font-weight:800}
+.xh-back{background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:999px;padding:6px 15px;font-size:13px;font-weight:700;cursor:pointer}
+.xh-back:hover{background:rgba(255,255,255,.28)}
+.xh-badge{background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.32);border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700}
+
+/* layout */
+.xc{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
+.xtabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:4px;margin-bottom:20px;overflow-x:auto}
+.xtab{flex:1;min-width:130px;padding:11px 14px;border:0;border-radius:10px;background:transparent;color:var(--text2);font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap}
+.xtab:hover{background:var(--surface2)}
+.xtab[aria-selected="true"]{background:var(--brand);color:#fff}
+.grid{display:grid;gap:18px}
+.g3{grid-template-columns:1.15fr 1.1fr .8fr}
+.g2{grid-template-columns:minmax(320px,.9fr) 1.3fr}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:1000px){.g3,.g2,.g4{grid-template-columns:1fr 1fr}}
+@media(max-width:680px){.g3,.g2,.g4{grid-template-columns:1fr}.xh{padding:12px 14px}.xc{padding:14px 10px 50px}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow);min-width:0}
+.card h2{font-size:16px;font-weight:800;margin-bottom:3px}
+.sub{font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.45}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.stat small{display:block;font-size:12px;font-weight:700;color:var(--text2)}
+.stat b{display:block;font-size:22px;font-weight:800;margin-top:4px}
+.stat.warn b{color:var(--amber)}.stat.good b{color:var(--brand-ink)}
+
+/* forms */
+.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.fld{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--text2);min-width:0;flex:1 1 140px}
+.in{border:1.5px solid var(--border2);border-radius:9px;padding:9px 11px;font-size:14px;background:#fff;width:100%;min-height:40px}
+.in:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px rgba(5,150,105,.18)}
+.in[readonly]{background:var(--surface2);color:var(--text2)}
+textarea.in{resize:vertical;min-height:64px}
+.hint{font-size:12px;color:var(--text3);font-weight:500}
+.btn{border:0;border-radius:9px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;background:var(--brand);color:#fff;white-space:nowrap}
+.btn:hover{background:var(--brand-ink)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.ghost{background:#fff;color:var(--brand-ink);border:1.5px solid var(--brand)}
+.btn.ghost:hover{background:var(--brand-soft)}
+.btn.danger{background:#fff;color:var(--red);border:1.5px solid #fca5a5}
+.btn.danger:hover{background:var(--red-bg)}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:7px}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:3px;gap:3px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;color:var(--text2);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
+.seg button[aria-selected="true"]{background:var(--brand);color:#fff}
+.subtabs{margin-bottom:16px}
+.sub-wrap{max-width:860px;margin:0 auto}
+#t3-add{max-width:720px;margin:0 auto}
+details.more{margin-top:12px}
+details.more summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-ink);padding:4px 0}
+.autobox{display:flex;gap:22px;align-items:center;flex-wrap:wrap;background:var(--surface2);border:1px dashed var(--border2);border-radius:10px;padding:10px 14px;margin-top:14px;font-size:14px}
+.autobox small{display:block;color:var(--text3);font-weight:600;font-size:11.5px}
+.autobox b{font-weight:700}
+
+/* lists + tables */
+.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.li:last-child{border-bottom:0}
+.li .meta{min-width:0}
+.li .meta small{display:block;color:var(--text3);font-size:12px;font-weight:500}
+.li.off{opacity:.55}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}
+.chip-btn{border:1.5px dashed var(--brand-line);background:var(--brand-soft);color:var(--brand-ink);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+.tw{overflow-x:auto;margin:0 -4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:12px;color:var(--text2);font-weight:700;padding:9px 8px;border-bottom:2px solid var(--border2);white-space:nowrap}
+td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.rev td{color:var(--text3);text-decoration:line-through}
+tr.rev td.keep,tr.rev td:last-child{text-decoration:none}
+tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
+.sm-t{display:block;font-size:12px;color:var(--text3);font-weight:500;text-decoration:none}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:var(--surface2);color:var(--text2);border:1px solid var(--border2);white-space:nowrap}
+.pill.due{background:var(--blue-bg);color:var(--blue);border-color:#bfdbfe}
+.pill.paid,.pill.cleared{background:var(--brand-soft);color:var(--brand-ink);border-color:var(--brand-line)}
+.pill.adjustment,.pill.part,.pill.advance{background:var(--amber-bg);color:var(--amber);border-color:#fde68a}
+.pill.unpaid,.pill.reversed{background:var(--red-bg);color:var(--red);border-color:#fecaca}
+.neg{color:var(--amber);font-weight:700}
+.empty{text-align:center;padding:30px 14px;color:var(--text2);font-size:14px}
+.empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
+.banner{background:var(--amber-bg);border:1px solid #fde68a;color:var(--amber);border-radius:10px;padding:9px 13px;font-size:13px;font-weight:600;margin-bottom:12px}
+.preview{background:var(--brand-soft);border:1px solid var(--brand-line);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--brand-ink);font-weight:600;margin-top:12px}
+.preview.warn{background:var(--amber-bg);border-color:#fde68a;color:var(--amber)}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:var(--text2)}
+.cklist{max-height:200px;overflow:auto;border:1.5px solid var(--border2);border-radius:9px;padding:4px 10px;margin:8px 0}
+.cklist label{display:flex;gap:9px;align-items:center;padding:7px 0;font-size:13px;font-weight:600;border-bottom:1px solid var(--border)}
+.cklist label:last-child{border-bottom:0}
+
+/* modal + toast */
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:18px}
+.md{background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:24px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.md h3{font-size:17px;font-weight:800;margin-bottom:4px}
+.md .stack{display:flex;flex-direction:column;gap:12px;margin:14px 0}
+.md .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.tl{border-left:3px solid var(--brand-line);margin:12px 0 0 6px;padding-left:14px}
+.tl div{margin-bottom:12px;font-size:13px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#0f172a;color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.25s;z-index:200;max-width:92vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.toast.error{background:#b91c1c}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:var(--brand);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.toast,.spin{transition:none;animation:none}}
+
+/* tab hints, auto-dues card, tour */
+.tabhint{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--brand-line);color:var(--brand-ink);border-radius:10px;padding:9px 14px;margin-bottom:16px;font-size:13.5px;font-weight:600}
+.linkbtn{background:none;border:0;color:var(--brand-ink);font-weight:800;font-size:13px;text-decoration:underline;cursor:pointer;padding:2px 4px}
+.btnrow{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:var(--text);min-height:40px}
+.chk input{width:18px;height:18px;accent-color:var(--brand)}
+.tour-root{position:fixed;inset:0;z-index:300}
+.tour-dim{position:absolute;inset:0;background:rgba(15,23,42,.62)}
+.tour-hl{position:fixed;border-radius:12px;box-shadow:0 0 0 9999px rgba(15,23,42,.62),0 0 0 3px #34d399;pointer-events:none;transition:top .25s,left .25s,width .25s,height .25s}
+.tour-tip{position:fixed;background:#fff;border-radius:14px;padding:16px 18px;width:min(400px,calc(100vw - 24px));box-shadow:0 18px 50px rgba(0,0,0,.45);z-index:301}
+.tour-tip.center{top:50%;left:50%;transform:translate(-50%,-50%)}
+.tour-step{font-size:12px;font-weight:800;color:var(--brand-ink);text-transform:uppercase;letter-spacing:.05em}
+.tour-tip h3{font-size:17px;font-weight:800;margin:4px 0 6px}
+.tour-tip p{font-size:14px;line-height:1.55;color:#334155}
+.tour-acts{display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:14px;flex-wrap:wrap}
+.tour-acts .grp{display:flex;gap:8px}
+@media(prefers-reduced-motion:reduce){.tour-hl{transition:none}}
+
+/* receipt */
+.rc-ov{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:150;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:22px}
+.rc-wrap{background:#fff;border-radius:14px;max-width:660px;width:100%;padding:18px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.rc-actions{display:flex;gap:10px;justify-content:flex-end;margin-bottom:12px;flex-wrap:wrap}
+.rc-sheet{border:2px solid #0f172a;padding:20px 22px;color:#000;font-size:14px;page:receipt}
+.rc-head{text-align:center;border-bottom:2px solid #0f172a;padding-bottom:10px;margin-bottom:12px}
+.rc-head h2{font-size:20px;font-weight:800}
+.rc-head small{display:block;font-size:12px;color:#334155}
+.rc-title{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:6px 0 10px;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+.rc-title span{font-size:13px;text-transform:none;letter-spacing:0;font-weight:700}
+.rc-void{border:2px solid #b91c1c;color:#b91c1c;font-weight:800;padding:8px 12px;margin-bottom:10px;text-align:center;font-size:13px}
+.rc-table{width:100%;border-collapse:collapse}
+.rc-table td{padding:6px 4px;border-bottom:1px solid #cbd5e1;vertical-align:top;font-size:14px}
+.rc-table td:first-child{width:34%;font-weight:700;color:#334155}
+.rc-amt{font-size:22px;font-weight:800}
+.rc-sign{display:flex;gap:18px;margin-top:38px}
+.rc-sign div{flex:1;border-top:1.5px solid #000;padding-top:5px;text-align:center;font-size:12px;font-weight:700}
+.rc-sign small{display:block;font-weight:500;color:#334155;min-height:15px}
+.rc-foot{margin-top:14px;font-size:11px;color:#475569;text-align:center}
+@page receipt{size:A5 portrait;margin:10mm}
+@media print{
+  body.has-receipt .xh,body.has-receipt .xc,body.has-receipt .toast{display:none!important}
+  body.has-receipt .rc-ov{position:static;background:none;padding:0;display:block;overflow:visible}
+  body.has-receipt .rc-wrap{box-shadow:none;max-width:none;padding:0;border-radius:0}
+  body.has-receipt .rc-actions{display:none!important}
+}
+
+/* print: only the ledger/report area */
+.print-only{display:none}
+@media print{
+  .xh,.xtabs,.no-print,.toast,.btn,.seg,.row.filters{display:none!important}
+  body{background:#fff}.xc{max-width:none;padding:0}.card{box-shadow:none;border:0;padding:0}
+  .print-only{display:block;margin-bottom:12px}
+  .xpanel:not(.printing){display:none!important}
+  th,td{font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<header class="xh">
+  <div class="xh-l">
+    <button class="xh-back" id="btn-back" type="button">← Back</button>
+    <h1>🧾 Expense Management</h1>
+  </div>
+  <div class="xh-r">
+    <button class="xh-back" id="btn-tour" type="button" title="A 1-minute guided tour">? Tour</button>
+    <span class="xh-badge" id="who-badge">Loading…</span>
+    <span class="xh-badge" id="fy-badge"></span>
+  </div>
+</header>
+
+<main class="xc">
+  <nav class="xtabs" role="tablist" aria-label="Expense sections" id="tabs">
+    <button class="xtab" role="tab" id="tab1-btn" data-tab="1" aria-selected="false" aria-controls="tab1" hidden>Expense Heads</button>
+    <button class="xtab" role="tab" id="tab2-btn" data-tab="2" aria-selected="false" aria-controls="tab2" hidden>Expenses Due</button>
+    <button class="xtab" role="tab" id="tab3-btn" data-tab="3" aria-selected="false" aria-controls="tab3" hidden>Expenses Paid</button>
+    <button class="xtab" role="tab" id="tab4-btn" data-tab="4" aria-selected="false" aria-controls="tab4" hidden>Ledger</button>
+  </nav>
+
+  <div id="loading" class="empty"><span class="spin"></span>Loading Expense Management…</div>
+  <div id="denied" class="card empty" hidden>
+    <b>🔒 Access restricted</b>
+    <span id="denied-msg">You do not have permission to use Expense Management. Please ask the administrator.</span>
+  </div>
+
+  <!-- ═════════ TAB 1: HEADS, PAYEES, ADVISED-BY ═════════ -->
+  <section class="xpanel" id="tab1" role="tabpanel" aria-labelledby="tab1-btn" hidden>
+    <div class="tabhint" id="hint1"><span>Set up once: what you spend on (Heads), who you pay (Payees) and who approves (Advised by).</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="1">? How this works</button></div>
+    <div class="sub-wrap">
+      <div class="seg subtabs" role="tablist" aria-label="Setup sections" id="t1-subtabs">
+        <button type="button" role="tab" data-sub="heads" aria-selected="true">Heads</button>
+        <button type="button" role="tab" data-sub="payees" aria-selected="false">Payees</button>
+        <button type="button" role="tab" data-sub="adv" aria-selected="false">Advised by</button>
+      </div>
+      <div class="card" id="t1-heads">
+        <h2>Expense heads</h2>
+        <p class="sub">The categories you spend on. Create them once, then pick them when you record a payment.</p>
+        <form class="row" id="head-form" autocomplete="off">
+          <label class="fld" style="flex:2 1 150px">Head name<input class="in" id="head-name" maxlength="80" placeholder="e.g. Electricity" required></label>
+          <label class="fld">Type
+            <select class="in" id="head-type">
+              <option value="oneoff">One-off expense</option>
+              <option value="payee">Salary / payee ledger</option>
+            </select>
+          </label>
+          <button class="btn" type="submit">Add head</button>
+        </form>
+        <p class="hint" style="margin-top:6px">“Salary / payee ledger” heads always need a person or vendor, so every payment builds their ledger.</p>
+        <div class="chips" id="head-suggest"></div>
+        <label class="hint"><input type="checkbox" id="head-inactive"> Show inactive</label>
+        <div id="head-list"></div>
+      </div>
+
+      <div class="card" id="t1-payees" hidden>
+        <h2>Payees</h2>
+        <p class="sub">Anyone you pay: teachers, faculty, any staff, helpers or vendors. Each gets their own ledger.</p>
+        <div class="seg" role="group" aria-label="How to add a payee" id="party-mode">
+          <button type="button" data-mode="staff" aria-pressed="true">From staff list</button>
+          <button type="button" data-mode="manual" aria-pressed="false">Add manually</button>
+        </div>
+
+        <form id="party-staff-form" style="margin-top:12px">
+          <input class="in" id="staff-search" type="search" placeholder="Search staff by name or role" aria-label="Search staff">
+          <div class="cklist" id="staff-list" role="group" aria-label="Staff you can add"></div>
+          <div class="row">
+            <label class="fld">Monthly amount (optional)<input class="in" id="ps-monthly" inputmode="decimal" placeholder="₹ 0"></label>
+            <label class="fld">Default head<select class="in" id="ps-head"></select></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" type="submit" id="ps-add">Add selected staff</button>
+            <button class="btn ghost" type="button" id="ps-all">Select all shown</button>
+          </div>
+        </form>
+
+        <form id="party-manual-form" style="margin-top:12px" hidden autocomplete="off">
+          <div class="row">
+            <label class="fld" style="flex:2 1 150px">Name<input class="in" id="pm-name" maxlength="100" required></label>
+            <label class="fld">Role<input class="in" id="pm-role" list="role-list" maxlength="60" placeholder="e.g. Guard"></label>
+            <datalist id="role-list"><option>Helper</option><option>Guard</option><option>Cleaner</option><option>Driver</option><option>Gardener</option><option>Vendor</option><option>Contractor</option></datalist>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="fld">Mobile (optional)<input class="in" id="pm-mobile" inputmode="tel" maxlength="15"></label>
+            <label class="fld">Monthly amount<input class="in" id="pm-monthly" inputmode="decimal" placeholder="₹ 0"></label>
+            <label class="fld">Opening balance<input class="in" id="pm-opening" inputmode="decimal" placeholder="₹ 0" title="Positive = you owe them. Negative = advance already given."></label>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <label class="fld">Default head<select class="in" id="pm-head"></select></label>
+            <button class="btn" type="submit">Add payee</button>
+          </div>
+        </form>
+
+        <label class="hint" style="display:block;margin-top:14px"><input type="checkbox" id="party-inactive"> Show inactive</label>
+        <div id="party-list"></div>
+      </div>
+
+      <div class="card" id="t1-adv" hidden>
+        <h2>Advised by</h2>
+        <p class="sub">Who approved a payment. Once you add names here, choosing one becomes compulsory.</p>
+        <form class="row" id="adv-form" autocomplete="off">
+          <label class="fld">Name<input class="in" id="adv-name" maxlength="80" placeholder="e.g. Principal" required></label>
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <div id="adv-list" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ TAB 2: EXPENSES DUE ═════════ -->
+  <section class="xpanel" id="tab2" role="tabpanel" aria-labelledby="tab2-btn" hidden>
+    <div class="tabhint" id="hint2"><span>Who you owe this month: previous balance + due − paid = balance. What is left moves to next month by itself.</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="2">? How this works</button></div>
+    <div class="card" id="auto-card" style="margin-bottom:18px">
+      <div class="row" style="align-items:center">
+        <div style="flex:1 1 340px;min-width:240px">
+          <h2>Auto dues</h2>
+          <p class="sub" id="auto-text" style="margin-bottom:6px">Loading…</p>
+          <p class="hint" id="auto-last"></p>
+        </div>
+        <div class="row" style="align-items:flex-end;flex:0 0 auto">
+          <label class="fld" style="flex:0 0 150px">Create dues on day
+            <select class="in" id="auto-day" aria-label="Day of the month"></select>
+          </label>
+          <label class="chk"><input type="checkbox" id="auto-on"> Automatic</label>
+          <button class="btn" type="button" id="auto-save">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="row">
+        <label class="fld" style="flex:0 1 180px">Month<input class="in" type="month" id="due-month"></label>
+        <div class="seg" id="due-presets" role="group" aria-label="Quick month">
+          <button type="button" data-preset="this" aria-pressed="true">This month</button>
+          <button type="button" data-preset="last" aria-pressed="false">Last month</button>
+        </div>
+        <label class="fld" style="flex:0 1 260px">Payee<select class="in" id="due-party"><option value="">All payees</option></select></label>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" type="button" id="due-generate">Generate monthly salary dues</button>
+        <button class="btn ghost" type="button" id="due-report">Get Report (Excel)</button>
+        <button class="btn" type="button" id="due-add">Add due / bill</button>
+      </div>
+    </div>
+    <div class="grid g4" style="margin-bottom:18px" id="due-stats"></div>
+    <div class="card"><div class="tw" id="due-table"></div></div>
+  </section>
+
+  <!-- ═════════ TAB 3: EXPENSES PAID ═════════ -->
+  <section class="xpanel" id="tab3" role="tabpanel" aria-labelledby="tab3-btn" hidden>
+    <div class="tabhint" id="hint3"><span>Record each payment here, or look back at old ones in the Payment list.</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="3">? How this works</button></div>
+    <div class="seg subtabs" role="tablist" aria-label="Payment sections" id="t3-subtabs">
+      <button type="button" role="tab" data-sub="add" aria-selected="true">Add payment</button>
+      <button type="button" role="tab" data-sub="list" aria-selected="false">Payment list</button>
+    </div>
+    <div>
+      <div class="card" id="t3-add">
+        <h2>Record a payment</h2>
+        <p class="sub">The date, time and your name are added automatically.</p>
+        <div class="seg" role="group" aria-label="Entry type" id="pay-type">
+          <button type="button" data-type="paid" aria-pressed="true">Cash / bank payment</button>
+          <button type="button" data-type="adjustment" aria-pressed="false">Non-cash adjustment</button>
+        </div>
+        <form id="pay-form" style="margin-top:14px" autocomplete="off">
+          <div class="row">
+            <label class="fld">Paid to<select class="in" id="p-party"></select></label>
+            <label class="fld">Head<select class="in" id="p-head" required></select></label>
+          </div>
+          <div class="row" style="margin-top:12px" id="p-name-row" hidden>
+            <label class="fld">Name of person / shop<input class="in" id="p-name" maxlength="100" placeholder="Who was paid?"></label>
+          </div>
+          <label class="fld" style="margin-top:12px">Description<input class="in" id="p-desc" maxlength="200" placeholder="e.g. To Guard, salary" required></label>
+          <div class="row" style="margin-top:12px">
+            <label class="fld">Amount<input class="in" id="p-amount" inputmode="decimal" placeholder="₹" required></label>
+            <label class="fld">Advised by<select class="in" id="p-adv"></select></label>
+          </div>
+          <label class="fld" style="margin-top:12px"><span id="p-remark-label">Remarks (optional)</span><input class="in" id="p-remark" maxlength="500" placeholder="Anything extra worth remembering"></label>
+          <details class="more">
+            <summary>More options (payment mode, bill number, back-date)</summary>
+            <div class="row" style="margin-top:12px">
+              <label class="fld" id="p-mode-wrap">Mode
+                <select class="in" id="p-mode"><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="other">Other</option></select>
+              </label>
+              <label class="fld">Bill / transaction no.<input class="in" id="p-ref" maxlength="80"></label>
+            </div>
+            <label class="fld" style="margin-top:12px" id="p-date-wrap" hidden>Back-date (owner only)<input class="in" type="date" id="p-date"></label>
+          </details>
+          <div class="autobox" aria-live="polite">
+            <div><small>Date &amp; time</small><b id="p-when"></b></div>
+            <div><small>Entered by</small><b id="p-entered"></b></div>
+            <span class="pill">automatic</span>
+          </div>
+          <div class="preview" id="p-preview" hidden></div>
+          <div class="row" style="margin-top:14px"><button class="btn" type="submit" id="p-save">Save payment</button></div>
+          <div class="preview" id="p-last" hidden style="margin-top:14px"></div>
+        </form>
+      </div>
+
+      <div class="card" id="t3-list" hidden>
+        <h2>Entries</h2>
+        <p class="sub" id="ent-sub">Every payment, due and adjustment, newest first.</p>
+        <div id="ent-banner"></div>
+        <div class="print-only" id="e-print-head"></div>
+        <div class="row filters" style="margin-bottom:10px">
+          <div class="seg" id="e-presets" role="group" aria-label="Date range">
+            <button type="button" data-preset="today" aria-pressed="true">Today</button>
+            <button type="button" data-preset="yesterday" aria-pressed="false">Yesterday</button>
+            <button type="button" data-preset="last7" aria-pressed="false">Last 7 days</button>
+            <button type="button" data-preset="month" aria-pressed="false">This month</button>
+            <button type="button" data-preset="all" aria-pressed="false">All time</button>
+          </div>
+          <span style="flex:1"></span>
+          <button class="btn ghost" type="button" id="e-report">Get Report (Excel)</button>
+          <button class="btn ghost" type="button" id="e-print">Print</button>
+        </div>
+        <div class="row filters" style="margin-bottom:12px">
+          <label class="fld" style="flex:0 1 150px">From<input class="in" type="date" id="e-from"></label>
+          <label class="fld" style="flex:0 1 150px">To<input class="in" type="date" id="e-to"></label>
+          <label class="fld">Show
+            <select class="in" id="e-type">
+              <option value="money" selected>Money paid (payments + adjustments)</option>
+              <option value="due">Dues only</option>
+              <option value="paid">Cash / bank payments only</option>
+              <option value="adjustment">Adjustments only</option>
+              <option value="">Everything</option>
+            </select>
+          </label>
+          <label class="fld" style="flex:2 1 160px">Search<input class="in" type="search" id="e-q" placeholder="Name, description, voucher"></label>
+        </div>
+        <div class="tw" id="ent-table"></div>
+        <div class="pager" id="ent-pager"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════ TAB 4: LEDGER ═════════ -->
+  <section class="xpanel" id="tab4" role="tabpanel" aria-labelledby="tab4-btn" hidden>
+    <div class="tabhint" id="hint4"><span>The full account of any person, who entered what, and where the money went.</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="4">? How this works</button></div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="row filters">
+        <div class="seg" role="group" aria-label="Ledger view" id="led-view">
+          <button type="button" data-view="party" aria-pressed="true">By payee</button>
+          <button type="button" data-view="cash" aria-pressed="false">Cash book (by who entered)</button>
+          <button type="button" data-view="head" aria-pressed="false">By head</button>
+        </div>
+        <span style="flex:1"></span>
+        <label class="fld" id="l-party-wrap" style="flex:0 1 260px">Payee<select class="in" id="l-party"></select></label>
+        <label class="fld" style="flex:0 1 150px">From<input class="in" type="date" id="l-from"></label>
+        <label class="fld" style="flex:0 1 150px">To<input class="in" type="date" id="l-to"></label>
+      </div>
+      <div class="btnrow no-print">
+        <button class="btn ghost" type="button" id="l-print">Print</button>
+        <button class="btn ghost" type="button" id="l-export">Export Excel</button>
+      </div>
+    </div>
+    <div class="print-only" id="l-print-head"></div>
+    <div id="led-body"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script src="js/config-v2.js"></script>
+<script src="js/api.js"></script>
+<script src="js/expense-management.js"></script>
+</body>
+</html>

@@ -201,6 +201,9 @@ async function handleCreateCredentials(e) {
         var examToggle = document.getElementById('exam-access-toggle');
         var isExamActive = examToggle ? examToggle.checked : false;
 
+        var expenseToggle = document.getElementById('expense-access-toggle');
+        var isExpenseActive = expenseToggle ? expenseToggle.checked : false;
+
         const requestData = {
             staffId: staffId,
             password: password,
@@ -220,7 +223,15 @@ async function handleCreateCredentials(e) {
             canAccessExamSetup:   isExamActive ? document.getElementById('perm-setup').checked : false,
             canAccessMarksEntry:  isExamActive ? document.getElementById('perm-marks').checked : false,
             canAccessTabulation:  isExamActive ? document.getElementById('perm-tabulation').checked : false,
-            canAccessReportCards: isExamActive ? document.getElementById('perm-reports').checked : false
+            canAccessReportCards: isExamActive ? document.getElementById('perm-reports').checked : false,
+
+            // 🚨 EXPENSE MANAGEMENT 🚨
+            canAccessExpenseManagement: isExpenseActive,
+            canAccessExpenseTab1: isExpenseActive ? document.getElementById('perm-exp-tab1').checked : false,
+            canAccessExpenseTab2: isExpenseActive ? document.getElementById('perm-exp-tab2').checked : false,
+            canAccessExpenseTab3: isExpenseActive ? document.getElementById('perm-exp-tab3').checked : false,
+            canAccessExpenseTab4: isExpenseActive ? document.getElementById('perm-exp-tab4').checked : false,
+            canAccessExpenseAllEntries: isExpenseActive ? document.getElementById('perm-exp-all').checked : false
         };
         
         const response = await apiPost(API_ENDPOINTS.CREDENTIALS, requestData, true);
@@ -240,6 +251,11 @@ async function handleCreateCredentials(e) {
             document.getElementById('exam-toggle-slider').style.background = '#e2e8f0';
             document.getElementById('exam-toggle-knob').style.transform = 'translateX(0)';
             document.getElementById('exam-sub-options').style.display = 'none';
+
+            // Reset Expense visuals
+            document.getElementById('expense-toggle-slider').style.background = '#e2e8f0';
+            document.getElementById('expense-toggle-knob').style.transform = 'translateX(0)';
+            document.getElementById('expense-sub-options').style.display = 'none';
 
             await loadCredentialsData();
         } else {
@@ -275,9 +291,12 @@ function displayCredentials() {
         const hasFee = !!addAccess.canAccessFeeManagement;
         const hasExam = !!(addAccess.canAccessAdmitCards || addAccess.canAccessExamSetup || addAccess.canAccessMarksEntry || addAccess.canAccessTabulation || addAccess.canAccessReportCards);
         
+        const hasExpense = !!addAccess.canAccessExpenseManagement && !!(addAccess.canAccessExpenseTab1 || addAccess.canAccessExpenseTab2 || addAccess.canAccessExpenseTab3 || addAccess.canAccessExpenseTab4);
+
         let badgesHtml = '';
         if (hasFee) badgesHtml += '<span style="font-size:10px;background:#eef2ff;color:#4f46e5;border-radius:4px;padding:2px 6px;font-weight:700;margin-right:4px;">💰 Fee Management</span>';
-        if (hasExam) badgesHtml += '<span style="font-size:10px;background:#fffbeb;color:#d97706;border-radius:4px;padding:2px 6px;font-weight:700;">📝 Exam Management</span>';
+        if (hasExam) badgesHtml += '<span style="font-size:10px;background:#fffbeb;color:#d97706;border-radius:4px;padding:2px 6px;font-weight:700;margin-right:4px;">📝 Exam Management</span>';
+        if (hasExpense) badgesHtml += '<span style="font-size:10px;background:#ecfdf5;color:#059669;border-radius:4px;padding:2px 6px;font-weight:700;">🧾 Expense Management</span>';
 
         row.innerHTML = `
             <td><code style="background: var(--gray-100); padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace;">${cred.loginId || '-'}</code></td>
@@ -347,6 +366,19 @@ function updateCredential(id) {
     document.getElementById('update-perm-tabulation').checked = hasTabu;
     document.getElementById('update-perm-reports').checked = hasReports;
 
+    // Expense logic
+    var hasExpense = !!addAccess.canAccessExpenseManagement;
+    document.getElementById('update-expense-toggle').checked = hasExpense;
+    document.getElementById('update-expense-slider').style.background = hasExpense ? '#059669' : '#e2e8f0';
+    document.getElementById('update-expense-knob').style.transform = hasExpense ? 'translateX(20px)' : 'translateX(0)';
+    document.getElementById('update-expense-sub-options').style.display = hasExpense ? 'block' : 'none';
+
+    document.getElementById('update-perm-exp-tab1').checked = !!addAccess.canAccessExpenseTab1;
+    document.getElementById('update-perm-exp-tab2').checked = !!addAccess.canAccessExpenseTab2;
+    document.getElementById('update-perm-exp-tab3').checked = !!addAccess.canAccessExpenseTab3;
+    document.getElementById('update-perm-exp-tab4').checked = !!addAccess.canAccessExpenseTab4;
+    document.getElementById('update-perm-exp-all').checked = !!addAccess.canAccessExpenseAllEntries;
+
     document.getElementById('update-modal').style.display = 'flex';
 }
 
@@ -361,6 +393,7 @@ async function saveUpdatedCredential() {
     var password = document.getElementById('update-password').value.trim();
     var feeAccess = document.getElementById('update-fee-toggle').checked;
     var examAccess = document.getElementById('update-exam-toggle').checked;
+    var expenseAccess = document.getElementById('update-expense-toggle').checked;
     var btn = document.getElementById('update-save-btn');
 
     if (password && password.length < 6) return showError('Password must be at least 6 characters');
@@ -382,7 +415,15 @@ async function saveUpdatedCredential() {
             canAccessExamSetup:   examAccess ? document.getElementById('update-perm-setup').checked : false,
             canAccessMarksEntry:  examAccess ? document.getElementById('update-perm-marks').checked : false,
             canAccessTabulation:  examAccess ? document.getElementById('update-perm-tabulation').checked : false,
-            canAccessReportCards: examAccess ? document.getElementById('update-perm-reports').checked : false
+            canAccessReportCards: examAccess ? document.getElementById('update-perm-reports').checked : false,
+
+            // 🚨 EXPENSE MANAGEMENT 🚨
+            canAccessExpenseManagement: expenseAccess,
+            canAccessExpenseTab1: expenseAccess ? document.getElementById('update-perm-exp-tab1').checked : false,
+            canAccessExpenseTab2: expenseAccess ? document.getElementById('update-perm-exp-tab2').checked : false,
+            canAccessExpenseTab3: expenseAccess ? document.getElementById('update-perm-exp-tab3').checked : false,
+            canAccessExpenseTab4: expenseAccess ? document.getElementById('update-perm-exp-tab4').checked : false,
+            canAccessExpenseAllEntries: expenseAccess ? document.getElementById('update-perm-exp-all').checked : false
         }
     };
     if (password) updateData.password = password;
