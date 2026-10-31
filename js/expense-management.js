@@ -1251,7 +1251,7 @@ var TOUR_STEPS = [
   { tab: 3, sub: 'add', target: '#p-amount', title: 'Type the amount', text: 'The line below the form shows the balance after this payment. It turns orange if you are paying more than is due.' },
   { tab: 3, sub: 'add', target: '.autobox', title: 'Date, time and your name: automatic', text: 'These are added for you and nobody can type them. That is how every entry shows who made it.' },
   { tab: 3, sub: 'list', target: '#e-presets', title: 'Payment list: find any entry', text: 'Use Today, Yesterday, Last 7 days, This month or All time. “Get Report” downloads the list to Excel.' },
-  { tab: 3, sub: 'list', target: '#ent-table', title: 'Receipt, History, Reverse', text: 'Receipt prints a slip with the amount in words. History shows who entered or changed an entry. Reverse cancels a wrong entry: it stays visible but stops counting, so nothing is ever deleted and the books stay honest.\n(Edit and Reverse are for the owner.)' },
+  { tab: 3, sub: 'list', target: '#ent-table', prep: 'showSomeEntries', title: 'Receipt, History, Reverse', text: 'Receipt prints a slip with the amount in words. History shows who entered or changed an entry. Reverse cancels a wrong entry: it stays visible but stops counting, so nothing is ever deleted and the books stay honest.\n(Edit and Reverse are for the owner.)' },
 
   { tab: 4, target: '#led-view', title: 'The full account', text: 'By payee: one person’s account, newest first, with the opening and closing balance on every row.\nCash book: who entered what.\nBy head: where the money went.' },
   { tab: 4, target: '#l-export', title: 'Print or export', text: 'Pick the dates, then print the page or export it to Excel.' },
@@ -1289,6 +1289,7 @@ function tourEnd(markSeen) {
   if (root && root.parentNode) root.parentNode.removeChild(root);
   document.removeEventListener('keydown', tourKeys);
   if (T && markSeen !== false) tourMarkSeen();
+  if (T && T.saved) { $('e-from').value = T.saved.from; $('e-to').value = T.saved.to; markPreset(T.saved.preset); loadEntries(1); }
   if (T && T.back && currentTab() !== T.back) switchTab(T.back);
   T = null;
 }
@@ -1311,6 +1312,7 @@ function tourShow() {
   var st = T.steps[T.i];
   if (st.tab > 0 && currentTab() !== st.tab) switchTab(st.tab);
   if (st.sub) setSub(st.tab === 1 ? 't1' : 't3', st.sub);
+  if (st.prep === 'showSomeEntries') tourShowSomeEntries();
   var text = typeof st.text === 'function' ? st.text() : st.text;
   var last = T.i === T.steps.length - 1;
   var tip = document.getElementById('tour-tip');
@@ -1322,16 +1324,30 @@ function tourShow() {
   document.getElementById('tour-skip').onclick = function () { tourEnd(true); };
   document.getElementById('tour-next').onclick = function () { tourGo(1); };
   var back = document.getElementById('tour-back'); if (back) back.onclick = function () { tourGo(-1); };
-  tip.className = 'tour-tip center'; document.getElementById('tour-hl').hidden = true;   // centered until the target is found
+  tourCenter(tip); document.getElementById('tour-hl').hidden = true;   // centered until the target is found
   setTimeout(function () { if (T && T.steps[T.i] === st) tourPlace(st); }, 220);
+  setTimeout(function () { if (T && T.steps[T.i] === st) tourPlace(st); }, 900);   // again, in case data arrived after the first placement
   setTimeout(function () { var nb = document.getElementById('tour-next'); if (nb) nb.focus(); }, 30);
+}
+
+// Centre the box. The earlier step may have left an exact top/left on it, and those would beat the CSS, so clear them.
+function tourCenter(tip) {
+  tip.className = 'tour-tip center';
+  tip.style.top = ''; tip.style.left = ''; tip.style.transform = '';
+}
+
+// The Payment list opens on "Today", which is often empty. For this step show real entries so Receipt / History / Reverse are visible.
+function tourShowSomeEntries() {
+  if (S.entRows && S.entRows.length) return;
+  if (!T.saved) T.saved = { preset: S.preset, from: $('e-from').value, to: $('e-to').value };
+  applyPreset('all');
 }
 
 function tourPlace(st) {
   var tip = document.getElementById('tour-tip'), hl = document.getElementById('tour-hl');
   if (!tip || !hl) return;
   var el = st.target ? document.querySelector(st.target) : null;
-  if (!el || !el.getClientRects().length) { tip.className = 'tour-tip center'; hl.hidden = true; return; }
+  if (!el || !el.getClientRects().length) { tourCenter(tip); hl.hidden = true; return; }
   if (el.scrollIntoView) el.scrollIntoView({ block: 'center' });
   var r = el.getBoundingClientRect(), pad = 6;
   hl.hidden = false;
