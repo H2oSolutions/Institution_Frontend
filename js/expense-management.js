@@ -393,12 +393,12 @@ function submitStaffParties(e) {
   var ids = [].map.call(document.querySelectorAll('.staff-ck:checked'), function (c) { return c.value; });
   if (!ids.length) { toast('Tick at least one staff member', 'error'); return; }
   var body;
-  try { body = { staffIds: ids, monthlyAmount: optAmount($('ps-monthly').value, 'Monthly amount'), defaultHeadId: $('ps-head').value || undefined }; }
+try { body = { staffIds: ids, monthlyAmount: optAmount($('ps-monthly').value, 'Monthly amount'), dueDay: $('ps-dueday').value || undefined, defaultHeadId: $('ps-head').value || undefined }; }
   catch (err) { toast(errMsg(err), 'error'); return; }
   $('ps-add').disabled = true;
   aPost('/parties/from-staff', body).then(function (r) {
     var d = r.data; toast(d.created.length + ' payee' + (d.created.length === 1 ? '' : 's') + ' added' + (d.skipped.length ? ', ' + d.skipped.length + ' skipped' : ''));
-    $('ps-monthly').value = ''; return reloadTab1();
+    $('ps-monthly').value = ''; $('ps-dueday').value = ''; return reloadTab1();
   }).catch(function (err) { toast(errMsg(err), 'error'); })
     .then(function () { $('ps-add').disabled = false; });
 }
@@ -411,6 +411,7 @@ function submitManualParty(e) {
       source: 'manual', name: $('pm-name').value.trim(), role: $('pm-role').value.trim() || undefined,
       mobile: $('pm-mobile').value.trim() || undefined,
       monthlyAmount: optAmount($('pm-monthly').value, 'Monthly amount'),
+      dueDay: $('pm-dueday').value || undefined,
       openingBalance: optAmount($('pm-opening').value, 'Opening balance'),
       defaultHeadId: $('pm-head').value || undefined
     };
@@ -418,7 +419,7 @@ function submitManualParty(e) {
   if (!body.name) { toast('Enter a name', 'error'); return; }
   aPost('/parties', body).then(function () {
     toast('Payee added');
-    ['pm-name', 'pm-role', 'pm-mobile', 'pm-monthly', 'pm-opening'].forEach(function (id) { $(id).value = ''; });
+    ['pm-name', 'pm-role', 'pm-mobile', 'pm-monthly', 'pm-dueday', 'pm-opening'].forEach(function (id) { $(id).value = ''; });
     return reloadTab1();
   }).catch(function (err) { toast(errMsg(err), 'error'); });
 }
@@ -429,12 +430,13 @@ function editParty(id) {
     { key: 'name', label: 'Name', value: p.name },
     { key: 'role', label: 'Role', value: p.role },
     { key: 'mobile', label: 'Mobile', value: p.mobile || '' },
-    { key: 'monthlyAmount', label: 'Monthly amount (₹)', value: p.monthlyAmount || '', type: 'text', placeholder: '0' },
+   { key: 'monthlyAmount', label: 'Monthly amount (₹)', value: p.monthlyAmount || '', type: 'text', placeholder: '0' },
+    { key: 'dueDay', label: 'Installment date (1-31)', value: p.dueDay || '', type: 'number', placeholder: 'e.g. 5' },
     { key: 'defaultHeadId', label: 'Default head', type: 'select', value: p.defaultHeadId || '', options: [{ v: '', t: '— none —' }].concat(S.heads.map(function (h) { return { v: h._id, t: h.name }; })) }
   ];
   if (isOwner()) fields.push({ key: 'openingBalance', label: 'Opening balance (₹)', value: p.openingBalance || 0, hint: 'Positive = you owe them. Negative = advance already given. Changes the whole ledger.' });
   openForm('Edit payee', p.source === 'staff' ? 'Linked to a staff record.' : null, fields, 'Save changes', function (v) {
-    var body = { name: v.name, role: v.role, mobile: v.mobile, defaultHeadId: v.defaultHeadId || null };
+    var body = { name: v.name, role: v.role, mobile: v.mobile, defaultHeadId: v.defaultHeadId || null, dueDay: v.dueDay || null };
     var m = money(v.monthlyAmount === '' ? 0 : v.monthlyAmount); if (isNaN(m)) throw new Error('Monthly amount must be a number');
     body.monthlyAmount = m;
     if (isOwner()) { var o = money(v.openingBalance === '' ? 0 : v.openingBalance); if (isNaN(o)) throw new Error('Opening balance must be a number'); body.openingBalance = o; }
@@ -503,18 +505,47 @@ function renderDue() {
     '<div class="stat"><small>Paid in advance</small><b>' + inr(t.advances) + '</b></div>';
 
   var only = $('due-party').value;
-  var rows = S.dueRows.filter(function (r) { return !only || String(r.partyId) === only; });
-  if (!rows.length) {
+  var rawRows = S.dueRows.filter(function (r) { return !only || String(r.partyId) === only; });
+  if (!rawRows.length) {
     $('due-table').innerHTML = emptyBox('Nothing to show for ' + monthLabel(S.dueMonth),
       S.partiesAll.length ? 'Use “Generate monthly salary dues”, or add a due or bill.' : 'Add payees in the Expense Heads tab first.');
     return;
   }
+
+  // 1. SMART SORT: Unpaid first, then sorted by Earliest Due Date
+  var rows = rawRows.sort(function(a, b) {
+    var aUnpaid = (a.monthDue > a.monthPaid || a.closing > 0) ? 1 : 0;
+    var bUnpaid = (b.monthDue > b.monthPaid || b.closing > 0) ? 1 : 0;
+    if (aUnpaid !== bUnpaid) return bUnpaid - aUnpaid; 
+    var aDay = a.dueDay || 99;
+    var bDay = b.dueDay || 99;
+    if (aDay !== bDay) return aDay - bDay; 
+    return a.name.localeCompare(b.name);
+  });
+
+  var today = new Date();
+  var curM = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  var curD = today.getDate();
+
   $('due-table').innerHTML = '<table><thead><tr><th>Payee</th><th>Head</th><th class="n">Previous balance</th><th class="n">Due</th><th class="n">Paid</th><th class="n">Balance</th><th>Status</th><th></th></tr></thead><tbody>' +
     rows.map(function (r) {
+      // 2. OVERDUE ALERT LOGIC
+      var isOverdue = false;
+      if (r.dueDay && ((r.monthDue > 0 && r.monthDue > r.monthPaid) || r.closing > 0)) {
+         if (S.dueMonth < curM || (S.dueMonth === curM && curD > r.dueDay)) isOverdue = true;
+      }
+      var dateHtml = '';
+      if (r.monthDue > 0 && r.dueDay) {
+         var dStr = r.dueDay + ' ' + monthLabel(S.dueMonth).split(' ')[0].slice(0,3);
+         dateHtml = isOverdue 
+            ? '<br><span class="sm-t" style="color:var(--red); font-weight: 800;">⚠️ Overdue (' + dStr + ')</span>' 
+            : '<br><span class="sm-t" style="color:var(--brand-ink); font-weight: 700;">📅 ' + dStr + '</span>';
+      }
+
       return '<tr><td class="keep"><b>' + esc(r.name) + '</b><span class="sm-t">' + esc(r.role) + (r.isActive ? '' : ' · inactive') + '</span></td>' +
         '<td>' + esc(r.head || '–') + '</td>' +
         '<td class="n' + (r.previous < 0 ? ' neg' : '') + '">' + num(r.previous) + '</td>' +
-        '<td class="n">' + num(r.monthDue) + '</td><td class="n">' + num(r.monthPaid) + '</td>' +
+        '<td class="n">' + num(r.monthDue) + dateHtml + '</td><td class="n">' + num(r.monthPaid) + '</td>' +
         '<td class="n' + (r.closing < 0 ? ' neg' : '') + '"><b>' + num(r.closing) + '</b></td>' +
         '<td><span class="pill ' + esc(r.status) + '">' + esc(STATUS_TXT[r.status] || r.status) + '</span></td>' +
         '<td>' + (can(3) && r.isActive ? '<button class="btn ghost sm" type="button" data-act="pay-party" data-id="' + esc(r.partyId) + '">Pay</button>' : '') + '</td></tr>';
@@ -1099,17 +1130,34 @@ function exportDueReport() {
   var only = $('due-party').value;
   var rows = S.dueRows.filter(function (r) { return !only || String(r.partyId) === only; });
   if (!rows.length) { toast('There is nothing to export for this month', 'error'); return; }
+  
   var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Expenses due');
   headerRows(ws, 'Expenses due · ' + monthLabel(S.dueMonth), monthLabel(S.dueMonth));
-  ws.addRow(['Payee', 'Role', 'Head', 'Previous balance', 'Due', 'Paid', 'Balance', 'Status']).font = { bold: true };
+  
+  // 1. Added 'Installment Date' to the header
+  ws.addRow(['Payee', 'Role', 'Head', 'Installment Date', 'Previous balance', 'Due', 'Paid', 'Balance', 'Status']).font = { bold: true };
+  
   var t = { due: 0, paid: 0, bal: 0 };
   rows.forEach(function (r) {
-    ws.addRow([safeCell(r.name), safeCell(r.role), safeCell(r.head || ''), r.previous, r.monthDue, r.monthPaid, r.closing, STATUS_TXT[r.status] || r.status]);
-    t.due = Math.round((t.due + r.monthDue) * 100) / 100; t.paid = Math.round((t.paid + r.monthPaid) * 100) / 100; t.bal = Math.round((t.bal + r.closing) * 100) / 100;
+    // 2. Format the due date just like the UI (e.g., '25 Nov')
+    var dateStr = r.dueDay ? r.dueDay + ' ' + monthLabel(S.dueMonth).split(' ')[0].slice(0, 3) : '';
+    
+    // 3. Inserted dateStr into the row array
+    ws.addRow([safeCell(r.name), safeCell(r.role), safeCell(r.head || ''), dateStr, r.previous, r.monthDue, r.monthPaid, r.closing, STATUS_TXT[r.status] || r.status]);
+    
+    t.due = Math.round((t.due + r.monthDue) * 100) / 100; 
+    t.paid = Math.round((t.paid + r.monthPaid) * 100) / 100; 
+    t.bal = Math.round((t.bal + r.closing) * 100) / 100;
   });
+  
   ws.addRow([]);
-  ws.addRow(['Total', '', '', '', t.due, t.paid, t.bal]).font = { bold: true };
-  [26, 18, 22, 16, 12, 12, 14, 14].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
+  
+  // 4. Added an extra empty string '' so the totals align under the shifted columns
+  ws.addRow(['Total', '', '', '', '', t.due, t.paid, t.bal]).font = { bold: true };
+  
+  // 5. Added width '14' (the 4th number) for the new Installment Date column
+  [26, 18, 22, 14, 16, 12, 12, 14, 14].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
+  
   saveWorkbook(wb, 'Expenses-Due-' + S.dueMonth + '.xlsx');
 }
 

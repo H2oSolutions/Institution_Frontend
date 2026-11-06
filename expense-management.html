@@ -255,7 +255,8 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           <div class="cklist" id="staff-list" role="group" aria-label="Staff you can add"></div>
           <div class="row">
             <label class="fld">Monthly amount (optional)<input class="in" id="ps-monthly" inputmode="decimal" placeholder="₹ 0"></label>
-            <label class="fld">Default head<select class="in" id="ps-head"></select></label>
+          <label class="fld">Installment date (1-31)<input class="in" id="ps-dueday" type="number" min="1" max="31" placeholder="e.g. 5"></label>
+          <label class="fld">Default head<select class="in" id="ps-head"></select></label>
           </div>
           <div class="row" style="margin-top:10px">
             <button class="btn" type="submit" id="ps-add">Add selected staff</button>
@@ -272,6 +273,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           <div class="row" style="margin-top:10px">
             <label class="fld">Mobile (optional)<input class="in" id="pm-mobile" inputmode="tel" maxlength="15"></label>
             <label class="fld">Monthly amount<input class="in" id="pm-monthly" inputmode="decimal" placeholder="₹ 0"></label>
+            <label class="fld">Installment date (1-31)<input class="in" id="pm-dueday" type="number" min="1" max="31" placeholder="e.g. 5"></label>
             <label class="fld">Opening balance<input class="in" id="pm-opening" inputmode="decimal" placeholder="₹ 0" title="Positive = you owe them. Negative = advance already given."></label>
           </div>
           <div class="row" style="margin-top:10px">
