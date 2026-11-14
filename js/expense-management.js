@@ -262,8 +262,8 @@ function boot() {
 ═══════════════════════════════════════════════════════════════ */
 var SUGGESTED_HEADS = [
   { name: 'Salary - Staff', type: 'payee' }, { name: 'Salary - Helpers', type: 'payee' },
-  { name: 'Electricity', type: 'oneoff' }, { name: 'Repairs & Maintenance', type: 'oneoff' },
-  { name: 'Stationery & Books', type: 'oneoff' }, { name: 'Events', type: 'oneoff' }
+  { name: 'Electricity', type: 'payee' }, { name: 'Repairs & Maintenance', type: 'payee' },
+  { name: 'Stationery & Books', type: 'payee' }, { name: 'Events', type: 'payee' }
 ];
 
 function can(tab) { return !!(S.me && S.me.perms && S.me.perms['tab' + tab]); }
@@ -276,7 +276,7 @@ function renderHeads() {
   var list = S.headsAll.filter(function (h) { return showOff || h.isActive; });
   $('head-list').innerHTML = list.length ? list.map(function (h) {
     return '<div class="li' + (h.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(h.name) + '</b>' +
-      '<small>' + (h.type === 'payee' ? 'Payee ledger' : 'One-off') + ' · ' + h.entryCount + ' entr' + (h.entryCount === 1 ? 'y' : 'ies') + (h.isActive ? '' : ' · inactive') + '</small></div>' +
+      '<small>Payee ledger · ' + h.entryCount + ' entr' + (h.entryCount === 1 ? 'y' : 'ies') + (h.isActive ? '' : ' · inactive') + '</small></div>' +
       '<div><button class="btn ghost sm" type="button" data-act="edit-head" data-id="' + esc(h._id) + '">Edit</button> ' +
       '<button class="btn ' + (h.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-head" data-id="' + esc(h._id) + '">' + (h.isActive ? 'Deactivate' : 'Activate') + '</button>' +
       (h.entryCount === 0 ? ' <button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' : '') + '</div></div>';
@@ -352,18 +352,15 @@ function submitHead(e) {
   e.preventDefault();
   var name = $('head-name').value.trim();
   if (!name) return;
-  createHead(name, $('head-type').value).then(function () { $('head-name').value = ''; $('head-name').focus(); })
+  createHead(name, 'payee').then(function () { $('head-name').value = ''; $('head-name').focus(); })
     .catch(function (err) { toast(errMsg(err), 'error'); });
 }
 
 function editHead(id) {
   var h = byId(S.headsAll, id); if (!h) return;
   var fields = [{ key: 'name', label: 'Head name', value: h.name }];
-  if (!h.entryCount) fields.push({ key: 'type', label: 'Type', type: 'select', value: h.type, options: [{ v: 'oneoff', t: 'One-off expense' }, { v: 'payee', t: 'Salary / payee ledger' }] });
-  else fields.push({ key: 'note', label: 'Type', type: 'text', value: h.type === 'payee' ? 'Payee ledger' : 'One-off', hint: 'Type is locked once a head has entries.' });
   openForm('Edit head', null, fields, 'Save changes', function (v) {
-    var body = { name: v.name };
-    if (v.type) body.type = v.type;
+    var body = { name: v.name, type: 'payee' };
     return aPut('/heads/' + id, body).then(function () { toast('Head updated'); return reloadTab1(); });
   });
 }
@@ -645,7 +642,7 @@ function addDue() {
 ═══════════════════════════════════════════════════════════════ */
 function fillPayForm() {
   var curP = $('p-party').value, curH = $('p-head').value, curA = $('p-adv').value;
-  $('p-party').innerHTML = '<option value="">' + (S.payType === 'adjustment' ? '— choose payee —' : '— no payee (one-off) —') + '</option>' +
+  $('p-party').innerHTML = '<option value="">— choose payee —</option>' +
     S.parties.map(function (p) { return '<option value="' + esc(p._id) + '">' + esc(p.name) + ' · ' + esc(p.role) + '</option>'; }).join('');
   $('p-head').innerHTML = '<option value="">— choose head —</option>' + S.heads.map(function (h) { return '<option value="' + esc(h._id) + '">' + esc(h.name) + '</option>'; }).join('');
   $('p-adv').innerHTML = S.advisors.length
@@ -678,11 +675,11 @@ function syncPayForm() {
   var adj = S.payType === 'adjustment';
   var party = byId(S.parties, $('p-party').value);
   var head = byId(S.heads, $('p-head').value);
-  $('p-name-row').hidden = !!party || adj;
+  $('p-name-row').hidden = true;
   $('p-mode-wrap').hidden = adj;
   $('p-desc').placeholder = adj ? 'e.g. Books adjusted' : 'e.g. To Guard, salary';
   $('p-save').textContent = adj ? 'Save adjustment' : 'Save payment';
-  var first = $('p-party').options[0]; if (first && !$('p-party').value) first.textContent = adj ? '— choose payee —' : '— no payee (one-off) —';
+  var first = $('p-party').options[0]; if (first && !$('p-party').value) first.textContent = '— choose payee —';
 
   var pv = $('p-preview'), amt = money($('p-amount').value);
   if (party) {
@@ -695,8 +692,6 @@ function syncPayForm() {
       pv.hidden = false; pv.className = 'preview';
       pv.textContent = 'Current balance: ' + (before < 0 ? inr(Math.abs(before)) + ' advance given' : before > 0 ? inr(before) + ' owed to ' + party.name : 'settled');
     }
-  } else if (head && head.type === 'payee') {
-    pv.hidden = false; pv.className = 'preview warn'; pv.textContent = '“' + head.name + '” is a payee head. Choose who is being paid.';
   } else pv.hidden = true;
 }
 
@@ -716,7 +711,7 @@ function submitPayment(e) {
   if (!$('p-head').value) { toast('Choose a head', 'error'); return; }
   if (!$('p-desc').value.trim()) { toast('Write a description', 'error'); $('p-desc').focus(); return; }
   if (isNaN(amt) || amt <= 0) { toast('Enter an amount greater than zero', 'error'); return; }
-  if (adj && !$('p-party').value) { toast('Choose the payee whose ledger this adjusts', 'error'); return; }
+  if (!$('p-party').value) { toast('Choose a payee', 'error'); return; }
   if (S.advisors.length && !$('p-adv').value) { toast('Choose who advised this payment', 'error'); return; }
   var body = {
     type: S.payType, headId: $('p-head').value, partyId: $('p-party').value || undefined,
@@ -749,9 +744,21 @@ S.entRows = []; S.preset = 'today'; S.entInit = false;
 TAB_LOADERS[3] = function () {
   loadLookupsOnce().then(function () {
     fillPayForm();
+    fillEnteredByFilter();
     if (!S.entInit) { S.entInit = true; applyPreset('today'); } else loadEntries(S.ent.page || 1);
   }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
+
+function fillEnteredByFilter() {
+  if (!$('e-by')) return;
+  var cur = $('e-by').value;
+  var opts = '<option value="">All staff</option><option value="admin">Owner / Admin</option>';
+  if (S.staffOpts && S.staffOpts.length) {
+    opts += S.staffOpts.map(function (s) { return '<option value="' + esc(s._id) + '">' + esc(s.name) + '</option>'; }).join('');
+  }
+  $('e-by').innerHTML = opts;
+  $('e-by').value = cur;
+}
 
 function shiftYmd(n) { return ymd(new Date(Date.now() + n * 86400000)); }
 function presetRange(name) {
@@ -774,7 +781,7 @@ function applyPreset(name) {
   loadEntries(1);
 }
 
-function entFilters() { return { from: $('e-from').value, to: $('e-to').value, type: $('e-type').value, q: $('e-q').value.trim() }; }
+function entFilters() { return { from: $('e-from').value, to: $('e-to').value, type: $('e-type').value, enteredBy: $('e-by') ? $('e-by').value : '', q: $('e-q').value.trim() }; }
 
 function entPeriodText() {
   var f = $('e-from').value, t = $('e-to').value;
@@ -1526,6 +1533,7 @@ function wireEvents() {
   $('e-presets').addEventListener('click', function (e) { var b = e.target.closest('button[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   ['e-from', 'e-to'].forEach(function (id) { $(id).addEventListener('change', function () { markPreset(''); loadEntries(1); }); });
   $('e-type').addEventListener('change', function () { loadEntries(1); });
+  if ($('e-by')) $('e-by').addEventListener('change', function () { loadEntries(1); });
   $('e-report').addEventListener('click', exportEntriesReport);
   $('e-print').addEventListener('click', printEntries);
   $('e-q').addEventListener('input', debounce(function () { loadEntries(1); }, 350));

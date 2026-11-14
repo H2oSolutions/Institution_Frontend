@@ -228,12 +228,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
         <p class="sub">The categories you spend on. Create them once, then pick them when you record a payment.</p>
         <form class="row" id="head-form" autocomplete="off">
           <label class="fld" style="flex:2 1 150px">Head name<input class="in" id="head-name" maxlength="80" placeholder="e.g. Electricity" required></label>
-          <label class="fld">Type
-            <select class="in" id="head-type">
-              <option value="oneoff">One-off expense</option>
-              <option value="payee">Salary / payee ledger</option>
-            </select>
-          </label>
+          
           <button class="btn" type="submit">Add head</button>
         </form>
         <p class="hint" style="margin-top:6px">“Salary / payee ledger” heads always need a person or vendor, so every payment builds their ledger.</p>
@@ -404,8 +399,8 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           <button class="btn ghost" type="button" id="e-print">Print</button>
         </div>
         <div class="row filters" style="margin-bottom:12px">
-          <label class="fld" style="flex:0 1 150px">From<input class="in" type="date" id="e-from"></label>
-          <label class="fld" style="flex:0 1 150px">To<input class="in" type="date" id="e-to"></label>
+          <label class="fld" style="flex:0 1 140px">From<input class="in" type="date" id="e-from"></label>
+          <label class="fld" style="flex:0 1 140px">To<input class="in" type="date" id="e-to"></label>
           <label class="fld">Show
             <select class="in" id="e-type">
               <option value="money" selected>Money paid (payments + adjustments)</option>
@@ -413,6 +408,11 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
               <option value="paid">Cash / bank payments only</option>
               <option value="adjustment">Adjustments only</option>
               <option value="">Everything</option>
+            </select>
+          </label>
+          <label class="fld">Entered by
+            <select class="in" id="e-by">
+              <option value="">All staff</option>
             </select>
           </label>
           <label class="fld" style="flex:2 1 160px">Search<input class="in" type="search" id="e-q" placeholder="Name, description, voucher"></label>
