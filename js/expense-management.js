@@ -17,7 +17,8 @@ var S = {
   ent: { page: 1, pages: 1, total: 0 },
   ledView: 'party', ledData: null,
   dueMonth: '', dueRows: [], dueTotals: null,
-  entReq: 0, dueReq: 0, ledReq: 0     // newest request wins: a slow old answer must never overwrite a newer one
+  entReq: 0, dueReq: 0, ledReq: 0,    // newest request wins: a slow old answer must never overwrite a newer one
+  todayDueReq: 0, todayDueRows: []
 };
 
 /* ───────────────────────── tiny helpers ───────────────────────── */
@@ -490,7 +491,7 @@ function fillDueParties() {
 TAB_LOADERS[2] = function () {
   if (!S.dueMonth) { S.dueMonth = thisMonth(); $('due-month').value = S.dueMonth; }
   loadSettings();
-  loadLookupsOnce().then(function () { fillDueParties(); loadDue(); }).catch(function (e) { toast(errMsg(e), 'error'); });
+  loadLookupsOnce().then(function () { fillDueParties(); loadDue(); loadTodayDues(); }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
 
 function loadDue() {
@@ -610,7 +611,7 @@ function checkAutoDues() {
     if (d && d.created > 0) {
       var months = d.runs.filter(function (x) { return x.created; }).map(function (x) { return monthLabel(x.month); }).join(', ');
       toast('Auto dues created for ' + months + ' (' + d.created + ' payee' + (d.created === 1 ? '' : 's') + ')');
-      if (!$('tab2').hidden) loadDue();
+      if (!$('tab2').hidden) { loadDue(); loadTodayDues(); }
     }
   }).catch(function () { /* the hourly job will try again */ });
 }
@@ -629,6 +630,7 @@ function generateDues() {
             problems.map(function (x) { return '<div class="li"><span>' + esc(x.name) + '</span><span class="hint">' + esc(x.reason) + '</span></div>'; }).join(''));
         }
         loadDue();
+        loadTodayDues();
       });
     }).catch(function (e) { toast(errMsg(e), 'error'); });
 }
@@ -652,7 +654,7 @@ function addDue() {
     var amt = money(v.amount); if (isNaN(amt) || amt <= 0) throw new Error('Enter an amount greater than zero');
     if (!v.description.trim()) throw new Error('Write a description');
     return aPost('/dues', { partyId: v.partyId, headId: v.headId, description: v.description.trim(), amount: amt, forMonth: v.forMonth || undefined, reference: v.reference || undefined, remark: v.remark || undefined })
-      .then(function () { toast('Due added'); loadDue(); });
+      .then(function () { toast('Due added'); loadDue(); loadTodayDues(); });
   });
   var pSel = document.getElementById('ff-partyId');
   var hSel = document.getElementById('ff-headId');
@@ -670,6 +672,44 @@ function addDue() {
     syncDueModal(false);
     pSel.addEventListener('change', function () { syncDueModal(true); });
   }
+}
+
+function loadTodayDues() {
+  var box = $('t2-today-table');
+  if (!box) return;
+  var my = ++S.todayDueReq, t = todayYmd();
+  box.innerHTML = '<div class="empty"><span class="spin"></span>Loading…</div>';
+  aGet('/entries', { from: t, to: t, type: 'due', page: 1, limit: 100 }).then(function (r) {
+    if (my !== S.todayDueReq) return;
+    S.todayDueRows = r.data || [];
+    var tot = r.totals || {};
+    if ($('t2-today-sub')) {
+      $('t2-today-sub').textContent = fmtD(t + 'T12:00:00+05:30') + ' · Total due entered today: ' + inr(tot.due) +
+        (S.todayDueRows.length ? ' (' + S.todayDueRows.length + ' entr' + (S.todayDueRows.length === 1 ? 'y' : 'ies') + ')' : '');
+    }
+    if (!S.todayDueRows.length) {
+      box.innerHTML = emptyBox('No dues entered today yet', 'Any due or bill you add or generate today will appear here automatically.');
+      return;
+    }
+    box.innerHTML = '<table><thead><tr><th>Sr. No.</th><th>Time</th><th>Payee</th><th>Head</th><th>Description</th><th class="n">Amount</th><th>Entered by</th><th>Remarks</th><th></th></tr></thead><tbody>' +
+      S.todayDueRows.map(function (e) {
+        var rev = e.status === 'reversed';
+        var sub = [e.forMonth ? monthLabel(e.forMonth) : '', e.reference ? 'Bill: ' + e.reference : '', e.source === 'auto' ? 'auto' : ''].filter(Boolean).join(' · ');
+        var remarks = (e.remark ? esc(e.remark) : '') + (rev ? '<span class="sm-t" style="color:var(--red)">Reversed: ' + esc(e.reversedReason || '') + '</span>' : '');
+        var acts = '<button class="btn ghost sm" type="button" data-act="audit" data-id="' + esc(e._id) + '">History</button>';
+        if (isOwner() && !rev) acts += ' <button class="btn ghost sm" type="button" data-act="edit-entry" data-id="' + esc(e._id) + '">Edit</button> <button class="btn danger sm" type="button" data-act="reverse-entry" data-id="' + esc(e._id) + '">Reverse</button>';
+        return '<tr' + (rev ? ' class="rev"' : '') + '>' +
+          '<td class="keep"><b>' + esc(e.voucherNo) + '</b></td>' +
+          '<td>' + esc(fmtT(e.entryDate)) + '</td>' +
+          '<td class="keep"><b>' + esc(e.partyName || e.payeeName || '–') + '</b></td>' +
+          '<td>' + esc(e.headName) + (sub ? '<span class="sm-t">' + esc(sub) + '</span>' : '') + '</td>' +
+          '<td>' + esc(descOf(e)) + '</td>' +
+          '<td class="n"><b>' + num(e.amount) + '</b></td>' +
+          '<td>' + who(e.enteredBy) + '</td>' +
+          '<td>' + remarks + '</td>' +
+          '<td class="keep">' + acts + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).catch(function (e) { if (my === S.todayDueReq) box.innerHTML = emptyBox('Could not load today’s dues', errMsg(e)); });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -897,7 +937,7 @@ function showAudit(id) {
 }
 
 function editEntry(id) {
-  var e = byId(S.entRows, id); if (!e) return;
+  var e = byId(S.entRows, id) || byId(S.todayDueRows, id); if (!e) return;
   var fields = [{ key: 'description', label: 'Description', value: e.description || '' }, { key: 'amount', label: 'Amount (₹)', value: e.amount }];
   fields.push({ key: 'headId', label: 'Head', type: 'select', value: e.headId, options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) });
   if (e.type === 'paid') fields.push({ key: 'mode', label: 'Mode', type: 'select', value: e.mode || 'cash', options: ['cash', 'bank', 'upi', 'cheque', 'other'].map(function (m) { return { v: m, t: m.toUpperCase() }; }) });
@@ -921,12 +961,12 @@ function editEntry(id) {
       if (code) body.deleteCode = code;
       return aPut('/entries/' + id, body);
     }).catch(function (err) { codeFailed(err); throw err; })
-      .then(function () { toast('Entry updated'); return refreshParties().then(function () { loadEntries(S.ent.page); }); });
+      .then(function () { toast('Entry updated'); return refreshParties().then(function () { loadEntries(S.ent.page); if (!$('tab2').hidden) { loadDue(); loadTodayDues(); } }); });
   });
 }
 
 function reverseEntry(id) {
-  var e = byId(S.entRows, id); if (!e) return;
+  var e = byId(S.entRows, id) || byId(S.todayDueRows, id); if (!e) return;
   openForm('Reverse ' + e.voucherNo + '?', 'The entry stays visible, struck through, and stops counting in the balance. This cannot be undone.', [
     { key: 'reason', label: 'Reason (required)', type: 'textarea', value: '' }
   ], 'Reverse entry', function (v) {
@@ -935,7 +975,7 @@ function reverseEntry(id) {
       var body = { reason: v.reason.trim() }; if (code) body.deleteCode = code;
       return aPost('/entries/' + id + '/reverse', body);
     }).catch(function (err) { codeFailed(err); throw err; })
-      .then(function () { toast('Entry reversed'); return refreshParties().then(function () { fillPayForm(); loadEntries(S.ent.page); }); });
+      .then(function () { toast('Entry reversed'); return refreshParties().then(function () { fillPayForm(); loadEntries(S.ent.page); if (!$('tab2').hidden) { loadDue(); loadTodayDues(); } }); });
   });
 }
 
