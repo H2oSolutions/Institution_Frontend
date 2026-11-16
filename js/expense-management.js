@@ -273,14 +273,15 @@ function emptyBox(title, text) { return '<div class="empty"><b>' + esc(title) + 
 
 function renderHeads() {
   var showOff = $('head-inactive').checked;
-  var list = S.headsAll.filter(function (h) { return showOff || h.isActive; });
+  var q = ($('head-search') ? $('head-search').value : '').trim().toLowerCase();
+  var list = S.headsAll.filter(function (h) { return (showOff || h.isActive) && (!q || h.name.toLowerCase().indexOf(q) >= 0); });
   $('head-list').innerHTML = list.length ? list.map(function (h) {
     return '<div class="li' + (h.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(h.name) + '</b>' +
       '<small>Payee ledger · ' + h.entryCount + ' entr' + (h.entryCount === 1 ? 'y' : 'ies') + (h.isActive ? '' : ' · inactive') + '</small></div>' +
       '<div><button class="btn ghost sm" type="button" data-act="edit-head" data-id="' + esc(h._id) + '">Edit</button> ' +
       '<button class="btn ' + (h.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-head" data-id="' + esc(h._id) + '">' + (h.isActive ? 'Deactivate' : 'Activate') + '</button>' +
       (h.entryCount === 0 ? ' <button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' : '') + '</div></div>';
-  }).join('') : emptyBox('No heads yet', 'Add your first head above, or tap a suggestion.');
+  }).join('') : (q ? emptyBox('No matching heads', 'No head matched “' + q + '”.') : emptyBox('No heads yet', 'Add your first head above, or tap a suggestion.'));
 
   var have = {}; S.headsAll.forEach(function (h) { have[h.name.toLowerCase()] = 1; });
   var sugg = SUGGESTED_HEADS.filter(function (x) { return !have[x.name.toLowerCase()]; });
@@ -305,17 +306,26 @@ function balLabel(b) {
 
 function renderParties() {
   var showOff = $('party-inactive').checked;
-  var list = S.partiesAll.filter(function (p) { return showOff || p.isActive; });
+  var q = ($('party-search') ? $('party-search').value : '').trim().toLowerCase();
+  var list = S.partiesAll.filter(function (p) {
+    if (!showOff && !p.isActive) return false;
+    if (!q) return true;
+    var h = p.defaultHeadId ? byId(S.headsAll, p.defaultHeadId) : null;
+    var hay = (p.name + ' ' + (p.role || '') + ' ' + (p.mobile || '') + ' ' + (h ? h.name : '')).toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
   $('party-list').innerHTML = list.length ? list.map(function (p) {
+    var h = p.defaultHeadId ? byId(S.headsAll, p.defaultHeadId) : null;
     return '<div class="li' + (p.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(p.name) + '</b> <span class="pill">' + (p.source === 'staff' ? 'Staff' : 'Manual') + '</span>' +
-      '<small>' + esc(p.role) + (p.monthlyAmount > 0 ? ' · ' + inr(p.monthlyAmount) + ' / month' : '') + ' · ' + balLabel(p.balance || 0) + '</small></div>' +
+      '<small>' + esc(p.role) + (h ? ' · Head: <b>' + esc(h.name) + '</b>' : '') + (p.monthlyAmount > 0 ? ' · ' + inr(p.monthlyAmount) + ' / month' : '') + ' · ' + balLabel(p.balance || 0) + '</small></div>' +
       '<div><button class="btn ghost sm" type="button" data-act="edit-party" data-id="' + esc(p._id) + '">Edit</button> ' +
       '<button class="btn ' + (p.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-party" data-id="' + esc(p._id) + '">' + (p.isActive ? 'Deactivate' : 'Activate') + '</button>' +
       (p.entryCount === 0 ? ' <button class="btn danger sm" type="button" data-act="delete-party" data-id="' + esc(p._id) + '">Delete</button>' : '') + '</div></div>';
-  }).join('') : emptyBox('No payees yet', 'Pick staff from the list above, or add a helper or vendor manually.');
+  }).join('') : (q ? emptyBox('No matching payees', 'No payee matched “' + q + '”.') : emptyBox('No payees yet', 'Pick staff from the list above, or add a helper or vendor manually.'));
 }
 
 function renderStaffList() {
+  $('staff-search').hidden = S.staffOpts.length === 0;
   var q = ($('staff-search').value || '').trim().toLowerCase();
   var list = S.staffOpts.filter(function (s) { return !q || (s.name + ' ' + (s.designation || '')).toLowerCase().indexOf(q) >= 0; });
   $('staff-list').innerHTML = list.length ? list.map(function (s) {
@@ -502,7 +512,12 @@ function renderDue() {
     '<div class="stat"><small>Paid in advance</small><b>' + inr(t.advances) + '</b></div>';
 
   var only = $('due-party').value;
-  var rawRows = S.dueRows.filter(function (r) { return !only || String(r.partyId) === only; });
+  var dq = ($('due-q') ? $('due-q').value : '').trim().toLowerCase();
+  var rawRows = S.dueRows.filter(function (r) {
+    if (only && String(r.partyId) !== only) return false;
+    if (dq && (r.name + ' ' + (r.head || '') + ' ' + (r.role || '')).toLowerCase().indexOf(dq) < 0) return false;
+    return true;
+  });
   if (!rawRows.length) {
     $('due-table').innerHTML = emptyBox('Nothing to show for ' + monthLabel(S.dueMonth),
       S.partiesAll.length ? 'Use “Generate monthly salary dues”, or add a due or bill.' : 'Add payees in the Expense Heads tab first.');
@@ -621,20 +636,40 @@ function generateDues() {
 function addDue() {
   if (!S.parties.length) { toast('Add a payee first (Expense Heads tab)', 'error'); return; }
   if (!S.heads.length) { toast('Add a head first (Expense Heads tab)', 'error'); return; }
+  var initPartyId = $('due-party').value || String(S.parties[0]._id);
+  var initParty = byId(S.parties, initPartyId);
+  var initHeadId = (initParty && initParty.defaultHeadId && byId(S.heads, initParty.defaultHeadId)) ? initParty.defaultHeadId : '';
   openForm('Add a due or bill', 'Money you owe a payee, like a salary or a supplier’s bill. It is recorded under: ' + whoAmI() + ' (automatic).', [
-    { key: 'partyId', label: 'Payee', type: 'select', value: $('due-party').value || '', options: S.parties.map(function (p) { return { v: p._id, t: p.name }; }) },
-    { key: 'headId', label: 'Head', type: 'select', value: '', options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) },
+    { key: 'partyId', label: 'Payee', type: 'select', value: initPartyId, options: S.parties.map(function (p) { return { v: p._id, t: p.name }; }) },
+    { key: 'headId', label: 'Head (auto-picked from payee)', type: 'select', value: initHeadId, options: [{ v: '', t: '— choose head —' }].concat(S.heads.map(function (h) { return { v: h._id, t: h.name }; })) },
     { key: 'description', label: 'Description', value: '', placeholder: 'e.g. September salary' },
-    { key: 'amount', label: 'Amount (₹)', value: '', placeholder: '0' },
+    { key: 'amount', label: 'Amount (₹)', value: (initParty && initParty.monthlyAmount > 0) ? initParty.monthlyAmount : '', placeholder: '0' },
     { key: 'forMonth', label: 'For month', type: 'month', value: S.dueMonth },
     { key: 'reference', label: 'Bill number (optional)', value: '' },
     { key: 'remark', label: 'Remarks (optional)', type: 'textarea', value: '' }
   ], 'Add due', function (v) {
+    if (!v.headId) throw new Error('Choose a head (or set a default head for this payee first)');
     var amt = money(v.amount); if (isNaN(amt) || amt <= 0) throw new Error('Enter an amount greater than zero');
     if (!v.description.trim()) throw new Error('Write a description');
     return aPost('/dues', { partyId: v.partyId, headId: v.headId, description: v.description.trim(), amount: amt, forMonth: v.forMonth || undefined, reference: v.reference || undefined, remark: v.remark || undefined })
       .then(function () { toast('Due added'); loadDue(); });
   });
+  var pSel = document.getElementById('ff-partyId');
+  var hSel = document.getElementById('ff-headId');
+  var aInp = document.getElementById('ff-amount');
+  function syncDueModal(fillAmount) {
+    var p = byId(S.parties, pSel.value);
+    var hasDef = !!(p && p.defaultHeadId && byId(S.heads, p.defaultHeadId));
+    if (hSel) {
+      if (hasDef) { hSel.value = p.defaultHeadId; hSel.disabled = true; }
+      else { hSel.disabled = false; if (fillAmount) hSel.value = ''; }
+    }
+    if (fillAmount && p && aInp) aInp.value = p.monthlyAmount > 0 ? p.monthlyAmount : '';
+  }
+  if (pSel) {
+    syncDueModal(false);
+    pSel.addEventListener('change', function () { syncDueModal(true); });
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -674,7 +709,13 @@ function autoDescribe() {
 function syncPayForm() {
   var adj = S.payType === 'adjustment';
   var party = byId(S.parties, $('p-party').value);
-  var head = byId(S.heads, $('p-head').value);
+  var hasDefHead = !!(party && party.defaultHeadId && byId(S.heads, party.defaultHeadId));
+  if (hasDefHead) {
+    $('p-head').value = party.defaultHeadId;
+    $('p-head').disabled = true;
+  } else {
+    $('p-head').disabled = false;
+  }
   $('p-name-row').hidden = true;
   $('p-mode-wrap').hidden = adj;
   $('p-desc').placeholder = adj ? 'e.g. Books adjusted' : 'e.g. To Guard, salary';
@@ -745,6 +786,9 @@ TAB_LOADERS[3] = function () {
   loadLookupsOnce().then(function () {
     fillPayForm();
     fillEnteredByFilter();
+    if (!S.staffOpts.length) {
+      aGet('/staff-options').then(function (r) { S.staffOpts = r.data || []; fillEnteredByFilter(); }).catch(function () {});
+    }
     if (!S.entInit) { S.entInit = true; applyPreset('today'); } else loadEntries(S.ent.page || 1);
   }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
@@ -1291,7 +1335,7 @@ var TOUR_STEPS = [
     var names = { 1: 'Expense Heads (set things up once)', 2: 'Expenses Due (who you owe this month)', 3: 'Expenses Paid (record every payment)', 4: 'Ledger (the full account of any person)' };
     return allowedTabs().map(function (i) { return '• ' + names[i]; }).join('\n') + '\nYou only see the tabs you have access to.'; } },
 
-  { tab: 1, sub: 'heads', target: '#head-form', title: 'Heads: what you spend on', text: 'Heads are labels for your spending, like Salary, Electricity or Repairs. Create each one once.\nChoose “Salary / payee ledger” when the money goes to a person, and “One-off” for ordinary bills.\nTip: 5 to 10 heads are plenty.' },
+  { tab: 1, sub: 'heads', target: '#head-form', title: 'Heads: what you spend on', text: 'Heads are labels for your spending, like Salary, Electricity or Repairs. Create each one once.\nEvery head links to a person or vendor so every payment builds their ledger.\nTip: 5 to 10 heads are plenty.' },
   { tab: 1, sub: 'payees', target: '#party-mode', title: 'Payees: who you pay', text: 'Payees are the people and shops you pay. Pick teachers from your staff list, or add helpers, drivers and vendors by hand.\nEvery payee gets a personal account that tracks what you owe them.' },
   { tab: 1, sub: 'payees', target: '#ps-monthly', title: 'Monthly amount = the salary plan', text: 'Type the monthly salary here, for example 20000. It is only a plan: each month it becomes “money to pay” by itself, on the day you choose in the Expenses Due tab.' },
   { tab: 1, sub: 'adv', target: '#t1-adv', title: 'Advised by: who approved', text: 'List the people who approve payments, for example Principal, Manager and Director.\nOnce you add a name, choosing one becomes required on every payment, so you always know who said yes.' },
@@ -1471,7 +1515,8 @@ var ACTIONS = {
     setTimeout(function () {
       $('p-party').value = el.dataset.id;
       var p = byId(S.parties, el.dataset.id);
-      if (p && p.defaultHeadId && !$('p-head').value) $('p-head').value = p.defaultHeadId;
+      if (p && p.defaultHeadId && byId(S.heads, p.defaultHeadId)) $('p-head').value = p.defaultHeadId;
+      else $('p-head').value = '';
       autoDescribe(); syncPayForm(); $('p-amount').focus();
     }, 250);
   },
@@ -1502,12 +1547,15 @@ function wireEvents() {
 
   // tab 1
   $('head-form').addEventListener('submit', submitHead);
+  if ($('head-search')) $('head-search').addEventListener('input', renderHeads);
   $('head-inactive').addEventListener('change', renderHeads);
   $('party-mode').addEventListener('click', function (e) { var b = e.target.closest('button[data-mode]'); if (b) setPartyMode(b.dataset.mode); });
   $('staff-search').addEventListener('input', renderStaffList);
+  $('staff-search').addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
   $('party-staff-form').addEventListener('submit', submitStaffParties);
   $('ps-all').addEventListener('click', function () { [].forEach.call(document.querySelectorAll('.staff-ck'), function (c) { c.checked = true; }); });
   $('party-manual-form').addEventListener('submit', submitManualParty);
+  if ($('party-search')) $('party-search').addEventListener('input', renderParties);
   $('party-inactive').addEventListener('change', renderParties);
   $('adv-form').addEventListener('submit', submitAdvisor);
 
@@ -1516,6 +1564,7 @@ function wireEvents() {
   $('due-presets').addEventListener('click', function (e) { var b = e.target.closest('button[data-preset]'); if (b) setDueMonth(b.dataset.preset); });
   $('due-report').addEventListener('click', exportDueReport);
   $('due-party').addEventListener('change', renderDue);
+  if ($('due-q')) $('due-q').addEventListener('input', renderDue);
   $('due-generate').addEventListener('click', generateDues);
   $('due-add').addEventListener('click', addDue);
 
@@ -1523,7 +1572,8 @@ function wireEvents() {
   $('pay-type').addEventListener('click', function (e) { var b = e.target.closest('button[data-type]'); if (b) setPayType(b.dataset.type); });
   $('p-party').addEventListener('change', function () {
     var p = byId(S.parties, $('p-party').value);
-    if (p && p.defaultHeadId && !$('p-head').value) $('p-head').value = p.defaultHeadId;
+    if (p && p.defaultHeadId && byId(S.heads, p.defaultHeadId)) $('p-head').value = p.defaultHeadId;
+    else $('p-head').value = '';
     autoDescribe();
     syncPayForm();
   });

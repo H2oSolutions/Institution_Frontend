@@ -233,6 +233,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
         </form>
         <p class="hint" style="margin-top:6px">“Salary / payee ledger” heads always need a person or vendor, so every payment builds their ledger.</p>
         <div class="chips" id="head-suggest"></div>
+        <input class="in" id="head-search" type="search" placeholder="Search heads by name…" aria-label="Search heads" style="margin:8px 0">
         <label class="hint"><input type="checkbox" id="head-inactive"> Show inactive</label>
         <div id="head-list"></div>
       </div>
@@ -277,7 +278,10 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           </div>
         </form>
 
-        <label class="hint" style="display:block;margin-top:14px"><input type="checkbox" id="party-inactive"> Show inactive</label>
+        <hr style="border:0;border-top:1px solid var(--border2);margin:18px 0 14px">
+        <h3 style="font-size:15px;font-weight:800;margin-bottom:6px">Added payees</h3>
+        <input class="in" id="party-search" type="search" placeholder="Search added payees by name, role, or head…" aria-label="Search payees" style="margin:4px 0">
+        <label class="hint" style="display:block;margin-top:6px"><input type="checkbox" id="party-inactive"> Show inactive</label>
         <div id="party-list"></div>
       </div>
 
@@ -319,7 +323,8 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           <button type="button" data-preset="this" aria-pressed="true">This month</button>
           <button type="button" data-preset="last" aria-pressed="false">Last month</button>
         </div>
-        <label class="fld" style="flex:0 1 260px">Payee<select class="in" id="due-party"><option value="">All payees</option></select></label>
+        <label class="fld" style="flex:0 1 240px">Payee<select class="in" id="due-party"><option value="">All payees</option></select></label>
+        <label class="fld" style="flex:1 1 180px">Search<input class="in" type="search" id="due-q" placeholder="Search payee or head…"></label>
       </div>
       <div class="btnrow">
         <button class="btn ghost" type="button" id="due-generate">Generate monthly salary dues</button>
