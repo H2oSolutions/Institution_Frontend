@@ -1194,7 +1194,8 @@ function editEntry(id) {
   if (e.type !== 'due' && S.advisors.length) fields.push({ key: 'advisedById', label: 'Advised by', type: 'select', value: e.advisedById || '', options: S.advisors.map(function (a) { return { v: a._id, t: a.name }; }) });
   fields.push({ key: 'reference', label: 'Bill / transaction no.', value: e.reference || '' });
   fields.push({ key: 'remark', label: 'Remarks', type: 'textarea', value: e.remark || '' });
-  openForm('Edit ' + e.voucherNo, 'Originally entered by ' + e.enteredBy.name + '. Your change is added to the entry’s history with your name.', fields, 'Save changes', function (v) {
+  var origBy = e.enteredBy.kind === 'system' ? 'Admin' : e.enteredBy.name;
+  openForm('Edit ' + e.voucherNo, 'Originally entered by ' + origBy + '. Your change is added to the entry’s history with your name.', fields, 'Save changes', function (v) {
     var body = {}, amt = money(v.amount);
     if (isNaN(amt) || amt <= 0) throw new Error('Enter an amount greater than zero');
     if (v.description.trim() !== (e.description || '')) { if (!v.description.trim()) throw new Error('Description cannot be empty'); body.description = v.description.trim(); }
@@ -1482,7 +1483,12 @@ function exportEntriesReport() {
 function exportDueReport() {
   if (!needExcel()) return;
   var only = $('due-party').value;
-  var rows = S.dueRows.filter(function (r) { return !only || String(r.partyId) === only; });
+  var dq = ($('due-q') ? $('due-q').value : '').trim().toLowerCase();
+  var rows = S.dueRows.filter(function (r) {
+    if (only && String(r.partyId) !== only) return false;
+    if (dq && (r.name + ' ' + (r.head || '') + ' ' + (r.role || '') + ' ' + (r.autoDueRemark || '')).toLowerCase().indexOf(dq) < 0) return false;
+    return true;
+  });
   if (!rows.length) { toast('There is nothing to export for this month', 'error'); return; }
 
   var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Expenses due');
