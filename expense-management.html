@@ -57,7 +57,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .fld{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:var(--text2);min-width:0;flex:1 1 140px}
 .in{border:1.5px solid var(--border2);border-radius:9px;padding:9px 11px;font-size:14px;background:#fff;width:100%;min-height:40px}
 .in:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px rgba(5,150,105,.18)}
-.in[readonly]{background:var(--surface2);color:var(--text2)}
+.in[readonly],.in:disabled{background:var(--surface2);color:var(--text2);cursor:not-allowed}
 textarea.in{resize:vertical;min-height:64px}
 .hint{font-size:12px;color:var(--text3);font-weight:500}
 .btn{border:0;border-radius:9px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;background:var(--brand);color:#fff;white-space:nowrap}
@@ -83,11 +83,12 @@ details.more summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--b
 .autobox b{font-weight:700}
 
 /* lists + tables */
-.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}
+.li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;flex-wrap:wrap}
 .li:last-child{border-bottom:0}
-.li .meta{min-width:0}
-.li .meta small{display:block;color:var(--text3);font-size:12px;font-weight:500}
+.li .meta{min-width:0;flex:1 1 240px}
+.li .meta small{display:block;color:var(--text3);font-size:12px;font-weight:500;margin-top:2px}
 .li.off{opacity:.55}
+.acts-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}
 .chip-btn{border:1.5px dashed var(--brand-line);background:var(--brand-soft);color:var(--brand-ink);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
 .tw{overflow-x:auto;margin:0 -4px}
@@ -130,7 +131,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.toast,.spin{transition:none;animation:none}}
 
-/* tab hints, auto-dues card, tour */
+/* tab hints, tour */
 .tabhint{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--brand-soft);border:1px solid var(--brand-line);color:var(--brand-ink);border-radius:10px;padding:9px 14px;margin-bottom:16px;font-size:13.5px;font-weight:600}
 .linkbtn{background:none;border:0;color:var(--brand-ink);font-weight:800;font-size:13px;text-decoration:underline;cursor:pointer;padding:2px 4px}
 .btnrow{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
@@ -228,7 +229,6 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
         <p class="sub">The categories you spend on. Create them once, then pick them when you record a payment.</p>
         <form class="row" id="head-form" autocomplete="off">
           <label class="fld" style="flex:2 1 150px">Head name<input class="in" id="head-name" maxlength="80" placeholder="e.g. Electricity" required></label>
-          
           <button class="btn" type="submit">Add head</button>
         </form>
         <p class="hint" style="margin-top:6px">“Salary / payee ledger” heads always need a person or vendor, so every payment builds their ledger.</p>
@@ -240,7 +240,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
 
       <div class="card" id="t1-payees" hidden>
         <h2>Payees</h2>
-        <p class="sub">Anyone you pay: teachers, faculty, any staff, helpers or vendors. Each gets their own ledger.</p>
+        <p class="sub">Anyone you pay: teachers, faculty, any staff, helpers or vendors. Set their monthly or one-time dues in the Expenses Due tab.</p>
         <div class="seg" role="group" aria-label="How to add a payee" id="party-mode">
           <button type="button" data-mode="staff" aria-pressed="true">From staff list</button>
           <button type="button" data-mode="manual" aria-pressed="false">Add manually</button>
@@ -250,11 +250,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           <input class="in" id="staff-search" type="search" placeholder="Search staff by name or role" aria-label="Search staff">
           <div class="cklist" id="staff-list" role="group" aria-label="Staff you can add"></div>
           <div class="row">
-            <label class="fld">Monthly amount (optional)<input class="in" id="ps-monthly" inputmode="decimal" placeholder="₹ 0"></label>
-          <label class="fld">Installment date (1-31)<input class="in" id="ps-dueday" type="number" min="1" max="31" placeholder="e.g. 5"></label>
-          <label class="fld">Default head<select class="in" id="ps-head"></select></label>
-          </div>
-          <div class="row" style="margin-top:10px">
+            <label class="fld">Default head<select class="in" id="ps-head"></select></label>
             <button class="btn" type="submit" id="ps-add">Add selected staff</button>
             <button class="btn ghost" type="button" id="ps-all">Select all shown</button>
           </div>
@@ -268,11 +264,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
           </div>
           <div class="row" style="margin-top:10px">
             <label class="fld">Mobile (optional)<input class="in" id="pm-mobile" inputmode="tel" maxlength="15"></label>
-            <label class="fld">Monthly amount<input class="in" id="pm-monthly" inputmode="decimal" placeholder="₹ 0"></label>
-            <label class="fld">Installment date (1-31)<input class="in" id="pm-dueday" type="number" min="1" max="31" placeholder="e.g. 5"></label>
             <label class="fld">Opening balance<input class="in" id="pm-opening" inputmode="decimal" placeholder="₹ 0" title="Positive = you owe them. Negative = advance already given."></label>
-          </div>
-          <div class="row" style="margin-top:10px">
             <label class="fld">Default head<select class="in" id="pm-head"></select></label>
             <button class="btn" type="submit">Add payee</button>
           </div>
@@ -299,42 +291,29 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
 
   <!-- ═════════ TAB 2: EXPENSES DUE ═════════ -->
   <section class="xpanel" id="tab2" role="tabpanel" aria-labelledby="tab2-btn" hidden>
-    <div class="tabhint" id="hint2"><span>Who you owe this month: previous balance + due − paid = balance. What is left moves to next month by itself.</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="2">? How this works</button></div>
-    <div class="card" id="auto-card" style="margin-bottom:18px">
-      <div class="row" style="align-items:center">
-        <div style="flex:1 1 340px;min-width:240px">
-          <h2>Auto dues</h2>
-          <p class="sub" id="auto-text" style="margin-bottom:6px">Loading…</p>
-          <p class="hint" id="auto-last"></p>
-        </div>
-        <div class="row" style="align-items:flex-end;flex:0 0 auto">
-          <label class="fld" style="flex:0 0 205px">Create dues on day
-            <select class="in" id="auto-day" aria-label="Day of the month"></select>
-          </label>
-          <label class="chk"><input type="checkbox" id="auto-on"> Automatic</label>
-          <button class="btn" type="button" id="auto-save">Save</button>
-        </div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:18px">
+    <div class="tabhint" id="hint2"><span>Who you owe this month: previous balance + due − paid = balance. Set one-time dues or automatic monthly schedules here.</span><button class="linkbtn" type="button" data-act="tour-tab" data-tab="2">? How this works</button></div>
+    <div class="card no-print" style="margin-bottom:18px">
       <div class="row">
         <label class="fld" style="flex:0 1 180px">Month<input class="in" type="month" id="due-month"></label>
         <div class="seg" id="due-presets" role="group" aria-label="Quick month">
-          <button type="button" data-preset="this" aria-pressed="true">This month</button>
           <button type="button" data-preset="last" aria-pressed="false">Last month</button>
+          <button type="button" data-preset="this" aria-pressed="true">This month</button>
+          <button type="button" data-preset="next" aria-pressed="false">Next month</button>
         </div>
         <label class="fld" style="flex:0 1 240px">Payee<select class="in" id="due-party"><option value="">All payees</option></select></label>
         <label class="fld" style="flex:1 1 180px">Search<input class="in" type="search" id="due-q" placeholder="Search payee or head…"></label>
       </div>
       <div class="btnrow">
-        <button class="btn ghost" type="button" id="due-generate">Generate monthly salary dues</button>
+        <button class="btn ghost" type="button" id="due-generate">Generate scheduled dues now</button>
         <button class="btn ghost" type="button" id="due-report">Get Report (Excel)</button>
-        <button class="btn" type="button" id="due-add">Add due / bill</button>
+        <button class="btn ghost" type="button" id="due-print">Print</button>
+        <button class="btn" type="button" id="due-add">Add due (One-time / Automatic)</button>
       </div>
     </div>
+    <div class="print-only" id="due-print-head"></div>
     <div class="grid g4" style="margin-bottom:18px" id="due-stats"></div>
     <div class="card"><div class="tw" id="due-table"></div></div>
-    <div class="card" style="margin-top:18px" id="t2-today-card">
+    <div class="card no-print" style="margin-top:18px" id="t2-today-card">
       <div style="margin-bottom:10px">
         <h2 style="margin:0">Today's dues entered</h2>
         <p class="sub" id="t2-today-sub" style="margin:2px 0 0">Dues added or generated today appear here automatically.</p>
@@ -422,7 +401,7 @@ tfoot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:0}
               <option value="">Everything</option>
             </select>
           </label>
-          <label class="fld">Entered by
+          <label class="fld" id="e-by-wrap">Entered by
             <select class="in" id="e-by">
               <option value="">All staff</option>
             </select>
