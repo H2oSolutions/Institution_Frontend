@@ -1026,15 +1026,38 @@ function submitPayment(e) {
 }
 
 /* ---- entries list ---- */
-S.entRows = []; S.preset = 'today'; S.entInit = false;
+S.entRows = []; S.preset = 'today'; S.entInit = false; S.expStaff = null;
+
+function loadExpenseStaff() {
+  if (S.expStaff !== null) return Promise.resolve(S.expStaff);
+  if (!isOwner()) {
+    S.expStaff = (S.me && Array.isArray(S.me.expenseStaff)) ? S.me.expenseStaff : [];
+    return Promise.resolve(S.expStaff);
+  }
+  var credUrl = (typeof API_ENDPOINTS !== 'undefined' && API_ENDPOINTS.CREDENTIALS)
+    ? API_ENDPOINTS.CREDENTIALS
+    : (API_BASE_URL + '/credentials');
+  return apiGet(credUrl, true).then(function (r) {
+    var list = r.data || [];
+    S.expStaff = list.filter(function (c) {
+      var a = c.additionalAccess || {};
+      return c.staff && c.staff._id && a.canAccessExpenseManagement &&
+        (a.canAccessExpenseTab1 || a.canAccessExpenseTab2 || a.canAccessExpenseTab3 || a.canAccessExpenseTab4);
+    }).map(function (c) {
+      return { _id: String(c.staff._id), name: c.staff.name };
+    });
+    return S.expStaff;
+  }).catch(function () {
+    S.expStaff = [];
+    return S.expStaff;
+  });
+}
 
 TAB_LOADERS[3] = function () {
   loadLookupsOnce().then(function () {
     fillPayForm();
     fillEnteredByFilter();
-    if ((!S.me || !S.me.staffList || !S.me.staffList.length) && !S.staffOpts.length) {
-      aGet('/staff-options').then(function (r) { S.staffOpts = r.data || []; fillEnteredByFilter(); }).catch(function () {});
-    }
+    loadExpenseStaff().then(function () { fillEnteredByFilter(); });
     if (!S.entInit) { S.entInit = true; applyPreset('today'); } else loadEntries(S.ent.page || 1);
   }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
@@ -1042,8 +1065,23 @@ TAB_LOADERS[3] = function () {
 function fillEnteredByFilter() {
   if (!$('e-by')) return;
   var cur = $('e-by').value;
-  var staffList = (S.me && Array.isArray(S.me.staffList) && S.me.staffList.length) ? S.me.staffList : (S.staffOpts || []);
-  var opts = '<option value="">All staff</option><option value="admin">Owner / Admin</option><option value="system">Admin (Auto)</option>';
+  var seen = {}, staffList = [];
+  function addStaff(id, name) {
+    if (!id || !name) return;
+    var k = String(id);
+    if (seen[k]) return;
+    seen[k] = true;
+    staffList.push({ _id: k, name: name });
+  }
+  (S.expStaff || []).forEach(function (s) { addStaff(s._id, s.name); });
+  if (S.me && S.me.kind === 'staff' && S.me.staffId) addStaff(S.me.staffId, S.me.name);
+  (S.entRows || []).forEach(function (e) {
+    if (e.enteredBy && e.enteredBy.kind === 'staff' && e.enteredBy.id) {
+      addStaff(e.enteredBy.id, e.enteredBy.name);
+    }
+  });
+  staffList.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var opts = '<option value="">All entries</option><option value="admin">Admin (Manual)</option><option value="system">Admin (Auto dues)</option>';
   if (staffList.length) {
     opts += staffList.map(function (s) { return '<option value="' + esc(s._id) + '">' + esc(s.name) + '</option>'; }).join('');
   }
@@ -1088,6 +1126,7 @@ function loadEntries(page) {
   aGet('/entries', Object.assign({ page: S.ent.page, limit: 15 }, entFilters())).then(function (r) {
     if (my !== S.entReq) return;
     S.entRows = r.data || [];
+    fillEnteredByFilter();
     S.ent.pages = r.pagination.totalPages || 1; S.ent.total = r.pagination.totalRecords;
     renderEntries(r);
   }).catch(function (e) { if (my !== S.entReq) return; $('ent-table').innerHTML = emptyBox('Could not load entries', errMsg(e)); });
