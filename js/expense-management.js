@@ -139,6 +139,10 @@ function openForm(title, sub, fields, saveLabel, onSave) {
         }).join('') + '</select>';
       } else if (f.type === 'textarea') {
         html += '<textarea class="in" id="' + id + '" rows="3" maxlength="500">' + esc(val) + '</textarea>';
+      } else if (f.type === 'checkbox') {
+        html += '<span style="display:flex;align-items:center;gap:8px;margin-top:2px;font-weight:500;cursor:pointer">' +
+          '<input id="' + id + '" type="checkbox"' + (val ? ' checked' : '') + ' style="width:16px;height:16px;margin:0">' +
+          '<span>' + esc(f.text || '') + '</span></span>';
       } else {
         html += '<input class="in" id="' + id + '" type="' + (f.type || 'text') + '" value="' + esc(val) + '"' +
           (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '') +
@@ -170,7 +174,10 @@ function openForm(title, sub, fields, saveLabel, onSave) {
       var ok = ov.querySelector('#fm-ok'), er = ov.querySelector('#fm-err');
       if (ok.disabled || saving) return;
       var vals = {};
-      fields.forEach(function (f) { vals[f.key] = ov.querySelector('#ff-' + f.key).value; });
+      fields.forEach(function (f) {
+        var el = ov.querySelector('#ff-' + f.key);
+        vals[f.key] = f.type === 'checkbox' ? el.checked : el.value;
+      });
       setModalBusy(true);
       setBtnLoading(ok, true, 'Saving…');
       er.textContent = '';
@@ -1108,16 +1115,30 @@ function editEntry(id) {
 
 function reverseEntry(id) {
   var e = byId(S.entRows, id); if (!e) return;
-  openForm('Reverse ' + e.voucherNo + '?', 'The entry stays visible, struck through, and stops counting in the balance. This cannot be undone.', [
+  var isAuto = e.source === 'auto' && e.scheduleId;
+  var fields = [
     { key: 'reason', label: 'Reason (required)', type: 'textarea', value: '' }
-  ], 'Reverse entry', function (v) {
+  ];
+  if (isAuto) {
+    fields.push({
+      key: 'stopSchedule',
+      label: 'Recurring schedule',
+      type: 'checkbox',
+      value: false,
+      text: 'Stop future auto-dues (also remove this recurring monthly rule)'
+    });
+  }
+  openForm('Reverse ' + e.voucherNo + '?', 'The entry stays visible, struck through, and stops counting in the balance. This cannot be undone.', fields, 'Reverse entry', function (v) {
     if (!v.reason.trim()) throw new Error('Write a reason');
     return getDeleteCode().then(function (code) {
-      var body = { reason: v.reason.trim() }; if (code) body.deleteCode = code;
+      var body = { reason: v.reason.trim() };
+      if (code) body.deleteCode = code;
+      if (isAuto && v.stopSchedule) body.stopSchedule = true;
       return aPost('/entries/' + id + '/reverse', body);
     }).catch(function (err) { codeFailed(err); throw err; })
-      .then(function () {
-        toast('Entry reversed');
+      .then(function (res) {
+        var stopped = res && res.scheduleRemoved;
+        toast(stopped ? 'Entry reversed & recurring rule removed' : 'Entry reversed');
         return refreshHeadBalances().then(function () {
           syncPayForm();
           loadEntries(S.ent.page);
