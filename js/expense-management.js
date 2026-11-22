@@ -1,7 +1,7 @@
 'use strict';
-// js/expense-management.js - Expense Management (owner + staff)
+// js/expense-management.js - Simplified Head-Only Expense Management (owner + staff)
 //
-// Tabs: 1 Heads/Payees/Advised-by · 2 Expenses Due · 3 Expenses Paid · 4 Ledger
+// Tabs: 1 Expense Heads & Advised-by · 2 Expenses Due · 3 Expenses Paid · 4 Ledger
 // The server decides what each login may do (GET /expense/me); this page only
 // shows what the server allows. Every dynamic string is escaped before it is
 // put into HTML, and clicks go through one delegated handler (data-act).
@@ -10,15 +10,16 @@ var EXP = API_BASE_URL + '/expense';
 
 var S = {
   me: null,
-  headsAll: [], partiesAll: [], advisorsAll: [],
-  heads: [], parties: [], advisors: [], staffOpts: [],
-  partyMode: 'staff',
+  headsAll: [], advisorsAll: [],
+  heads: [], advisors: [],
+  headBalances: {},
   payType: 'paid',
+  pendingAttachment: null,
   ent: { page: 1, pages: 1, total: 0 },
-  ledView: 'party', ledData: null,
-  dueMonth: '', dueRows: [], dueTotals: null,
-  entReq: 0, dueReq: 0, ledReq: 0,    // newest request wins: a slow old answer must never overwrite a newer one
-  todayDueReq: 0, todayDueRows: []
+  entRows: [], preset: 'today', entInit: false,
+  ledView: 'head', ledData: null,
+  dueMonth: '', dueRows: [], dueSchedules: [], dueTotals: null,
+  entReq: 0, dueReq: 0, ledReq: 0
 };
 
 /* ───────────────────────── tiny helpers ───────────────────────── */
@@ -35,22 +36,23 @@ function ymd(d) { return istShift(d).toISOString().slice(0, 10); }
 function todayYmd() { return ymd(new Date()); }
 function thisMonth() { return todayYmd().slice(0, 7); }
 function fmtD(d) { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }); }
-function fmtDT(d) { return fmtD(d) + ', ' + new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }); }
+function fmtT(d) { return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }); }
+function fmtDT(d) { return fmtD(d) + ', ' + fmtT(d); }
 function monthLabel(m) {
   var p = String(m).split('-');
   return ['January','February','March','April','May','June','July','August','September','October','November','December'][Number(p[1]) - 1] + ' ' + p[0];
 }
-function money(v) { // accepts "1,500" / " 12.5 " -> number or NaN
+function money(v) {
   var n = Number(String(v === undefined || v === null ? '' : v).replace(/[,\s₹]/g, ''));
   return isFinite(n) ? n : NaN;
 }
 function parseDueDayInput(v) {
   if (v === undefined || v === null || String(v).trim() === '') return null;
   var d = parseInt(String(v).trim(), 10);
-  if (isNaN(d) || d < 1 || d > 31) throw new Error('Installment date must be between 1 and 31');
+  if (isNaN(d) || d < 1 || d > 31) throw new Error('Due date must be between 1 and 31');
   return d;
 }
-function ordinal(n) { var v = n % 100, sfx = ['th', 'st', 'nd', 'rd']; return n + (sfx[(v - 20) % 10] || sfx[v] || sfx[0]); }
+function ordinal(n) { var v = n % 100, sfx = ['th', 'st', 'nd', 'rd']; return n + (sfx[(v - 20) % 100] || sfx[v] || sfx[0]); }
 function byId(list, id) { for (var i = 0; i < list.length; i++) if (String(list[i]._id) === String(id)) return list[i]; return null; }
 
 var toastTimer;
@@ -142,7 +144,7 @@ function openForm(title, sub, fields, saveLabel, onSave) {
           (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '') +
           (f.min !== undefined ? ' min="' + esc(f.min) + '"' : '') +
           (f.max !== undefined ? ' max="' + esc(f.max) + '"' : '') +
-          (f.type === 'text' || !f.type ? ' maxlength="100"' : '') + '>';
+          (f.type === 'text' || !f.type ? ' maxlength="200"' : '') + '>';
       }
       if (f.hint) html += '<span class="hint">' + esc(f.hint) + '</span>';
       html += '</label>';
@@ -231,23 +233,39 @@ function showDenied(msg) {
 
 function deriveActive() {
   S.heads = S.headsAll.filter(function (h) { return h.isActive; });
-  S.parties = S.partiesAll.filter(function (p) { return p.isActive; });
   S.advisors = S.advisorsAll.filter(function (a) { return a.isActive; });
 }
+
 function loadLookups() {
   return Promise.all([
     aGet('/heads', { includeInactive: 'true' }).then(function (r) { S.headsAll = r.data || []; }),
-    aGet('/parties', { withBalance: 'true', includeInactive: 'true' }).then(function (r) { S.partiesAll = r.data || []; }),
     aGet('/advisors', { includeInactive: 'true' }).then(function (r) { S.advisorsAll = r.data || []; })
   ]).then(deriveActive);
 }
 
-function refreshParties() {
-  return aGet('/parties', { withBalance: 'true', includeInactive: 'true' }).then(function (r) { S.partiesAll = r.data || []; deriveActive(); });
-}
 function loadLookupsOnce() {
   if (S.preloaded) { S.preloaded = false; return Promise.resolve(); }
   return loadLookups();
+}
+
+function refreshHeadBalances() {
+  if (!can(2) && !can(4)) return Promise.resolve();
+  var req = can(2)
+    ? aGet('/due-summary', { month: thisMonth() }).then(function (r) {
+        var map = {};
+        ((r.data && r.data.rows) || []).forEach(function (row) {
+          map[String(row.headId)] = Number(row.currentBalance) || 0;
+        });
+        S.headBalances = map;
+      })
+    : aGet('/ledger/heads').then(function (r) {
+        var map = {};
+        (r.data || []).forEach(function (row) {
+          map[String(row.headId)] = Number(row.balance) || 0;
+        });
+        S.headBalances = map;
+      });
+  return req.catch(function () {});
 }
 
 function boot() {
@@ -262,17 +280,20 @@ function boot() {
   $('fy-badge').textContent = '📅 FY ' + s + '-' + String(s + 1).slice(2);
 
   wireEvents();
-  setInterval(function () { var w = $('p-when'); if (w && !$('t3-add').hidden && !$('tab3').hidden) w.textContent = fmtDT(new Date()); }, 30000);
+  setInterval(function () {
+    var w = $('p-when');
+    if (w && !$('t3-add').hidden && !$('tab3').hidden) w.textContent = fmtDT(new Date());
+  }, 30000);
 
   aGet('/me').then(function (r) {
     S.me = r.data;
     $('who-badge').textContent = (S.me.kind === 'admin' ? '👑 Owner login' : '👤 ' + S.me.name);
-    if (!S.me.allEntries) {
-      var byWrap = $('e-by-wrap') || ($('e-by') && $('e-by').closest('label'));
-      if (byWrap) byWrap.hidden = true;
-    }
+    if (!S.me.allEntries && $('e-by-wrap')) $('e-by-wrap').hidden = true;
     var tabs = allowedTabs();
-    if (!tabs.length) { showDenied('You do not have permission to use any Expense Management section. Please ask the administrator.'); return; }
+    if (!tabs.length) {
+      showDenied('You do not have permission to use any Expense Management section. Please ask the administrator.');
+      return;
+    }
     tabs.forEach(function (i) { $('tab' + i + '-btn').hidden = false; });
     return loadLookups().then(function () {
       $('loading').hidden = true;
@@ -289,81 +310,44 @@ function boot() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB 1 · HEADS, PAYEES, ADVISED-BY
+   TAB 1 · EXPENSE HEADS & ADVISED-BY
 ═══════════════════════════════════════════════════════════════ */
 var SUGGESTED_HEADS = [
-  { name: 'Salary - Staff', type: 'payee' }, { name: 'Salary - Helpers', type: 'payee' },
-  { name: 'Electricity', type: 'payee' }, { name: 'Repairs & Maintenance', type: 'payee' },
-  { name: 'Stationery & Books', type: 'payee' }, { name: 'Events', type: 'payee' }
+  'Salary', 'Installment', 'Diesel', 'Electricity',
+  'Rent', 'Repairs & Maintenance', 'Stationery & Books', 'Events'
 ];
 
 function can(tab) { return !!(S.me && S.me.perms && S.me.perms['tab' + tab]); }
 function isOwner() { return !!(S.me && S.me.isOwner); }
-
 function emptyBox(title, text) { return '<div class="empty"><b>' + esc(title) + '</b>' + esc(text) + '</div>'; }
 
 function renderHeads() {
   var showOff = $('head-inactive').checked;
   var q = ($('head-search') ? $('head-search').value : '').trim().toLowerCase();
-  var list = S.headsAll.filter(function (h) { return (showOff || h.isActive) && (!q || h.name.toLowerCase().indexOf(q) >= 0); });
+  var list = S.headsAll.filter(function (h) {
+    return (showOff || h.isActive) && (!q || h.name.toLowerCase().indexOf(q) >= 0);
+  });
   $('head-list').innerHTML = list.length ? list.map(function (h) {
-    return '<div class="li' + (h.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(h.name) + '</b>' +
-      '<small>Payee ledger · ' + h.entryCount + ' entr' + (h.entryCount === 1 ? 'y' : 'ies') + (h.isActive ? '' : ' · inactive') + '</small></div>' +
-      '<div class="acts-row"><button class="btn ghost sm" type="button" data-act="edit-head" data-id="' + esc(h._id) + '">Edit</button>' +
+    var meta = [
+      h.entryCount + ' entr' + (h.entryCount === 1 ? 'y' : 'ies'),
+      h.scheduleCount ? h.scheduleCount + ' auto rule' + (h.scheduleCount === 1 ? '' : 's') : '',
+      h.isActive ? '' : 'inactive'
+    ].filter(Boolean).join(' · ');
+    var canDel = h.entryCount === 0 && (!h.scheduleCount || h.scheduleCount === 0);
+    return '<div class="li' + (h.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(h.name) + '</b><small>' + esc(meta) + '</small></div>' +
+      '<div class="acts-row">' +
+      '<button class="btn ghost sm" type="button" data-act="edit-head" data-id="' + esc(h._id) + '">Edit</button>' +
       '<button class="btn ' + (h.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-head" data-id="' + esc(h._id) + '">' + (h.isActive ? 'Deactivate' : 'Activate') + '</button>' +
-      (h.entryCount === 0 ? '<button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' : '') + '</div></div>';
+      (canDel ? '<button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' : '') +
+      '</div></div>';
   }).join('') : (q ? emptyBox('No matching heads', 'No head matched “' + q + '”.') : emptyBox('No heads yet', 'Add your first head above, or tap a suggestion.'));
 
-  var have = {}; S.headsAll.forEach(function (h) { have[h.name.toLowerCase()] = 1; });
-  var sugg = SUGGESTED_HEADS.filter(function (x) { return !have[x.name.toLowerCase()]; });
-  $('head-suggest').innerHTML = sugg.length ? '<span class="hint" style="align-self:center">Quick add:</span>' + sugg.map(function (x) {
-    return '<button class="chip-btn" type="button" data-act="suggest-head" data-name="' + esc(x.name) + '" data-type="' + x.type + '">+ ' + esc(x.name) + '</button>';
+  var have = {};
+  S.headsAll.forEach(function (h) { have[h.name.toLowerCase()] = 1; });
+  var sugg = SUGGESTED_HEADS.filter(function (name) { return !have[name.toLowerCase()]; });
+  $('head-suggest').innerHTML = sugg.length ? '<span class="hint" style="align-self:center">Quick add:</span>' + sugg.map(function (name) {
+    return '<button class="chip-btn" type="button" data-act="suggest-head" data-name="' + esc(name) + '">+ ' + esc(name) + '</button>';
   }).join('') : '';
-}
-
-function headOptions(selected, withNone, noneLabel) {
-  var o = withNone ? '<option value="">' + esc(noneLabel || '— none —') + '</option>' : '';
-  return o + S.heads.map(function (h) {
-    return '<option value="' + esc(h._id) + '"' + (String(h._id) === String(selected) ? ' selected' : '') + '>' + esc(h.name) + '</option>';
-  }).join('');
-}
-function renderHeadSelects() { $('ps-head').innerHTML = headOptions('', true); $('pm-head').innerHTML = headOptions('', true); }
-
-function balLabel(b) {
-  if (b > 0) return '<span>' + inr(b) + ' owed</span>';
-  if (b < 0) return '<span class="neg">' + inr(Math.abs(b)) + ' advance</span>';
-  return '<span class="hint">settled</span>';
-}
-
-function renderParties() {
-  var showOff = $('party-inactive').checked;
-  var q = ($('party-search') ? $('party-search').value : '').trim().toLowerCase();
-  var list = S.partiesAll.filter(function (p) {
-    if (!showOff && !p.isActive) return false;
-    if (!q) return true;
-    var h = p.defaultHeadId ? byId(S.headsAll, p.defaultHeadId) : null;
-    var hay = (p.name + ' ' + (p.role || '') + ' ' + (p.mobile || '') + ' ' + (h ? h.name : '')).toLowerCase();
-    return hay.indexOf(q) >= 0;
-  });
-  $('party-list').innerHTML = list.length ? list.map(function (p) {
-    var h = p.defaultHeadId ? byId(S.headsAll, p.defaultHeadId) : null;
-    return '<div class="li' + (p.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(p.name) + '</b> <span class="pill">' + (p.source === 'staff' ? 'Staff' : 'Manual') + '</span>' +
-      '<small>' + esc(p.role) + (p.mobile ? ' · ' + esc(p.mobile) : '') + (h ? ' · Head: <b>' + esc(h.name) + '</b>' : '') + ' · ' + balLabel(p.balance || 0) + '</small></div>' +
-      '<div class="acts-row">' +
-      '<button class="btn ghost sm" type="button" data-act="edit-party" data-id="' + esc(p._id) + '">Edit</button>' +
-      '<button class="btn ' + (p.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-party" data-id="' + esc(p._id) + '">' + (p.isActive ? 'Deactivate' : 'Activate') + '</button>' +
-      (p.entryCount === 0 ? '<button class="btn danger sm" type="button" data-act="delete-party" data-id="' + esc(p._id) + '">Delete</button>' : '') + '</div></div>';
-  }).join('') : (q ? emptyBox('No matching payees', 'No payee matched “' + q + '”.') : emptyBox('No payees yet', 'Pick staff from the list above, or add a helper or vendor manually.'));
-}
-
-function renderStaffList() {
-  $('staff-search').hidden = S.staffOpts.length === 0;
-  var q = ($('staff-search').value || '').trim().toLowerCase();
-  var list = S.staffOpts.filter(function (s) { return !q || (s.name + ' ' + (s.designation || '')).toLowerCase().indexOf(q) >= 0; });
-  $('staff-list').innerHTML = list.length ? list.map(function (s) {
-    return '<label><input type="checkbox" class="staff-ck" value="' + esc(s._id) + '"> <span>' + esc(s.name) +
-      (s.designation ? ' <span class="hint">· ' + esc(s.designation) + '</span>' : '') + '</span></label>';
-  }).join('') : '<div class="hint" style="padding:10px 0">' + (S.staffOpts.length ? 'No staff match your search.' : 'Every active staff member is already a payee.') + '</div>';
 }
 
 function renderAdvisors() {
@@ -375,19 +359,15 @@ function renderAdvisors() {
   }).join('') : emptyBox('No names yet', 'Optional. Add Principal, Manager, Director and so on.');
 }
 
-function renderTab1() { renderHeads(); renderHeadSelects(); renderParties(); renderAdvisors(); renderStaffList(); }
+function renderTab1() { renderHeads(); renderAdvisors(); }
 
 function reloadTab1(useCache) {
-  return (useCache ? loadLookupsOnce() : loadLookups()).then(function () {
-    renderTab1();
-    return aGet('/staff-options').then(function (r) { S.staffOpts = r.data || []; renderStaffList(); });
-  }).catch(function (e) { toast(errMsg(e), 'error'); });
+  return (useCache ? loadLookupsOnce() : loadLookups()).then(renderTab1).catch(function (e) { toast(errMsg(e), 'error'); });
 }
 TAB_LOADERS[1] = function () { return reloadTab1(true); };
 
-/* ---- Tab 1 actions ---- */
-function createHead(name, type) {
-  return aPost('/heads', { name: name, type: type }).then(function () { toast('Head added'); return reloadTab1(); });
+function createHead(name) {
+  return aPost('/heads', { name: name }).then(function () { toast('Head added'); return reloadTab1(); });
 }
 
 function submitHead(e) {
@@ -396,104 +376,21 @@ function submitHead(e) {
   if (!name) return;
   var btn = e.target.querySelector('button[type="submit"]');
   setBtnLoading(btn, true, 'Adding…');
-  createHead(name, 'payee').then(function () { $('head-name').value = ''; $('head-name').focus(); })
+  createHead(name).then(function () { $('head-name').value = ''; $('head-name').focus(); })
     .catch(function (err) { toast(errMsg(err), 'error'); })
     .then(function () { setBtnLoading(btn, false); });
 }
 
 function editHead(id) {
   var h = byId(S.headsAll, id); if (!h) return;
-  var fields = [{ key: 'name', label: 'Head name', value: h.name }];
-  openForm('Edit head', null, fields, 'Save changes', function (v) {
-    var body = { name: v.name, type: 'payee' };
-    return aPut('/heads/' + id, body).then(function () { toast('Head updated'); return reloadTab1(); });
+  openForm('Edit head', null, [{ key: 'name', label: 'Head name', value: h.name }], 'Save changes', function (v) {
+    return aPut('/heads/' + id, { name: v.name }).then(function () { toast('Head updated'); return reloadTab1(); });
   });
 }
+
 function toggleHead(id) {
   var h = byId(S.headsAll, id); if (!h) return;
   aPut('/heads/' + id, { isActive: !h.isActive }).then(function () { toast(h.isActive ? 'Head deactivated' : 'Head activated'); return reloadTab1(); })
-    .catch(function (err) { toast(errMsg(err), 'error'); });
-}
-
-function setPartyMode(mode) {
-  S.partyMode = mode;
-  var btns = document.querySelectorAll('#party-mode button');
-  for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', btns[i].dataset.mode === mode ? 'true' : 'false');
-  $('party-staff-form').hidden = mode !== 'staff';
-  $('party-manual-form').hidden = mode !== 'manual';
-}
-
-function optAmount(v, label) {
-  if (v === undefined || String(v).trim() === '') return undefined;
-  var n = money(v);
-  if (isNaN(n)) throw new Error(label + ' must be a number');
-  return n;
-}
-
-function submitStaffParties(e) {
-  e.preventDefault();
-  var ids = [].map.call(document.querySelectorAll('.staff-ck:checked'), function (c) { return c.value; });
-  if (!ids.length) { toast('Tick at least one staff member', 'error'); return; }
-  var body = {
-    staffIds: ids,
-    defaultHeadId: $('ps-head').value || undefined
-  };
-  setBtnLoading($('ps-add'), true, 'Adding…');
-  aPost('/parties/from-staff', body).then(function (r) {
-    var d = r.data; toast(d.created.length + ' payee' + (d.created.length === 1 ? '' : 's') + ' added' + (d.skipped.length ? ', ' + d.skipped.length + ' skipped' : ''));
-    return reloadTab1();
-  }).catch(function (err) { toast(errMsg(err), 'error'); })
-    .then(function () { setBtnLoading($('ps-add'), false); });
-}
-
-function submitManualParty(e) {
-  e.preventDefault();
-  var body;
-  try {
-    body = {
-      source: 'manual',
-      name: $('pm-name').value.trim(),
-      role: $('pm-role').value.trim() || undefined,
-      mobile: $('pm-mobile').value.trim() || undefined,
-      openingBalance: optAmount($('pm-opening').value, 'Opening balance'),
-      defaultHeadId: $('pm-head').value || undefined
-    };
-  } catch (err) { toast(errMsg(err), 'error'); return; }
-  if (!body.name) { toast('Enter a name', 'error'); return; }
-  var btn = e.target.querySelector('button[type="submit"]');
-  setBtnLoading(btn, true, 'Adding…');
-  aPost('/parties', body).then(function () {
-    toast('Payee added');
-    ['pm-name', 'pm-role', 'pm-mobile', 'pm-opening'].forEach(function (id) { $(id).value = ''; });
-    return reloadTab1();
-  }).catch(function (err) { toast(errMsg(err), 'error'); })
-    .then(function () { setBtnLoading(btn, false); });
-}
-
-function editParty(id) {
-  var p = byId(S.partiesAll, id); if (!p) return;
-  var fields = [
-    { key: 'name', label: 'Name', value: p.name },
-    { key: 'role', label: 'Role', value: p.role },
-    { key: 'mobile', label: 'Mobile', value: p.mobile || '' },
-    { key: 'defaultHeadId', label: 'Default head', type: 'select', value: p.defaultHeadId || '', options: [{ v: '', t: '— none —' }].concat(S.heads.map(function (h) { return { v: h._id, t: h.name }; })) }
-  ];
-  if (isOwner()) fields.push({ key: 'openingBalance', label: 'Opening balance (₹)', value: p.openingBalance || 0, hint: 'Positive = you owe them. Negative = advance already given. Changes the whole ledger.' });
-  openForm('Edit payee', p.source === 'staff' ? 'Linked to a staff record.' : null, fields, 'Save changes', function (v) {
-    var body = {
-      name: v.name,
-      role: v.role,
-      mobile: v.mobile,
-      defaultHeadId: v.defaultHeadId || null
-    };
-    if (isOwner()) { var o = money(v.openingBalance === '' ? 0 : v.openingBalance); if (isNaN(o)) throw new Error('Opening balance must be a number'); body.openingBalance = o; }
-    return aPut('/parties/' + id, body).then(function () { toast('Payee updated'); return reloadTab1(); });
-  });
-}
-
-function toggleParty(id) {
-  var p = byId(S.partiesAll, id); if (!p) return;
-  aPut('/parties/' + id, { isActive: !p.isActive }).then(function () { toast(p.isActive ? 'Payee deactivated' : 'Payee activated'); return reloadTab1(); })
     .catch(function (err) { toast(errMsg(err), 'error'); });
 }
 
@@ -506,12 +403,14 @@ function submitAdvisor(e) {
     .catch(function (err) { toast(errMsg(err), 'error'); })
     .then(function () { setBtnLoading(btn, false); });
 }
+
 function editAdvisor(id) {
   var a = byId(S.advisorsAll, id); if (!a) return;
   openForm('Rename', null, [{ key: 'name', label: 'Name', value: a.name }], 'Save', function (v) {
     return aPut('/advisors/' + id, { name: v.name }).then(function () { toast('Renamed'); return reloadTab1(); });
   });
 }
+
 function toggleAdvisor(id) {
   var a = byId(S.advisorsAll, id); if (!a) return;
   aPut('/advisors/' + id, { isActive: !a.isActive }).then(function () { return reloadTab1(); })
@@ -519,30 +418,44 @@ function toggleAdvisor(id) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TAB 2 · EXPENSES DUE
+   TAB 2 · EXPENSES DUE & AUTOMATIC SCHEDULES
 ═══════════════════════════════════════════════════════════════ */
 var STATUS_TXT = { unpaid: 'Unpaid', part: 'Part paid', cleared: 'Cleared', advance: 'Paid in advance', nil: 'No dues' };
 
-function fillDueParties() {
-  var cur = $('due-party').value;
-  $('due-party').innerHTML = '<option value="">All payees</option>' + S.partiesAll.filter(function (p) { return p.isActive; }).map(function (p) {
-    return '<option value="' + esc(p._id) + '">' + esc(p.name) + '</option>';
+function fillDueHeads() {
+  var cur = $('due-head').value;
+  $('due-head').innerHTML = '<option value="">All heads</option>' + S.headsAll.filter(function (h) { return h.isActive; }).map(function (h) {
+    return '<option value="' + esc(h._id) + '">' + esc(h.name) + '</option>';
   }).join('');
-  $('due-party').value = cur;
+  $('due-head').value = cur;
 }
 
 TAB_LOADERS[2] = function () {
   if (!S.dueMonth) { S.dueMonth = thisMonth(); $('due-month').value = S.dueMonth; }
-  loadLookupsOnce().then(function () { fillDueParties(); loadDue(); loadTodayDues(); }).catch(function (e) { toast(errMsg(e), 'error'); });
+  loadLookupsOnce().then(function () { fillDueHeads(); loadDue(); }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
 
 function loadDue() {
   var my = ++S.dueReq;
   $('due-table').innerHTML = '<div class="empty"><span class="spin"></span>Loading…</div>';
+  if ($('t2-schedules-table')) $('t2-schedules-table').innerHTML = '<div class="empty"><span class="spin"></span>Loading…</div>';
   aGet('/due-summary', { month: S.dueMonth }).then(function (r) {
     if (my !== S.dueReq) return;
-    S.dueRows = r.data.rows; S.dueTotals = r.data.totals; renderDue();
-  }).catch(function (e) { if (my !== S.dueReq) return; $('due-table').innerHTML = emptyBox('Could not load', errMsg(e)); });
+    S.dueRows = r.data.rows || [];
+    S.dueSchedules = r.data.schedules || [];
+    S.dueTotals = r.data.totals || { monthDue: 0, monthPaid: 0, outstanding: 0, advances: 0 };
+    if (S.dueMonth === thisMonth()) {
+      var map = {};
+      S.dueRows.forEach(function (row) { map[String(row.headId)] = Number(row.currentBalance) || 0; });
+      S.headBalances = map;
+    }
+    renderDue();
+    renderSchedulesTable();
+  }).catch(function (e) {
+    if (my !== S.dueReq) return;
+    $('due-table').innerHTML = emptyBox('Could not load', errMsg(e));
+    if ($('t2-schedules-table')) $('t2-schedules-table').innerHTML = '';
+  });
 }
 
 function renderDue() {
@@ -554,16 +467,21 @@ function renderDue() {
     '<div class="stat warn"><small>Balance to pay</small><b>' + inr(t.outstanding) + '</b></div>' +
     '<div class="stat"><small>Paid in advance</small><b>' + inr(t.advances) + '</b></div>';
 
-  var only = $('due-party').value;
+  var only = $('due-head').value;
   var dq = ($('due-q') ? $('due-q').value : '').trim().toLowerCase();
   var rawRows = S.dueRows.filter(function (r) {
-    if (only && String(r.partyId) !== only) return false;
-    if (dq && (r.name + ' ' + (r.head || '') + ' ' + (r.role || '') + ' ' + (r.autoDueRemark || '')).toLowerCase().indexOf(dq) < 0) return false;
+    if (only && String(r.headId) !== only) return false;
+    if (dq) {
+      var itemsTxt = (r.dueItems || []).map(function (it) { return it.description + ' ' + (it.remark || '') + ' ' + (it.reference || ''); }).join(' ');
+      var schedTxt = (r.schedules || []).map(function (sc) { return sc.description + ' ' + (sc.remark || ''); }).join(' ');
+      if ((r.name + ' ' + itemsTxt + ' ' + schedTxt).toLowerCase().indexOf(dq) < 0) return false;
+    }
     return true;
   });
+
   if (!rawRows.length) {
     $('due-table').innerHTML = emptyBox('Nothing to show for ' + monthLabel(S.dueMonth),
-      S.partiesAll.length ? 'Use “Add due (One-time / Automatic)” to set a due or schedule.' : 'Add payees in the Expense Heads tab first.');
+      S.headsAll.length ? 'Use “+ Add due (One-time)” or “+ Add due (Automatic)” above to record a due.' : 'Add heads in the Expense Heads tab first.');
     return;
   }
 
@@ -571,86 +489,218 @@ function renderDue() {
     var aUnpaid = (a.monthDue > a.monthPaid || a.closing > 0) ? 1 : 0;
     var bUnpaid = (b.monthDue > b.monthPaid || b.closing > 0) ? 1 : 0;
     if (aUnpaid !== bUnpaid) return bUnpaid - aUnpaid;
-    var aDay = a.dueDay || 99;
-    var bDay = b.dueDay || 99;
-    if (aDay !== bDay) return aDay - bDay;
     return a.name.localeCompare(b.name);
   });
 
-  var today = new Date();
-  var curM = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-  var curD = today.getDate();
+  var todayStr = todayYmd();
   var monShort = monthLabel(S.dueMonth).split(' ')[0].slice(0, 3);
 
-  $('due-table').innerHTML = '<table><thead><tr><th>Payee</th><th>Head</th><th class="n">Previous balance</th><th class="n">Due</th><th class="n">Paid</th><th class="n">Balance</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>' +
+  $('due-table').innerHTML = '<table><thead><tr><th>Head &amp; Due details</th><th class="n">Previous balance</th><th class="n">Due</th><th class="n">Paid</th><th class="n">Balance</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>' +
     rows.map(function (r) {
-      var isOverdue = false;
-      if (r.dueDay && ((r.monthDue > 0 && r.monthDue > r.monthPaid) || r.closing > 0)) {
-        if (S.dueMonth < curM || (S.dueMonth === curM && curD > r.dueDay)) isOverdue = true;
-      }
-      var dateHtml = '';
-      if (r.monthDue > 0 && r.dueDay) {
-        var dStr = r.dueDay + ' ' + monShort;
-        dateHtml = isOverdue
-          ? '<span class="sm-t" style="color:var(--red);font-weight:800;">⚠️ Overdue (' + dStr + ')</span>'
-          : '<span class="sm-t" style="color:var(--brand-ink);font-weight:700;">📅 ' + dStr + '</span>';
-      } else if (r.monthDue === 0 && r.monthlyAmount > 0) {
-        if (r.autoDueEnabled === false) {
-          dateHtml = '<span class="sm-t" style="color:var(--amber);font-weight:700;">⏸ Auto paused</span>';
-        } else if (r.dueDay) {
-          dateHtml = '<span class="sm-t">📅 Auto: ' + r.dueDay + ' ' + monShort + ' (' + esc(inr(r.monthlyAmount)) + ')</span>';
-        } else {
-          dateHtml = '<span class="sm-t">📅 Auto: ' + esc(inr(r.monthlyAmount)) + ' / mo</span>';
-        }
+      var isSettled = r.closing <= 0 && r.monthDue <= r.monthPaid;
+      var itemsHtml = '';
+      if (r.dueItems && r.dueItems.length) {
+        itemsHtml = '<div style="margin-top:6px;display:flex;flex-direction:column;gap:5px">' + r.dueItems.map(function (it) {
+          var dYmd = it.dueDate ? ymd(it.dueDate) : '';
+          var dStr = dYmd ? (Number(dYmd.slice(8, 10)) + ' ' + monShort) : '';
+          var overdue = !isSettled && dYmd && dYmd < todayStr;
+          var badge = dStr
+            ? (overdue
+                ? '<span style="color:var(--red);font-weight:700">⚠️ ' + esc(dStr) + '</span>'
+                : '<span style="color:var(--brand-ink);font-weight:700">📅 ' + esc(dStr) + '</span>')
+            : '';
+          var payItemBtn = (can(3) && r.isActive && r.closing > 0)
+            ? ' <button class="btn ghost sm no-print" style="padding:2px 8px;font-size:11px" type="button" data-act="pay-item" data-head="' + esc(r.headId) + '" data-amt="' + esc(it.amount) + '" data-desc="' + esc(it.description) + '">Pay</button>'
+            : '';
+          return '<div class="sm-t" style="color:var(--text2)">• <b>' + esc(it.description) + '</b> — ' + esc(inr(it.amount)) +
+            (badge ? ' · ' + badge : '') +
+            (it.source === 'auto' ? ' · <span style="color:var(--text3)">auto</span>' : '') +
+            (it.reference ? ' · Bill: ' + esc(it.reference) : '') +
+            payItemBtn + '</div>';
+        }).join('') + '</div>';
+      } else if (r.schedules && r.schedules.length) {
+        var activeCount = r.schedules.filter(function (s) { return s.autoDueEnabled !== false; }).length;
+        itemsHtml = '<span class="sm-t">' + activeCount + ' active automatic rule' + (activeCount === 1 ? '' : 's') + '</span>';
       }
 
-      var remarkSub = r.autoDueRemark ? '<span class="sm-t">📝 ' + esc(r.autoDueRemark) + '</span>' : '';
       var acts = [];
-      if (can(3) && r.isActive) acts.push('<button class="btn ghost sm" type="button" data-act="pay-party" data-id="' + esc(r.partyId) + '">Pay</button>');
-      if ((can(1) || can(2)) && r.isActive) acts.push('<button class="btn ghost sm" type="button" data-act="edit-schedule" data-id="' + esc(r.partyId) + '">Schedule</button>');
+      if (can(3) && r.isActive) acts.push('<button class="btn ghost sm" type="button" data-act="pay-head" data-id="' + esc(r.headId) + '" data-bal="' + esc(r.closing > 0 ? r.closing : '') + '">Pay</button>');
+      if (can(2) && r.isActive) acts.push('<button class="btn ghost sm" type="button" data-act="quick-due-head" data-id="' + esc(r.headId) + '">+ Due</button>');
+      if (can(4) && S.me && S.me.allEntries) acts.push('<button class="btn ghost sm" type="button" data-act="open-head-ledger" data-id="' + esc(r.headId) + '">Ledger</button>');
 
-      return '<tr><td class="keep"><b>' + esc(r.name) + '</b><span class="sm-t">' + esc(r.role) + (r.isActive ? '' : ' · inactive') + '</span>' + remarkSub + '</td>' +
-        '<td>' + esc(r.head || '–') + '</td>' +
+      return '<tr><td class="keep"><b>' + esc(r.name) + '</b>' + (r.isActive ? '' : ' <span class="sm-t">inactive</span>') + itemsHtml + '</td>' +
         '<td class="n' + (r.previous < 0 ? ' neg' : '') + '">' + num(r.previous) + '</td>' +
-        '<td class="n">' + num(r.monthDue) + dateHtml + '</td><td class="n">' + num(r.monthPaid) + '</td>' +
+        '<td class="n"><b>' + num(r.monthDue) + '</b></td>' +
+        '<td class="n">' + num(r.monthPaid) + '</td>' +
         '<td class="n' + (r.closing < 0 ? ' neg' : '') + '"><b>' + num(r.closing) + '</b></td>' +
         '<td><span class="pill ' + esc(r.status) + '">' + esc(STATUS_TXT[r.status] || r.status) + '</span></td>' +
         '<td class="keep no-print"><div class="acts-row" style="justify-content:flex-end">' + acts.join('') + '</div></td></tr>';
     }).join('') + '</tbody></table>';
 }
 
-function editSchedule(partyId) {
-  var p = byId(S.partiesAll, partyId);
-  if (!p) return;
+function renderSchedulesTable() {
+  var box = $('t2-schedules-table');
+  if (!box) return;
+  var only = $('due-head').value;
+  var dq = ($('due-q') ? $('due-q').value : '').trim().toLowerCase();
+  var list = (S.dueSchedules || []).filter(function (s) {
+    if (only && String(s.headId) !== only) return false;
+    if (dq && (s.headName + ' ' + s.description + ' ' + (s.remark || '')).toLowerCase().indexOf(dq) < 0) return false;
+    return true;
+  });
+
+  if (!list.length) {
+    box.innerHTML = emptyBox('No automatic monthly dues set up', 'Click “+ Add due (Automatic)” above to schedule recurring monthly expenses like bus installments, rent, or salaries.');
+    return;
+  }
+
+  box.innerHTML = '<table><thead><tr><th>Head</th><th>Description</th><th class="n">Monthly Amount</th><th>Due Date</th><th>Status</th><th>Remarks</th><th class="no-print"></th></tr></thead><tbody>' +
+    list.map(function (s) {
+      var active = s.autoDueEnabled !== false;
+      var acts = [
+        '<button class="btn ghost sm" type="button" data-act="edit-schedule" data-id="' + esc(s._id) + '">Edit</button>',
+        '<button class="btn ghost sm" type="button" data-act="toggle-schedule" data-id="' + esc(s._id) + '">' + (active ? 'Pause' : 'Resume') + '</button>',
+        '<button class="btn danger sm" type="button" data-act="delete-schedule" data-id="' + esc(s._id) + '">Remove</button>'
+      ].join('');
+      return '<tr' + (active ? '' : ' style="opacity:.65"') + '>' +
+        '<td><b>' + esc(s.headName) + '</b></td>' +
+        '<td>' + esc(s.description) + '</td>' +
+        '<td class="n"><b>' + inr(s.amount) + '</b></td>' +
+        '<td><span class="pill due">' + esc(ordinal(s.dueDay)) + ' of month</span></td>' +
+        '<td><span class="pill ' + (active ? 'paid' : 'part') + '">' + (active ? 'Active' : 'Paused') + '</span></td>' +
+        '<td>' + esc(s.remark || '–') + '</td>' +
+        '<td class="keep no-print"><div class="acts-row" style="justify-content:flex-end">' + acts + '</div></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+function openOneTimeDueModal(presetHeadId) {
+  if (!S.heads.length) { toast('Add a head first (Expense Heads tab)', 'error'); return; }
+  var initHead = presetHeadId || $('due-head').value || String(S.heads[0]._id);
   var fields = [
-    { key: 'defaultHeadId', label: 'Head', type: 'select', value: p.defaultHeadId || '', options: [{ v: '', t: '— choose head —' }].concat(S.heads.map(function (h) { return { v: h._id, t: h.name }; })) },
-    { key: 'monthlyAmount', label: 'Monthly amount (₹)', value: p.monthlyAmount || '', type: 'text', placeholder: '0', hint: 'Set to 0 to remove automatic monthly dues' },
-    { key: 'dueDay', label: 'Installment date (1–31)', value: p.dueDay || '', type: 'number', min: 1, max: 31, placeholder: 'e.g. 5', hint: 'Day of month when due is created (29–31 adjusts to month end)' },
-    { key: 'autoDueEnabled', label: 'Automatic schedule', type: 'select', value: p.autoDueEnabled === false ? 'false' : 'true', options: [{ v: 'true', t: 'Active (auto-generate monthly)' }, { v: 'false', t: 'Paused / stopped' }] },
-    { key: 'autoDueRemark', label: 'Saved recurring remark (optional)', type: 'textarea', value: p.autoDueRemark || '', hint: 'Attached automatically to every generated monthly due' }
+    { key: 'headId', label: 'Head', type: 'select', value: initHead, options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) },
+    { key: 'description', label: 'Description', placeholder: 'e.g. Bus 0899 insurance or Repair bill' },
+    { key: 'amount', label: 'Amount (₹)', placeholder: '0' },
+    { key: 'forMonth', label: 'For month', type: 'month', value: S.dueMonth || thisMonth() },
+    { key: 'dueDate', label: 'Due date (optional)', type: 'date' },
+    { key: 'reference', label: 'Bill / invoice no. (optional)' },
+    { key: 'remark', label: 'Remarks (optional)', type: 'textarea' }
   ];
-  openForm('Automatic schedule · ' + p.name, 'Configure monthly amount, installment date, remark, or pause/stop.', fields, 'Save schedule', function (v) {
-    var m = money(v.monthlyAmount === '' ? 0 : v.monthlyAmount);
-    if (isNaN(m) || m < 0) throw new Error('Monthly amount must be 0 or greater');
-    if (m > 0 && !v.defaultHeadId) throw new Error('Choose a head so automatic dues can be generated');
-    var dd = parseDueDayInput(v.dueDay);
-    if (m > 0 && !dd) throw new Error('Enter an installment date between 1 and 31');
-    var enabled = v.autoDueEnabled === 'true';
-    return aPut('/parties/' + partyId, {
-      defaultHeadId: v.defaultHeadId || null,
-      monthlyAmount: m,
-      dueDay: dd,
-      autoDueEnabled: enabled,
-      autoDueRemark: v.autoDueRemark.trim() || null
+  openForm('Add due (One-time)', 'Record a single bill or amount due for a specific month.', fields, 'Add one-time due', function (v) {
+    if (!v.headId) throw new Error('Choose a head');
+    var desc = v.description.trim();
+    if (!desc) throw new Error('Write a description');
+    var amt = money(v.amount);
+    if (isNaN(amt) || amt <= 0) throw new Error('Enter an amount greater than zero');
+    return aPost('/dues', {
+      headId: v.headId,
+      description: desc,
+      amount: amt,
+      forMonth: v.forMonth || undefined,
+      dueDate: v.dueDate || undefined,
+      reference: v.reference.trim() || undefined,
+      remark: v.remark.trim() || undefined
     }).then(function () {
-      if (m > 0 && enabled) {
-        return aPost('/auto-dues/check').catch(function () {});
-      }
-    }).then(function () {
-      toast('Schedule saved');
-      return refreshParties().then(function () { loadDue(); loadTodayDues(); });
+      toast('One-time due added');
+      loadDue();
     });
   });
+}
+
+function openAutoDueModal(presetHeadId) {
+  if (!S.heads.length) { toast('Add a head first (Expense Heads tab)', 'error'); return; }
+  var initHead = presetHeadId || $('due-head').value || String(S.heads[0]._id);
+  var targetMonth = S.dueMonth || thisMonth();
+  var fields = [
+    { key: 'headId', label: 'Head', type: 'select', value: initHead, options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) },
+    { key: 'description', label: 'Description', placeholder: 'e.g. Bus 0899 EMI or Building rent', hint: 'You can add multiple automatic dues under the same head (e.g. separate installments for each bus).' },
+    { key: 'amount', label: 'Monthly amount (₹)', placeholder: '0' },
+    { key: 'dueDay', label: 'Monthly due date (1–31)', type: 'number', min: 1, max: 31, placeholder: 'e.g. 5', hint: 'Automatically creates the due every month on this date (29–31 adjusts to month end).' },
+    { key: 'createNow', label: 'Also add due for ' + monthLabel(targetMonth) + ' right now?', type: 'select', value: 'yes', options: [{ v: 'yes', t: 'Yes — create ' + monthLabel(targetMonth) + ' due immediately' }, { v: 'no', t: 'No — start from upcoming scheduled date' }] },
+    { key: 'remark', label: 'Saved recurring remark (optional)', type: 'textarea', hint: 'Attached automatically to every generated monthly due' }
+  ];
+  openForm('Add due (Automatic monthly)', 'Creates a recurring monthly due rule under the selected head.', fields, 'Save automatic due', function (v) {
+    if (!v.headId) throw new Error('Choose a head');
+    var desc = v.description.trim();
+    if (!desc) throw new Error('Write a description');
+    var amt = money(v.amount);
+    if (isNaN(amt) || amt <= 0) throw new Error('Enter a monthly amount greater than zero');
+    var dd = parseDueDayInput(v.dueDay);
+    if (!dd) throw new Error('Enter a due date between 1 and 31');
+
+    return aPost('/schedules', {
+      headId: v.headId,
+      description: desc,
+      amount: amt,
+      dueDay: dd,
+      autoDueEnabled: true,
+      createForMonth: v.createNow === 'yes' ? targetMonth : undefined,
+      remark: v.remark.trim() || undefined
+    }).then(function () {
+      if (v.createNow !== 'yes') return aPost('/auto-dues/check').catch(function () {});
+    }).then(function () {
+      toast('Automatic monthly due saved');
+      loadDue();
+    });
+  });
+}
+
+function editSchedule(id) {
+  var s = byId(S.dueSchedules || [], id);
+  if (!s) return;
+  var fields = [
+    { key: 'headId', label: 'Head', type: 'select', value: s.headId, options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) },
+    { key: 'description', label: 'Description', value: s.description },
+    { key: 'amount', label: 'Monthly amount (₹)', value: s.amount },
+    { key: 'dueDay', label: 'Monthly due date (1–31)', type: 'number', min: 1, max: 31, value: s.dueDay },
+    { key: 'autoDueEnabled', label: 'Status', type: 'select', value: s.autoDueEnabled === false ? 'false' : 'true', options: [{ v: 'true', t: 'Active (auto-generate monthly)' }, { v: 'false', t: 'Paused' }] },
+    { key: 'remark', label: 'Saved recurring remark (optional)', type: 'textarea', value: s.remark || '' }
+  ];
+  openForm('Edit automatic due rule', null, fields, 'Save changes', function (v) {
+    if (!v.headId) throw new Error('Choose a head');
+    var desc = v.description.trim();
+    if (!desc) throw new Error('Description cannot be empty');
+    var amt = money(v.amount);
+    if (isNaN(amt) || amt <= 0) throw new Error('Enter a monthly amount greater than zero');
+    var dd = parseDueDayInput(v.dueDay);
+    if (!dd) throw new Error('Due date must be between 1 and 31');
+    var enabled = v.autoDueEnabled === 'true';
+
+    return aPut('/schedules/' + id, {
+      headId: v.headId,
+      description: desc,
+      amount: amt,
+      dueDay: dd,
+      autoDueEnabled: enabled,
+      remark: v.remark.trim() || null
+    }).then(function () {
+      if (enabled) return aPost('/auto-dues/check').catch(function () {});
+    }).then(function () {
+      toast('Schedule updated');
+      loadDue();
+    });
+  });
+}
+
+function toggleSchedule(id) {
+  var s = byId(S.dueSchedules || [], id);
+  if (!s) return;
+  var next = s.autoDueEnabled === false;
+  aPut('/schedules/' + id, { autoDueEnabled: next }).then(function () {
+    if (next) return aPost('/auto-dues/check').catch(function () {});
+  }).then(function () {
+    toast(next ? 'Schedule resumed' : 'Schedule paused');
+    loadDue();
+  }).catch(function (e) { toast(errMsg(e), 'error'); });
+}
+
+function deleteSchedule(id) {
+  var s = byId(S.dueSchedules || [], id);
+  if (!s) return;
+  askConfirm('Remove automatic schedule?', '“' + s.headName + ' — ' + s.description + '” will stop generating future dues. Existing dues already created remain intact.', 'Remove')
+    .then(function (yes) {
+      if (!yes) return;
+      return aDel('/schedules/' + id).then(function () { toast('Automatic schedule removed'); loadDue(); });
+    }).catch(function (e) { toast(errMsg(e), 'error'); });
 }
 
 function checkAutoDues() {
@@ -658,280 +708,26 @@ function checkAutoDues() {
     var d = r.data;
     if (d && d.created > 0) {
       var months = d.runs.filter(function (x) { return x.created; }).map(function (x) { return monthLabel(x.month); }).join(', ');
-      toast('Automatic dues created for ' + months + ' (' + d.created + ' payee' + (d.created === 1 ? '' : 's') + ')');
-      if (!$('tab2').hidden) { loadDue(); loadTodayDues(); }
+      toast('Automatic dues created for ' + months + ' (' + d.created + ' entr' + (d.created === 1 ? 'y' : 'ies') + ')');
+      if (!$('tab2').hidden) loadDue();
     }
   }).catch(function () {});
-}
-
-function generateDues() {
-  askConfirm('Generate scheduled dues for ' + monthLabel(S.dueMonth) + '?',
-    'A due is added for every active payee with an automatic monthly schedule. Paused payees or those already generated for this month are skipped.', 'Generate')
-    .then(function (yes) {
-      if (!yes) return;
-      var btn = $('due-generate');
-      setBtnLoading(btn, true, 'Generating…');
-      return aPost('/dues/generate', { month: S.dueMonth }).then(function (r) {
-        var d = r.data;
-        toast(d.created.length + ' due' + (d.created.length === 1 ? '' : 's') + ' generated');
-        var problems = d.skipped.filter(function (x) { return x.reason !== 'Already generated'; });
-        if (problems.length) {
-          openInfo('Some payees were skipped', '<p class="sub">Review their schedule or head if needed.</p>' +
-            problems.map(function (x) { return '<div class="li"><span>' + esc(x.name) + '</span><span class="hint">' + esc(x.reason) + '</span></div>'; }).join(''));
-        }
-        loadDue();
-        loadTodayDues();
-      }).then(function () { setBtnLoading(btn, false); }, function (e) { setBtnLoading(btn, false); throw e; });
-    }).catch(function (e) { toast(errMsg(e), 'error'); });
-}
-
-function addDue() {
-  if (!S.parties.length) { toast('Add a payee first (Expense Heads tab)', 'error'); return; }
-  if (!S.heads.length) { toast('Add a head first (Expense Heads tab)', 'error'); return; }
-
-  var initPartyId = $('due-party').value || String(S.parties[0]._id);
-  var mode = 'once';
-
-  var ov = document.createElement('div');
-  ov.className = 'ov';
-  ov.innerHTML = '<form class="md" role="dialog" aria-modal="true" aria-labelledby="ad-t" novalidate>' +
-    '<h3 id="ad-t">Add due</h3>' +
-    '<p class="sub" id="ad-sub">Record a one-time due/bill for this month, or set an automatic monthly schedule.</p>' +
-    '<div class="seg" role="group" aria-label="Due mode" id="ad-mode" style="margin-bottom:4px">' +
-      '<button type="button" data-dmode="once" aria-pressed="true">One-time due</button>' +
-      '<button type="button" data-dmode="auto" aria-pressed="false">Automatic monthly</button>' +
-    '</div>' +
-    '<div class="stack">' +
-      '<label class="fld" for="ad-party">Payee<select class="in" id="ad-party">' +
-        S.parties.map(function (p) { return '<option value="' + esc(p._id) + '"' + (String(p._id) === initPartyId ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
-      '</select></label>' +
-      '<label class="fld" for="ad-head">Head<select class="in" id="ad-head">' +
-        '<option value="">— choose head —</option>' +
-        S.heads.map(function (h) { return '<option value="' + esc(h._id) + '">' + esc(h.name) + '</option>'; }).join('') +
-      '</select></label>' +
-
-      '<div id="ad-once-fields" style="display:flex;flex-direction:column;gap:12px">' +
-        '<label class="fld" for="ad-desc">Description<input class="in" id="ad-desc" maxlength="200" placeholder="e.g. September salary or repair bill"></label>' +
-        '<div class="row">' +
-          '<label class="fld" for="ad-amount">Amount (₹)<input class="in" id="ad-amount" inputmode="decimal" placeholder="0"></label>' +
-          '<label class="fld" for="ad-month">For month<input class="in" id="ad-month" type="month" value="' + esc(S.dueMonth) + '"></label>' +
-        '</div>' +
-        '<label class="fld" for="ad-ref">Bill number (optional)<input class="in" id="ad-ref" maxlength="80"></label>' +
-        '<label class="fld" for="ad-remark">Remarks (optional)<textarea class="in" id="ad-remark" rows="2" maxlength="500"></textarea></label>' +
-      '</div>' +
-
-      '<div id="ad-auto-fields" style="display:none;flex-direction:column;gap:12px">' +
-        '<div class="row">' +
-          '<label class="fld" for="ad-auto-amt">Monthly amount (₹)<input class="in" id="ad-auto-amt" inputmode="decimal" placeholder="0"></label>' +
-          '<label class="fld" for="ad-auto-day">Installment date (1–31)<input class="in" id="ad-auto-day" type="number" min="1" max="31" placeholder="e.g. 5"></label>' +
-        '</div>' +
-        '<span class="hint" style="margin-top:-6px">Automatically creates the due every month on this date (29–31 adjusts to month end).</span>' +
-        '<label class="fld" for="ad-auto-enabled">Schedule status<select class="in" id="ad-auto-enabled">' +
-          '<option value="true">Active (auto-generate monthly)</option>' +
-          '<option value="false">Paused / stopped</option>' +
-        '</select></label>' +
-        '<label class="fld" for="ad-auto-remark">Saved recurring remark (optional)<textarea class="in" id="ad-auto-remark" rows="2" maxlength="500" placeholder="Attached automatically to every generated monthly due"></textarea></label>' +
-      '</div>' +
-    '</div>' +
-    '<div class="hint" id="ad-err" style="color:var(--red);font-weight:700;min-height:18px" role="alert"></div>' +
-    '<div class="acts"><button class="btn ghost" type="button" id="ad-no">Cancel</button><button class="btn" type="submit" id="ad-ok">Add one-time due</button></div>' +
-  '</form>';
-  document.body.appendChild(ov);
-
-  var form = ov.firstChild;
-  var pSel = ov.querySelector('#ad-party');
-  var hSel = ov.querySelector('#ad-head');
-  var okBtn = ov.querySelector('#ad-ok');
-  var errEl = ov.querySelector('#ad-err');
-
-  function syncPartyDefaults() {
-    var p = byId(S.parties, pSel.value);
-    var hasDef = !!(p && p.defaultHeadId && byId(S.heads, p.defaultHeadId));
-    if (hasDef) {
-      hSel.value = p.defaultHeadId;
-      hSel.disabled = true;
-    } else {
-      hSel.disabled = false;
-      hSel.value = '';
-    }
-    if (p) {
-      ov.querySelector('#ad-amount').value = p.monthlyAmount > 0 ? p.monthlyAmount : '';
-      ov.querySelector('#ad-remark').value = p.autoDueRemark || '';
-      ov.querySelector('#ad-auto-amt').value = p.monthlyAmount > 0 ? p.monthlyAmount : '';
-      ov.querySelector('#ad-auto-day').value = p.dueDay || '';
-      ov.querySelector('#ad-auto-enabled').value = p.autoDueEnabled === false ? 'false' : 'true';
-      ov.querySelector('#ad-auto-remark').value = p.autoDueRemark || '';
-    }
-  }
-
-  function setDueMode(nextMode) {
-    mode = nextMode;
-    var btns = ov.querySelectorAll('#ad-mode button');
-    for (var i = 0; i < btns.length; i++) {
-      btns[i].setAttribute('aria-pressed', btns[i].dataset.dmode === mode ? 'true' : 'false');
-    }
-    ov.querySelector('#ad-once-fields').style.display = mode === 'once' ? 'flex' : 'none';
-    ov.querySelector('#ad-auto-fields').style.display = mode === 'auto' ? 'flex' : 'none';
-    okBtn.textContent = mode === 'once' ? 'Add one-time due' : 'Save automatic schedule';
-    errEl.textContent = '';
-  }
-
-  ov.querySelector('#ad-mode').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-dmode]');
-    if (b) setDueMode(b.dataset.dmode);
-  });
-  pSel.addEventListener('change', syncPartyDefaults);
-  syncPartyDefaults();
-
-  var saving = false, noBtn = ov.querySelector('#ad-no');
-  function setDueModalBusy(on) {
-    saving = on;
-    noBtn.disabled = on;
-    ov.querySelectorAll('input,select,textarea,#ad-mode button').forEach(function (el) { el.disabled = on; });
-    if (!on) {
-      var curP = byId(S.parties, pSel.value);
-      hSel.disabled = !!(curP && curP.defaultHeadId && byId(S.heads, curP.defaultHeadId));
-    }
-  }
-
-  function close() { if (ov.parentNode) document.body.removeChild(ov); document.removeEventListener('keydown', onKey); }
-  function onKey(e) { if (e.key === 'Escape' && !saving) close(); }
-  document.addEventListener('keydown', onKey);
-  noBtn.onclick = function () { if (!saving) close(); };
-  setTimeout(function () { pSel.focus(); }, 30);
-
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    if (okBtn.disabled || saving) return;
-    errEl.textContent = '';
-
-    var partyId = pSel.value;
-    var headId = hSel.value;
-    if (!partyId) { errEl.textContent = 'Choose a payee'; return; }
-    if (!headId) { errEl.textContent = 'Choose a head'; return; }
-
-    if (mode === 'once') {
-      var desc = ov.querySelector('#ad-desc').value.trim();
-      var amt = money(ov.querySelector('#ad-amount').value);
-      var forMonth = ov.querySelector('#ad-month').value;
-      var ref = ov.querySelector('#ad-ref').value.trim();
-      var remark = ov.querySelector('#ad-remark').value.trim();
-
-      if (!desc) { errEl.textContent = 'Write a description'; return; }
-      if (isNaN(amt) || amt <= 0) { errEl.textContent = 'Enter an amount greater than zero'; return; }
-
-      setDueModalBusy(true);
-      setBtnLoading(okBtn, true, 'Adding due…');
-      aPost('/dues', {
-        partyId: partyId,
-        headId: headId,
-        description: desc,
-        amount: amt,
-        forMonth: forMonth || undefined,
-        reference: ref || undefined,
-        remark: remark || undefined
-      }).then(function () {
-        close();
-        toast('One-time due added');
-        loadDue();
-        loadTodayDues();
-      }).catch(function (err) {
-        errEl.textContent = errMsg(err);
-        setDueModalBusy(false);
-        setBtnLoading(okBtn, false);
-      });
-    } else {
-      var autoAmt = money(ov.querySelector('#ad-auto-amt').value);
-      var dd;
-      try {
-        dd = parseDueDayInput(ov.querySelector('#ad-auto-day').value);
-      } catch (err) {
-        errEl.textContent = errMsg(err);
-        return;
-      }
-      var enabled = ov.querySelector('#ad-auto-enabled').value === 'true';
-      var autoRemark = ov.querySelector('#ad-auto-remark').value.trim();
-
-      if (isNaN(autoAmt) || autoAmt <= 0) { errEl.textContent = 'Enter a monthly amount greater than zero'; return; }
-      if (!dd) { errEl.textContent = 'Enter an installment date between 1 and 31'; return; }
-
-      setDueModalBusy(true);
-      setBtnLoading(okBtn, true, 'Saving schedule…');
-      var p = byId(S.parties, partyId);
-      var body = {
-        monthlyAmount: autoAmt,
-        dueDay: dd,
-        autoDueEnabled: enabled,
-        autoDueRemark: autoRemark || null
-      };
-      if (!p || !p.defaultHeadId) body.defaultHeadId = headId;
-
-      aPut('/parties/' + partyId, body).then(function () {
-        if (enabled) return aPost('/auto-dues/check').catch(function () {});
-      }).then(function () {
-        close();
-        toast(enabled ? 'Automatic schedule saved' : 'Schedule saved (paused)');
-        return refreshParties().then(function () { loadDue(); loadTodayDues(); });
-      }).catch(function (err) {
-        errEl.textContent = errMsg(err);
-        setDueModalBusy(false);
-        setBtnLoading(okBtn, false);
-      });
-    }
-  });
-}
-
-function loadTodayDues() {
-  var box = $('t2-today-table');
-  if (!box) return;
-  var my = ++S.todayDueReq, t = todayYmd();
-  box.innerHTML = '<div class="empty"><span class="spin"></span>Loading…</div>';
-  aGet('/entries', { from: t, to: t, type: 'due', page: 1, limit: 100 }).then(function (r) {
-    if (my !== S.todayDueReq) return;
-    S.todayDueRows = r.data || [];
-    var tot = r.totals || {};
-    if ($('t2-today-sub')) {
-      $('t2-today-sub').textContent = fmtD(t + 'T12:00:00+05:30') + ' · Total due entered today: ' + inr(tot.due) +
-        (S.todayDueRows.length ? ' (' + S.todayDueRows.length + ' entr' + (S.todayDueRows.length === 1 ? 'y' : 'ies') + ')' : '');
-    }
-    if (!S.todayDueRows.length) {
-      box.innerHTML = emptyBox('No dues entered today yet', 'Any due or bill you add or generate today will appear here automatically.');
-      return;
-    }
-    box.innerHTML = '<table><thead><tr><th>Sr. No.</th><th>Time</th><th>Payee</th><th>Head</th><th>Description</th><th class="n">Amount</th><th>Entered by</th><th>Remarks</th><th class="no-print"></th></tr></thead><tbody>' +
-      S.todayDueRows.map(function (e) {
-        var rev = e.status === 'reversed';
-        var sub = [e.forMonth ? monthLabel(e.forMonth) : '', e.reference ? 'Bill: ' + e.reference : '', e.source === 'auto' ? 'auto' : ''].filter(Boolean).join(' · ');
-        var remarks = (e.remark ? esc(e.remark) : '') + (rev ? '<span class="sm-t" style="color:var(--red)">Reversed: ' + esc(e.reversedReason || '') + '</span>' : '');
-        var acts = '<button class="btn ghost sm" type="button" data-act="audit" data-id="' + esc(e._id) + '">History</button>';
-        if (isOwner() && !rev) acts += ' <button class="btn ghost sm" type="button" data-act="edit-entry" data-id="' + esc(e._id) + '">Edit</button> <button class="btn danger sm" type="button" data-act="reverse-entry" data-id="' + esc(e._id) + '">Reverse</button>';
-        return '<tr' + (rev ? ' class="rev"' : '') + '>' +
-          '<td class="keep"><b>' + esc(e.voucherNo) + '</b></td>' +
-          '<td>' + esc(fmtT(e.entryDate)) + '</td>' +
-          '<td class="keep"><b>' + esc(e.partyName || e.payeeName || '–') + '</b></td>' +
-          '<td>' + esc(e.headName) + (sub ? '<span class="sm-t">' + esc(sub) + '</span>' : '') + '</td>' +
-          '<td>' + esc(descOf(e)) + '</td>' +
-          '<td class="n"><b>' + num(e.amount) + '</b></td>' +
-          '<td>' + who(e.enteredBy) + '</td>' +
-          '<td>' + remarks + '</td>' +
-          '<td class="keep no-print">' + acts + '</td></tr>';
-      }).join('') + '</tbody></table>';
-  }).catch(function (e) { if (my === S.todayDueReq) box.innerHTML = emptyBox('Could not load today’s dues', errMsg(e)); });
 }
 
 /* ═══════════════════════════════════════════════════════════════
    TAB 3 · EXPENSES PAID
 ═══════════════════════════════════════════════════════════════ */
 function fillPayForm() {
-  var curP = $('p-party').value, curH = $('p-head').value, curA = $('p-adv').value;
-  $('p-party').innerHTML = '<option value="">— choose payee —</option>' +
-    S.parties.map(function (p) { return '<option value="' + esc(p._id) + '">' + esc(p.name) + ' · ' + esc(p.role) + '</option>'; }).join('');
-  $('p-head').innerHTML = '<option value="">— choose head —</option>' + S.heads.map(function (h) { return '<option value="' + esc(h._id) + '">' + esc(h.name) + '</option>'; }).join('');
+  var curH = $('p-head').value, curA = $('p-adv').value;
+  $('p-head').innerHTML = '<option value="">— choose head —</option>' + S.heads.map(function (h) {
+    return '<option value="' + esc(h._id) + '">' + esc(h.name) + '</option>';
+  }).join('');
   $('p-adv').innerHTML = S.advisors.length
     ? '<option value="">— choose —</option>' + S.advisors.map(function (a) { return '<option value="' + esc(a._id) + '">' + esc(a.name) + '</option>'; }).join('')
     : '<option value="">Not needed (no names added)</option>';
   $('p-adv').disabled = !S.advisors.length;
-  $('p-party').value = curP; $('p-head').value = curH; $('p-adv').value = curA;
+  $('p-head').value = curH;
+  $('p-adv').value = curA;
   $('p-entered').textContent = whoAmI();
   $('p-when').textContent = fmtDT(new Date());
   $('p-date-wrap').hidden = !isOwner();
@@ -944,42 +740,35 @@ function whoAmI() {
   return S.me.kind === 'admin' ? 'Admin (owner login)' : S.me.name + (S.me.designation ? ' · ' + S.me.designation : '');
 }
 
-function autoDescribe() {
-  if (S.payType === 'adjustment') return;
-  var party = byId(S.parties, $('p-party').value), d = $('p-desc');
-  var auto = party ? 'To ' + party.name : '';
-  if (!d.value || d.value === S.lastAutoDesc) d.value = auto;
-  S.lastAutoDesc = auto;
-}
-
 function syncPayForm() {
   var adj = S.payType === 'adjustment';
-  var party = byId(S.parties, $('p-party').value);
-  var hasDefHead = !!(party && party.defaultHeadId && byId(S.heads, party.defaultHeadId));
-  if (hasDefHead) {
-    $('p-head').value = party.defaultHeadId;
-    $('p-head').disabled = true;
-  } else {
-    $('p-head').disabled = false;
-  }
-  $('p-name-row').hidden = true;
   $('p-mode-wrap').hidden = adj;
-  $('p-desc').placeholder = adj ? 'e.g. Books adjusted' : 'e.g. To Guard, salary';
+  $('p-desc').placeholder = adj ? 'e.g. Fee concession adjusted against salary' : 'e.g. Bus 0899 installment or Diesel for generator';
   $('p-save').textContent = adj ? 'Save adjustment' : 'Save payment';
-  var first = $('p-party').options[0]; if (first && !$('p-party').value) first.textContent = '— choose payee —';
 
-  var pv = $('p-preview'), amt = money($('p-amount').value);
-  if (party) {
-    var before = Number(party.balance) || 0;
+  var headId = $('p-head').value;
+  var head = byId(S.heads, headId);
+  var pv = $('p-preview');
+  var amt = money($('p-amount').value);
+
+  if (head && S.headBalances[String(head._id)] !== undefined) {
+    var before = Number(S.headBalances[String(head._id)]) || 0;
     if (!isNaN(amt) && amt > 0) {
       var after = Math.round((before - amt) * 100) / 100;
-      pv.hidden = false; pv.className = 'preview' + (after < 0 ? ' warn' : '');
-      pv.textContent = 'Balance after this ' + (adj ? 'adjustment' : 'payment') + ': ' + (after < 0 ? inr(Math.abs(after)) + ' advance' : inr(after) + ' still owed') + '  (now ' + (before < 0 ? inr(Math.abs(before)) + ' advance' : inr(before) + ' owed') + ')';
+      pv.hidden = false;
+      pv.className = 'preview' + (after < 0 ? ' warn' : '');
+      pv.textContent = head.name + ' balance after this ' + (adj ? 'adjustment' : 'payment') + ': ' +
+        (after < 0 ? inr(Math.abs(after)) + ' advance' : inr(after) + ' due remaining') +
+        '  (now ' + (before < 0 ? inr(Math.abs(before)) + ' advance' : inr(before) + ' due') + ')';
     } else {
-      pv.hidden = false; pv.className = 'preview';
-      pv.textContent = 'Current balance: ' + (before < 0 ? inr(Math.abs(before)) + ' advance given' : before > 0 ? inr(before) + ' owed to ' + party.name : 'settled');
+      pv.hidden = false;
+      pv.className = 'preview';
+      pv.textContent = head.name + ' current balance: ' +
+        (before < 0 ? inr(Math.abs(before)) + ' advance' : before > 0 ? inr(before) + ' due' : 'settled');
     }
-  } else pv.hidden = true;
+  } else {
+    pv.hidden = true;
+  }
 }
 
 function setPayType(t) {
@@ -987,80 +776,116 @@ function setPayType(t) {
   var btns = document.querySelectorAll('#pay-type button');
   for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', btns[i].dataset.type === t ? 'true' : 'false');
   fillPayForm();
-  if (t === 'adjustment') { if ($('p-desc').value === S.lastAutoDesc) $('p-desc').value = ''; S.lastAutoDesc = null; }
-  else autoDescribe();
+}
+
+/* ---- Bill / Receipt image compression ---- */
+function clearAttachment() {
+  S.pendingAttachment = null;
+  if ($('p-att')) $('p-att').value = '';
+  if ($('p-att-preview')) {
+    $('p-att-preview').hidden = true;
+    $('p-att-preview').innerHTML = '';
+  }
+}
+
+function handleAttachmentChange(e) {
+  var file = e.target.files && e.target.files[0];
+  if (!file) { clearAttachment(); return; }
+  if (!/^image\//i.test(file.type)) {
+    toast('Please select an image file (JPG, PNG, or WebP).', 'error');
+    clearAttachment();
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (ev) {
+    var img = new Image();
+    img.onload = function () {
+      var maxDim = 1280;
+      var w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+      if (dataUrl.length > 1950000) {
+        dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+      }
+      S.pendingAttachment = {
+        dataUrl: dataUrl,
+        name: file.name || 'bill-image.jpg',
+        mimeType: 'image/jpeg'
+      };
+      var prev = $('p-att-preview');
+      if (prev) {
+        prev.hidden = false;
+        prev.innerHTML = '<span class="att-prev"><img src="' + esc(dataUrl) + '" alt="Bill preview"><span>' + esc(file.name) + '</span>' +
+          '<button class="btn danger sm" type="button" data-act="clear-att" style="padding:2px 7px;font-size:11px">Remove</button></span>';
+      }
+    };
+    img.onerror = function () { toast('Could not read image file.', 'error'); clearAttachment(); };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function submitPayment(e) {
   e.preventDefault();
   var adj = S.payType === 'adjustment';
   var amt = money($('p-amount').value);
-  if (!$('p-head').value) { toast('Choose a head', 'error'); return; }
+  if (!$('p-head').value) { toast('Choose a head', 'error'); $('p-head').focus(); return; }
+  if (isNaN(amt) || amt <= 0) { toast('Enter an amount greater than zero', 'error'); $('p-amount').focus(); return; }
   if (!$('p-desc').value.trim()) { toast('Write a description', 'error'); $('p-desc').focus(); return; }
-  if (isNaN(amt) || amt <= 0) { toast('Enter an amount greater than zero', 'error'); return; }
-  if (!$('p-party').value) { toast('Choose a payee', 'error'); return; }
-  if (S.advisors.length && !$('p-adv').value) { toast('Choose who advised this payment', 'error'); return; }
+  if (S.advisors.length && !$('p-adv').value) { toast('Choose who advised this payment', 'error'); $('p-adv').focus(); return; }
+
   var body = {
-    type: S.payType, headId: $('p-head').value, partyId: $('p-party').value || undefined,
-    payeeName: $('p-party').value ? undefined : ($('p-name').value.trim() || undefined),
+    type: S.payType,
+    headId: $('p-head').value,
     description: $('p-desc').value.trim(),
-    amount: amt, mode: adj ? undefined : $('p-mode').value,
-    advisedById: $('p-adv').value || undefined, reference: $('p-ref').value.trim() || undefined,
-    remark: $('p-remark').value.trim() || undefined, entryDate: (isOwner() && $('p-date').value) || undefined
+    amount: amt,
+    mode: adj ? undefined : $('p-mode').value,
+    advisedById: $('p-adv').value || undefined,
+    reference: $('p-ref').value.trim() || undefined,
+    remark: $('p-remark').value.trim() || undefined,
+    attachment: S.pendingAttachment || undefined,
+    entryDate: (isOwner() && $('p-date').value) || undefined
   };
+
   if (S.savingPayment) return;
   S.savingPayment = true;
   setBtnLoading($('p-save'), true, 'Saving…');
   aPost('/payments', body).then(function (r) {
     var d = r.data;
-    var tail = d.balanceAfter === null ? '' : ' · ' + (d.balanceAfter < 0 ? inr(Math.abs(d.balanceAfter)) + ' advance' : inr(d.balanceAfter) + ' still owed');
+    if (d.balanceAfter !== null && d.balanceAfter !== undefined) {
+      S.headBalances[String(d.entry.headId)] = d.balanceAfter;
+    }
+    var tail = d.balanceAfter === null ? '' : ' · ' + (d.balanceAfter < 0 ? inr(Math.abs(d.balanceAfter)) + ' advance' : inr(d.balanceAfter) + ' due');
     toast('Saved ' + d.entry.voucherNo + ' · entered by ' + d.entry.enteredBy.name + tail);
     $('p-last').hidden = false;
-    $('p-last').innerHTML = '✔ Saved <b>' + esc(d.entry.voucherNo) + '</b> · ' + esc(inr(d.entry.amount)) + ' · ' + esc(d.entry.partyName || d.entry.payeeName || '') +
+    $('p-last').innerHTML = '✔ Saved <b>' + esc(d.entry.voucherNo) + '</b> · ' + esc(inr(d.entry.amount)) + ' · ' + esc(d.entry.headName) +
       ' &nbsp;<button class="btn ghost sm" type="button" data-act="receipt" data-id="' + esc(d.entry._id) + '">Print receipt</button>';
-    ['p-amount', 'p-ref', 'p-remark', 'p-name', 'p-desc'].forEach(function (id) { $(id).value = ''; });
-    $('p-date').value = ''; S.lastAutoDesc = null;
-    return refreshParties().then(function () { fillPayForm(); autoDescribe(); loadEntries(1); });
+    ['p-amount', 'p-ref', 'p-remark', 'p-desc'].forEach(function (id) { $(id).value = ''; });
+    $('p-date').value = '';
+    clearAttachment();
+    fillPayForm();
+    loadEntries(1);
   }).catch(function (err) { toast(errMsg(err), 'error'); })
     .then(function () { S.savingPayment = false; setBtnLoading($('p-save'), false); });
 }
 
 /* ---- entries list ---- */
-S.entRows = []; S.preset = 'today'; S.entInit = false; S.expStaff = null;
-
-function loadExpenseStaff() {
-  if (S.expStaff !== null) return Promise.resolve(S.expStaff);
-  if (!isOwner()) {
-    S.expStaff = (S.me && Array.isArray(S.me.expenseStaff)) ? S.me.expenseStaff : [];
-    return Promise.resolve(S.expStaff);
-  }
-  var credUrl = (typeof API_ENDPOINTS !== 'undefined' && API_ENDPOINTS.CREDENTIALS)
-    ? API_ENDPOINTS.CREDENTIALS
-    : (API_BASE_URL + '/credentials');
-  return apiGet(credUrl, true).then(function (r) {
-    var list = r.data || [];
-    S.expStaff = list.filter(function (c) {
-      var a = c.additionalAccess || {};
-      return c.staff && c.staff._id && a.canAccessExpenseManagement &&
-        (a.canAccessExpenseTab1 || a.canAccessExpenseTab2 || a.canAccessExpenseTab3 || a.canAccessExpenseTab4);
-    }).map(function (c) {
-      return { _id: String(c.staff._id), name: c.staff.name };
-    });
-    return S.expStaff;
-  }).catch(function () {
-    S.expStaff = [];
-    return S.expStaff;
-  });
+function fillEntryHeads() {
+  if (!$('e-head')) return;
+  var cur = $('e-head').value;
+  $('e-head').innerHTML = '<option value="">All heads</option>' + S.headsAll.map(function (h) {
+    return '<option value="' + esc(h._id) + '">' + esc(h.name) + (h.isActive ? '' : ' (inactive)') + '</option>';
+  }).join('');
+  $('e-head').value = cur;
 }
-
-TAB_LOADERS[3] = function () {
-  loadLookupsOnce().then(function () {
-    fillPayForm();
-    fillEnteredByFilter();
-    loadExpenseStaff().then(function () { fillEnteredByFilter(); });
-    if (!S.entInit) { S.entInit = true; applyPreset('today'); } else loadEntries(S.ent.page || 1);
-  }).catch(function (e) { toast(errMsg(e), 'error'); });
-};
 
 function fillEnteredByFilter() {
   if (!$('e-by')) return;
@@ -1073,11 +898,13 @@ function fillEnteredByFilter() {
     seen[k] = true;
     staffList.push({ _id: k, name: name });
   }
-  (S.expStaff || []).forEach(function (s) { addStaff(s._id, s.name); });
-  if (S.me && S.me.kind === 'staff' && S.me.staffId) addStaff(S.me.staffId, S.me.name);
+  ((S.me && S.me.staffList) || []).forEach(function (s) { addStaff(s._id, s.name); });
+  if (S.me && S.me.kind === 'staff' && S.me.userKey) {
+    addStaff(S.me.userKey.replace(/^s/, ''), S.me.name);
+  }
   (S.entRows || []).forEach(function (e) {
-    if (e.enteredBy && e.enteredBy.kind === 'staff' && e.enteredBy.id) {
-      addStaff(e.enteredBy.id, e.enteredBy.name);
+    if (e.enteredBy && e.enteredBy.kind === 'staff' && e.enteredBy.staffId) {
+      addStaff(e.enteredBy.staffId, e.enteredBy.name);
     }
   });
   staffList.sort(function (a, b) { return a.name.localeCompare(b.name); });
@@ -1088,6 +915,16 @@ function fillEnteredByFilter() {
   $('e-by').innerHTML = opts;
   $('e-by').value = cur;
 }
+
+TAB_LOADERS[3] = function () {
+  loadLookupsOnce().then(function () {
+    fillPayForm();
+    fillEntryHeads();
+    fillEnteredByFilter();
+    refreshHeadBalances().then(syncPayForm);
+    if (!S.entInit) { S.entInit = true; applyPreset('today'); } else loadEntries(S.ent.page || 1);
+  }).catch(function (e) { toast(errMsg(e), 'error'); });
+};
 
 function shiftYmd(n) { return ymd(new Date(Date.now() + n * 86400000)); }
 function presetRange(name) {
@@ -1110,7 +947,16 @@ function applyPreset(name) {
   loadEntries(1);
 }
 
-function entFilters() { return { from: $('e-from').value, to: $('e-to').value, type: $('e-type').value, enteredBy: $('e-by') ? $('e-by').value : '', q: $('e-q').value.trim() }; }
+function entFilters() {
+  return {
+    from: $('e-from').value,
+    to: $('e-to').value,
+    headId: $('e-head') ? $('e-head').value : '',
+    type: $('e-type').value,
+    enteredBy: $('e-by') ? $('e-by').value : '',
+    q: $('e-q').value.trim()
+  };
+}
 
 function entPeriodText() {
   var f = $('e-from').value, t = $('e-to').value;
@@ -1127,17 +973,17 @@ function loadEntries(page) {
     if (my !== S.entReq) return;
     S.entRows = r.data || [];
     fillEnteredByFilter();
-    S.ent.pages = r.pagination.totalPages || 1; S.ent.total = r.pagination.totalRecords;
+    S.ent.pages = r.pagination.totalPages || 1;
+    S.ent.total = r.pagination.totalRecords;
     renderEntries(r);
   }).catch(function (e) { if (my !== S.entReq) return; $('ent-table').innerHTML = emptyBox('Could not load entries', errMsg(e)); });
 }
 
 function who(a) {
   var label = a.kind === 'system' ? 'Admin' : a.name;
-  var sub = a.kind === 'admin' ? 'Owner' : a.kind === 'system' ? 'Owner login' : (a.designation || '');
+  var sub = a.kind === 'admin' ? 'Owner' : a.kind === 'system' ? 'Auto rule' : (a.designation || '');
   return esc(label) + (sub ? '<span class="sm-t">' + esc(sub) + '</span>' : '');
 }
-function fmtT(d) { return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }); }
 function descOf(e) {
   if (e.description) return e.description;
   return e.type === 'due' ? 'Due' : e.type === 'adjustment' ? 'Adjustment' : 'Payment';
@@ -1148,26 +994,49 @@ function renderEntries(r) {
   $('ent-banner').innerHTML = r.scope === 'mine' ? '<div class="banner">Showing only the entries you made yourself.</div>' : '';
   var t = r.totals || {};
   $('ent-sub').textContent = entPeriodText() + ' · Paid ' + inr(t.paid) + ' · Adjusted ' + inr(t.adjustment) + ' · Due entered ' + inr(t.due) + (S.ent.total ? '  (' + S.ent.total + ' entr' + (S.ent.total === 1 ? 'y' : 'ies') + ')' : '');
-  if (!S.entRows.length) { $('ent-table').innerHTML = emptyBox('No entries for ' + entPeriodText(), 'Try “Last 7 days” or “All time”, or save a payment in the Add payment tab.'); $('ent-pager').innerHTML = ''; return; }
+  if (!S.entRows.length) {
+    $('ent-table').innerHTML = emptyBox('No entries for ' + entPeriodText(), 'Try “Last 7 days” or “All time”, or save a payment in the Add payment tab.');
+    $('ent-pager').innerHTML = '';
+    return;
+  }
   $('ent-table').innerHTML = '<table><thead><tr><th>Sr. No.</th><th>Date</th><th>Head</th><th>Description</th><th>Type</th><th class="n">Amount</th><th>Advised by</th><th>Entered by</th><th>Remarks</th><th class="no-print"></th></tr></thead><tbody>' +
     S.entRows.map(function (e) {
       var rev = e.status === 'reversed';
-      var small = [e.partyName || e.payeeName ? 'Paid to ' + (e.partyName || e.payeeName) : '', e.mode ? e.mode.toUpperCase() : '', e.reference || ''].filter(Boolean).join(' · ');
+      var small = [e.mode ? e.mode.toUpperCase() : '', e.reference || ''].filter(Boolean).join(' · ');
       var remarks = (e.remark ? esc(e.remark) : '') + (rev ? '<span class="sm-t" style="color:var(--red)">Reversed: ' + esc(e.reversedReason || '') + '</span>' : '');
+      var hasBill = !!(e.attachment && (e.attachment.name || e.attachment.mimeType));
       var acts = '';
+      if (hasBill) acts += '<button class="btn ghost sm" type="button" data-act="view-bill" data-id="' + esc(e._id) + '">📎 Bill</button> ';
       if (e.type !== 'due') acts += '<button class="btn ghost sm" type="button" data-act="receipt" data-id="' + esc(e._id) + '">Receipt</button> ';
       acts += '<button class="btn ghost sm" type="button" data-act="audit" data-id="' + esc(e._id) + '">History</button>';
       if (isOwner() && !rev) acts += ' <button class="btn ghost sm" type="button" data-act="edit-entry" data-id="' + esc(e._id) + '">Edit</button> <button class="btn danger sm" type="button" data-act="reverse-entry" data-id="' + esc(e._id) + '">Reverse</button>';
       return '<tr' + (rev ? ' class="rev"' : '') + '><td class="keep"><b>' + esc(e.voucherNo) + '</b></td>' +
         '<td>' + esc(fmtD(e.entryDate)) + '<span class="sm-t">' + esc(fmtT(e.entryDate)) + '</span></td>' +
-        '<td>' + esc(e.headName) + (e.forMonth ? '<span class="sm-t">' + esc(monthLabel(e.forMonth)) + '</span>' : '') + '</td>' +
+        '<td><b>' + esc(e.headName) + '</b>' + (e.forMonth ? '<span class="sm-t">' + esc(monthLabel(e.forMonth)) + '</span>' : '') + '</td>' +
         '<td><b>' + esc(descOf(e)) + '</b>' + (small ? '<span class="sm-t">' + esc(small) + '</span>' : '') + '</td>' +
         '<td class="keep"><span class="pill ' + esc(e.type) + '">' + esc(typeLabel(e.type)) + '</span>' + (e.source === 'auto' ? '<span class="sm-t">auto</span>' : '') + '</td>' +
-        '<td class="n"><b>' + num(e.amount) + '</b></td><td>' + esc(e.advisedByName || '–') + '</td><td>' + who(e.enteredBy) + '</td><td>' + remarks + '</td><td class="keep no-print">' + acts + '</td></tr>';
+        '<td class="n"><b>' + num(e.amount) + '</b></td><td>' + esc(e.advisedByName || '–') + '</td><td>' + who(e.enteredBy) + '</td><td>' + remarks + '</td><td class="keep no-print"><div class="acts-row">' + acts + '</div></td></tr>';
     }).join('') + '</tbody></table>';
   $('ent-pager').innerHTML = '<span>Page ' + S.ent.page + ' of ' + S.ent.pages + '</span><span>' +
     '<button class="btn ghost sm" type="button" data-act="ent-prev"' + (S.ent.page <= 1 ? ' disabled' : '') + '>← Newer</button> ' +
     '<button class="btn ghost sm" type="button" data-act="ent-next"' + (S.ent.page >= S.ent.pages ? ' disabled' : '') + '>Older →</button></span>';
+}
+
+function showBillImage(id) {
+  aGet('/entries/' + id).then(function (r) {
+    var e = r.data;
+    if (!e || !e.attachment || !e.attachment.dataUrl) {
+      toast('No attached image found for this entry.', 'error');
+      return;
+    }
+    openInfo(
+      e.voucherNo + ' · Attached Bill',
+      '<p class="sub">' + esc(e.headName) + ' · ' + esc(descOf(e)) + ' (' + esc(inr(e.amount)) + ')</p>' +
+      '<div style="text-align:center;background:var(--surface2);padding:10px;border-radius:10px;border:1px solid var(--border)">' +
+      '<img src="' + esc(e.attachment.dataUrl) + '" alt="Attached bill" style="max-width:100%;max-height:65vh;border-radius:8px;object-fit:contain">' +
+      '</div>'
+    );
+  }).catch(function (err) { toast(errMsg(err), 'error'); });
 }
 
 function showAudit(id) {
@@ -1181,12 +1050,12 @@ function showAudit(id) {
       return '<div><b>' + title + '</b> by ' + esc(byName) + byRole +
         '<div class="hint">' + esc(fmtDT(a.at)) + '</div>' + ch + (a.note ? '<div class="hint">Reason: ' + esc(a.note) + '</div>' : '') + '</div>';
     }).join('');
-    openInfo(e.voucherNo + ' · ' + inr(e.amount), '<p class="sub">' + esc(e.partyName || e.payeeName || '') + ' · ' + esc(e.headName) + '</p><div class="tl">' + rows + '</div>');
+    openInfo(e.voucherNo + ' · ' + inr(e.amount), '<p class="sub">' + esc(e.headName) + ' · ' + esc(descOf(e)) + '</p><div class="tl">' + rows + '</div>');
   }).catch(function (err) { toast(errMsg(err), 'error'); });
 }
 
 function editEntry(id) {
-  var e = byId(S.entRows, id) || byId(S.todayDueRows, id); if (!e) return;
+  var e = byId(S.entRows, id); if (!e) return;
   var fields = [{ key: 'description', label: 'Description', value: e.description || '' }, { key: 'amount', label: 'Amount (₹)', value: e.amount }];
   fields.push({ key: 'headId', label: 'Head', type: 'select', value: e.headId, options: S.heads.map(function (h) { return { v: h._id, t: h.name }; }) });
   if (e.type === 'paid') fields.push({ key: 'mode', label: 'Mode', type: 'select', value: e.mode || 'cash', options: ['cash', 'bank', 'upi', 'cheque', 'other'].map(function (m) { return { v: m, t: m.toUpperCase() }; }) });
@@ -1211,12 +1080,19 @@ function editEntry(id) {
       if (code) body.deleteCode = code;
       return aPut('/entries/' + id, body);
     }).catch(function (err) { codeFailed(err); throw err; })
-      .then(function () { toast('Entry updated'); return refreshParties().then(function () { loadEntries(S.ent.page); if (!$('tab2').hidden) { loadDue(); loadTodayDues(); } }); });
+      .then(function () {
+        toast('Entry updated');
+        return refreshHeadBalances().then(function () {
+          syncPayForm();
+          loadEntries(S.ent.page);
+          if (!$('tab2').hidden) loadDue();
+        });
+      });
   });
 }
 
 function reverseEntry(id) {
-  var e = byId(S.entRows, id) || byId(S.todayDueRows, id); if (!e) return;
+  var e = byId(S.entRows, id); if (!e) return;
   openForm('Reverse ' + e.voucherNo + '?', 'The entry stays visible, struck through, and stops counting in the balance. This cannot be undone.', [
     { key: 'reason', label: 'Reason (required)', type: 'textarea', value: '' }
   ], 'Reverse entry', function (v) {
@@ -1225,7 +1101,14 @@ function reverseEntry(id) {
       var body = { reason: v.reason.trim() }; if (code) body.deleteCode = code;
       return aPost('/entries/' + id + '/reverse', body);
     }).catch(function (err) { codeFailed(err); throw err; })
-      .then(function () { toast('Entry reversed'); return refreshParties().then(function () { fillPayForm(); loadEntries(S.ent.page); if (!$('tab2').hidden) { loadDue(); loadTodayDues(); } }); });
+      .then(function () {
+        toast('Entry reversed');
+        return refreshHeadBalances().then(function () {
+          syncPayForm();
+          loadEntries(S.ent.page);
+          if (!$('tab2').hidden) loadDue();
+        });
+      });
   });
 }
 
@@ -1236,19 +1119,19 @@ function monthStartYmd() { return todayYmd().slice(0, 8) + '01'; }
 
 TAB_LOADERS[4] = function () {
   var all = !!(S.me && S.me.allEntries);
-  var btns = document.querySelectorAll('#led-view button');
-  for (var i = 0; i < btns.length; i++) {
-    var needsAll = btns[i].dataset.view !== 'cash';
-    btns[i].disabled = needsAll && !all;
-    btns[i].title = (needsAll && !all) ? 'Needs permission to see everyone’s entries' : '';
-  }
-  if (!all) S.ledView = 'cash';
   if (!$('l-from').value) $('l-from').value = monthStartYmd();
   if (!$('l-to').value) $('l-to').value = todayYmd();
   loadLookupsOnce().then(function () {
-    var cur = $('l-party').value;
-    $('l-party').innerHTML = S.partiesAll.map(function (p) { return '<option value="' + esc(p._id) + '">' + esc(p.name) + ' · ' + esc(p.role) + (p.isActive ? '' : ' (inactive)') + '</option>'; }).join('');
-    if (cur) $('l-party').value = cur;
+    var cur = $('l-head').value;
+    if (all) {
+      $('l-head').innerHTML = '<option value="">All heads (Summary)</option>' + S.headsAll.map(function (h) {
+        return '<option value="' + esc(h._id) + '">' + esc(h.name) + (h.isActive ? '' : ' (inactive)') + '</option>';
+      }).join('');
+      if (cur) $('l-head').value = cur;
+    } else {
+      $('l-head').innerHTML = '<option value="">All heads (My entries summary)</option>';
+      $('l-head').value = '';
+    }
     setLedView(S.ledView);
   }).catch(function (e) { toast(errMsg(e), 'error'); });
 };
@@ -1257,7 +1140,7 @@ function setLedView(v) {
   S.ledView = v;
   var btns = document.querySelectorAll('#led-view button');
   for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', btns[i].dataset.view === v ? 'true' : 'false');
-  $('l-party-wrap').hidden = v !== 'party';
+  $('l-head-wrap').hidden = v !== 'head';
   loadLedger();
 }
 
@@ -1266,12 +1149,12 @@ function loadLedger() {
   var my = ++S.ledReq;
   $('led-body').innerHTML = '<div class="card empty"><span class="spin"></span>Loading…</div>';
   var req;
-  if (S.ledView === 'party') {
-    var pid = $('l-party').value;
-    if (!pid) { $('led-body').innerHTML = '<div class="card">' + emptyBox('No payees yet', 'Add payees in the Expense Heads tab to see their ledgers.') + '</div>'; return; }
-    req = aGet('/ledger/party/' + pid, p);
-  } else if (S.ledView === 'cash') req = aGet('/ledger/cashbook', p);
-  else req = aGet('/ledger/heads', p);
+  if (S.ledView === 'head') {
+    var hid = $('l-head').value;
+    req = hid ? aGet('/ledger/head/' + hid, p) : aGet('/ledger/heads', p);
+  } else {
+    req = aGet('/ledger/cashbook', p);
+  }
   req.then(function (r) { if (my !== S.ledReq) return; S.ledData = r.data; renderLedger(); })
     .catch(function (e) { if (my !== S.ledReq) return; $('led-body').innerHTML = '<div class="card">' + emptyBox('Could not load the ledger', errMsg(e)) + '</div>'; });
 }
@@ -1294,49 +1177,71 @@ function detailLine(r) { return [r.mode ? r.mode.toUpperCase() : '', r.reference
 
 function renderLedger() {
   var d = S.ledData, html = '';
-  $('l-print-head').innerHTML = '<h2 style="font-size:18px">Expense ledger</h2><div class="hint">' + esc(S.ledView === 'party' && d.party ? d.party.name + ' · ' + d.party.role + ' · ' : '') + esc(periodText()) + ' · Printed by ' + esc(whoAmI()) + '</div>';
+  var isSingleHead = S.ledView === 'head' && d && d.head;
+  $('l-print-head').innerHTML = '<h2 style="font-size:18px">Expense ledger</h2><div class="hint">' +
+    esc(isSingleHead ? d.head.name + ' · ' : '') + esc(periodText()) + ' · Printed by ' + esc(whoAmI()) + '</div>';
 
-  if (S.ledView === 'party') {
+  if (isSingleHead) {
     var c = d.totals.closing, lr = ledgerRows(d);
     html += '<div class="grid g4" style="margin-bottom:18px">' +
       '<div class="stat"><small>Opening balance</small><b>' + inr(d.opening) + '</b></div>' +
       '<div class="stat"><small>Credit (due)</small><b>' + inr(d.totals.credit) + '</b></div>' +
       '<div class="stat good"><small>Debit (paid + adjusted)</small><b>' + inr(d.totals.debit) + '</b></div>' +
-      '<div class="stat warn"><small>' + (c < 0 ? 'Paid in advance' : 'Closing balance (owed)') + '</small><b>' + inr(Math.abs(c)) + '</b></div></div>';
-    html += '<div class="card"><h2>' + esc(d.party.name) + '</h2><p class="sub">' + esc(d.party.role) + ' · ' + esc(periodText()) + ' · newest first</p>' +
+      '<div class="stat warn"><small>' + (c < 0 ? 'Paid in advance' : 'Closing balance (due)') + '</small><b>' + inr(Math.abs(c)) + '</b></div></div>';
+    html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">' +
+      '<div><h2>' + esc(d.head.name) + '</h2><p class="sub" style="margin-bottom:0">' + esc(periodText()) + ' · newest first</p></div>' +
+      '<button class="btn ghost sm no-print" type="button" data-act="ledger-all-heads">← All heads summary</button></div>' +
       (d.truncated ? '<div class="banner">Showing the first 3,000 rows. Narrow the dates to see the rest.</div>' : '') +
-      '<div class="tw"><table><thead><tr><th>Sr. No.</th><th>Date</th><th>Head</th><th>Description</th><th class="n">Opening Balance</th><th class="n">Credit</th><th class="n">Debit</th><th class="n">Closing Balance</th><th>Advised by</th><th>Entry made by</th><th>Remarks</th></tr></thead><tbody>' +
+      '<div class="tw"><table><thead><tr><th>Sr. No.</th><th>Date</th><th>Description</th><th class="n">Opening Balance</th><th class="n">Credit (Due)</th><th class="n">Debit (Paid)</th><th class="n">Closing Balance</th><th>Advised by</th><th>Entry made by</th><th>Remarks</th></tr></thead><tbody>' +
       (lr.length ? lr.map(function (x) {
         var r = x.r, sm = detailLine(r);
         return '<tr' + (x.rev ? ' class="rev"' : '') + '><td class="keep"><b>' + esc(r.voucherNo) + '</b></td>' +
           '<td>' + esc(fmtD(r.entryDate)) + '<span class="sm-t">' + esc(fmtT(r.entryDate)) + '</span></td>' +
-          '<td>' + esc(r.headName) + (r.forMonth ? '<span class="sm-t">' + esc(monthLabel(r.forMonth)) + '</span>' : '') + '</td>' +
-          '<td>' + esc(descOf(r)) + (sm ? '<span class="sm-t">' + esc(sm) + '</span>' : '') + (r.type === 'adjustment' ? '<span class="sm-t">Non-cash adjustment</span>' : '') + '</td>' +
+          '<td>' + esc(descOf(r)) + (r.forMonth ? '<span class="sm-t">' + esc(monthLabel(r.forMonth)) + '</span>' : '') + (sm ? '<span class="sm-t">' + esc(sm) + '</span>' : '') + (r.type === 'adjustment' ? '<span class="sm-t">Non-cash adjustment</span>' : '') + '</td>' +
           '<td class="n keep' + (x.open < 0 ? ' neg' : '') + '">' + (x.rev ? '' : num(x.open)) + '</td>' +
           '<td class="n">' + (r.type === 'due' ? num(r.amount) : '') + '</td><td class="n">' + (r.type !== 'due' ? num(r.amount) : '') + '</td>' +
           '<td class="n keep' + (x.close < 0 ? ' neg' : '') + '"><b>' + (x.rev ? '' : num(x.close)) + '</b></td>' +
           '<td>' + esc(r.advisedByName || '–') + '</td><td>' + who(r.enteredBy) + '</td>' +
           '<td class="keep">' + esc(r.remark || '') + (x.rev ? '<span class="sm-t" style="color:var(--red)">Reversed: ' + esc(r.reversedReason || '') + '</span>' : '') + '</td></tr>';
-      }).join('') : '<tr><td colspan="11"><div class="empty">No entries in this period.</div></td></tr>') +
-      '<tr><td>–</td><td>' + esc(periodText().split(' to ')[0]) + '</td><td></td><td><b>Opening balance at the start</b></td><td class="n' + (d.opening < 0 ? ' neg' : '') + '"><b>' + num(d.opening) + '</b></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>' +
-      '</tbody><tfoot><tr><td colspan="4">Total for the period</td><td class="n">' + num(d.opening) + '</td><td class="n">' + num(d.totals.credit) + '</td><td class="n">' + num(d.totals.debit) + '</td><td class="n">' + num(c) + '</td><td colspan="3"></td></tr></tfoot></table></div></div>';
-  } else if (S.ledView === 'cash') {
+      }).join('') : '<tr><td colspan="10"><div class="empty">No entries in this period.</div></td></tr>') +
+      '<tr><td>–</td><td>' + esc(periodText().split(' to ')[0]) + '</td><td><b>Opening balance at the start</b></td><td class="n' + (d.opening < 0 ? ' neg' : '') + '"><b>' + num(d.opening) + '</b></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>' +
+      '</tbody><tfoot><tr><td colspan="3">Total for the period</td><td class="n">' + num(d.opening) + '</td><td class="n">' + num(d.totals.credit) + '</td><td class="n">' + num(d.totals.debit) + '</td><td class="n">' + num(c) + '</td><td colspan="3"></td></tr></tfoot></table></div></div>';
+  } else if (S.ledView === 'head') {
+    var list = Array.isArray(d) ? d : [];
+    var totDue = 0, totPaid = 0, totAdj = 0, totSpent = 0, totBal = 0;
+    list.forEach(function (r) {
+      totDue = Math.round((totDue + r.due) * 100) / 100;
+      totPaid = Math.round((totPaid + r.paid) * 100) / 100;
+      totAdj = Math.round((totAdj + r.adjustment) * 100) / 100;
+      totSpent = Math.round((totSpent + r.spent) * 100) / 100;
+      totBal = Math.round((totBal + r.balance) * 100) / 100;
+    });
+    var canDrill = !!(S.me && S.me.allEntries);
+    html += '<div class="card"><h2>Spend &amp; balance by head</h2><p class="sub">' + esc(periodText()) + '</p>' +
+      (list.length ? '<div class="tw"><table><thead><tr><th>Head</th><th class="n">Due entered</th><th class="n">Paid</th><th class="n">Adjusted</th><th class="n">Total spent</th><th class="n">Period net (Due − Spent)</th>' + (canDrill ? '<th class="no-print"></th>' : '') + '</tr></thead><tbody>' +
+        list.map(function (r) {
+          return '<tr><td><b>' + esc(r.name) + '</b>' + (r.isActive ? '' : ' <span class="sm-t">inactive</span>') + '</td>' +
+            '<td class="n">' + num(r.due) + '</td>' +
+            '<td class="n">' + num(r.paid) + '</td>' +
+            '<td class="n">' + num(r.adjustment) + '</td>' +
+            '<td class="n"><b>' + num(r.spent) + '</b></td>' +
+            '<td class="n' + (r.balance < 0 ? ' neg' : '') + '">' + num(r.balance) + '</td>' +
+            (canDrill ? '<td class="keep no-print" style="text-align:right"><button class="btn ghost sm" type="button" data-act="open-head-ledger" data-id="' + esc(r.headId) + '">Full ledger</button></td>' : '') + '</tr>';
+        }).join('') +
+        '</tbody><tfoot><tr><td>Total</td><td class="n">' + num(totDue) + '</td><td class="n">' + num(totPaid) + '</td><td class="n">' + num(totAdj) + '</td><td class="n">' + num(totSpent) + '</td><td class="n">' + num(totBal) + '</td>' + (canDrill ? '<td class="no-print"></td>' : '') + '</tr></tfoot></table></div>'
+      : emptyBox('No entries in this period', 'Nothing has been recorded against any head yet.')) + '</div>';
+  } else {
     html += (d.scope === 'mine' ? '<div class="banner">Showing only the entries you made yourself.</div>' : '') +
       '<div class="card"><h2>Cash book</h2><p class="sub">Who recorded what. Reversed entries are not counted. ' + esc(periodText()) + '</p>' +
-      (d.groups.length ? '<div class="tw"><table><thead><tr><th>Recorded by</th><th class="n">Entries</th><th class="n">Paid</th><th class="n">Adjusted</th><th class="n">Dues entered</th><th class="n">Cash</th><th class="n">Bank</th><th class="n">UPI</th><th class="n">Cheque / other</th><th class="n">Reversed</th><th></th></tr></thead><tbody>' +
+      (d.groups.length ? '<div class="tw"><table><thead><tr><th>Recorded by</th><th class="n">Entries</th><th class="n">Paid</th><th class="n">Adjusted</th><th class="n">Dues entered</th><th class="n">Cash</th><th class="n">Bank</th><th class="n">UPI</th><th class="n">Cheque / other</th><th class="n">Reversed</th><th class="no-print"></th></tr></thead><tbody>' +
         d.groups.map(function (g) {
           var gName = g.kind === 'system' ? 'Admin' : g.name;
-          var gSub = (g.kind === 'admin' || g.kind === 'system') ? 'Owner login' : esc(g.designation || 'Staff');
+          var gSub = (g.kind === 'admin' || g.kind === 'system') ? 'Auto rule' : esc(g.designation || 'Staff');
           return '<tr><td class="keep"><b>' + esc(gName) + '</b><span class="sm-t">' + gSub + '</span></td><td class="n">' + g.entries + '</td><td class="n"><b>' + num(g.paid) + '</b></td><td class="n">' + num(g.adjustment) + '</td><td class="n">' + num(g.due) + '</td>' +
             '<td class="n">' + num(g.byMode.cash) + '</td><td class="n">' + num(g.byMode.bank) + '</td><td class="n">' + num(g.byMode.upi) + '</td><td class="n">' + num(g.byMode.cheque + g.byMode.other) + '</td><td class="n">' + g.reversed + '</td>' +
-            '<td class="keep"><button class="btn ghost sm no-print" type="button" data-act="cash-drill" data-key="' + esc(g.key) + '">View entries</button></td></tr>';
+            '<td class="keep no-print"><button class="btn ghost sm" type="button" data-act="cash-drill" data-key="' + esc(g.key) + '">View entries</button></td></tr>';
         }).join('') + '</tbody></table></div>' : emptyBox('No entries in this period', 'Entries you record will be grouped by who made them.')) +
       '</div><div id="cash-detail" style="margin-top:18px"></div>';
-  } else {
-    html += '<div class="card"><h2>Spend by head</h2><p class="sub">' + esc(periodText()) + '</p>' +
-      (d.length ? '<div class="tw"><table><thead><tr><th>Head</th><th class="n">Due entered</th><th class="n">Paid</th><th class="n">Adjusted</th><th class="n">Total paid + adjusted</th></tr></thead><tbody>' +
-        d.map(function (r) { return '<tr><td><b>' + esc(r.name) + '</b></td><td class="n">' + num(r.due) + '</td><td class="n">' + num(r.paid) + '</td><td class="n">' + num(r.adjustment) + '</td><td class="n"><b>' + num(r.paid + r.adjustment) + '</b></td></tr>'; }).join('') +
-        '</tbody></table></div>' : emptyBox('No entries in this period', 'Nothing has been recorded against any head yet.')) + '</div>';
   }
   $('led-body').innerHTML = html;
 }
@@ -1347,7 +1252,7 @@ function cashDrill(key) {
     var rows = r.data || [];
     $('cash-detail').innerHTML = '<div class="card"><h2>Entries</h2><p class="sub">' + rows.length + (r.pagination.totalRecords > rows.length ? ' of ' + r.pagination.totalRecords : '') + ' shown, newest first.</p><div class="tw"><table><thead><tr><th>Sr. No.</th><th>Date</th><th>Head</th><th>Description</th><th>Type</th><th class="n">Amount</th><th>Advised by</th><th>Remarks</th></tr></thead><tbody>' +
       rows.map(function (e) {
-        return '<tr' + (e.status === 'reversed' ? ' class="rev"' : '') + '><td class="keep"><b>' + esc(e.voucherNo) + '</b></td><td>' + esc(fmtD(e.entryDate)) + '<span class="sm-t">' + esc(fmtT(e.entryDate)) + '</span></td><td>' + esc(e.headName) + '</td><td>' + esc(descOf(e)) + ((e.partyName || e.payeeName) ? '<span class="sm-t">Paid to ' + esc(e.partyName || e.payeeName) + '</span>' : '') + '</td><td class="keep"><span class="pill ' + esc(e.type) + '">' + esc(typeLabel(e.type)) + '</span></td><td class="n">' + num(e.amount) + '</td><td>' + esc(e.advisedByName || '–') + '</td><td>' + esc(e.remark || '') + '</td></tr>';
+        return '<tr' + (e.status === 'reversed' ? ' class="rev"' : '') + '><td class="keep"><b>' + esc(e.voucherNo) + '</b></td><td>' + esc(fmtD(e.entryDate)) + '<span class="sm-t">' + esc(fmtT(e.entryDate)) + '</span></td><td>' + esc(e.headName) + '</td><td>' + esc(descOf(e)) + '</td><td class="keep"><span class="pill ' + esc(e.type) + '">' + esc(typeLabel(e.type)) + '</span></td><td class="n">' + num(e.amount) + '</td><td>' + esc(e.advisedByName || '–') + '</td><td>' + esc(e.remark || '') + '</td></tr>';
       }).join('') + '</tbody></table></div></div>';
     $('cash-detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }).catch(function (e) { toast(errMsg(e), 'error'); });
@@ -1407,38 +1312,37 @@ function exportExcel() {
   if (!d) { toast('Nothing to export yet', 'error'); return; }
   if (!needExcel()) return;
   var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Ledger'), label;
-  if (S.ledView === 'party') {
-    headerRows(ws, d.party.name + ' (' + d.party.role + ') · ledger', periodText());
-    ws.addRow(['Sr. No.', 'Date', 'Head', 'Description', 'Opening Balance', 'Credit', 'Debit', 'Closing Balance', 'Advised by', 'Entry made by', 'Remarks', 'Status']);
+  if (S.ledView === 'head' && d.head) {
+    headerRows(ws, d.head.name + ' · ledger', periodText());
+    ws.addRow(['Sr. No.', 'Date', 'Description', 'For Month', 'Opening Balance', 'Credit (Due)', 'Debit (Paid)', 'Closing Balance', 'Advised by', 'Entry made by', 'Remarks', 'Status']);
     ledgerRows(d).forEach(function (x) {
       var r = x.r;
-      ws.addRow([r.voucherNo, fmtD(r.entryDate) + ' ' + fmtT(r.entryDate), safeCell(r.headName), safeCell(descOf(r)), x.rev ? '' : x.open,
+      ws.addRow([r.voucherNo, fmtD(r.entryDate) + ' ' + fmtT(r.entryDate), safeCell(descOf(r)), r.forMonth ? monthLabel(r.forMonth) : '', x.rev ? '' : x.open,
         r.type === 'due' ? r.amount : '', r.type !== 'due' ? r.amount : '', x.rev ? '' : x.close,
         safeCell(r.advisedByName || ''), safeCell(r.enteredBy.kind === 'system' ? 'Admin' : r.enteredBy.name), safeCell(r.remark || ''), x.rev ? 'Reversed' : '']);
     });
-    ws.addRow(['', '', '', 'Opening balance at the start', d.opening]);
-    ws.addRow(['', '', '', 'Total for the period', d.opening, d.totals.credit, d.totals.debit, d.totals.closing]);
-    boldHeader(ws, 6, [14, 20, 22, 36, 16, 12, 12, 16, 18, 20, 30, 10]);
-    label = d.party.name.replace(/[^a-z0-9]+/gi, '-');
+    ws.addRow(['', '', 'Opening balance at the start', '', d.opening]);
+    ws.addRow(['', '', 'Total for the period', '', d.opening, d.totals.credit, d.totals.debit, d.totals.closing]);
+    boldHeader(ws, 6, [14, 20, 36, 16, 16, 14, 14, 16, 18, 20, 30, 10]);
+    label = d.head.name.replace(/[^a-z0-9]+/gi, '-');
   } else if (S.ledView === 'cash') {
     headerRows(ws, 'Cash book', periodText());
     ws.addRow(['Recorded by', 'Role', 'Entries', 'Paid', 'Adjusted', 'Dues entered', 'Cash', 'Bank', 'UPI', 'Cheque / other', 'Reversed']);
     d.groups.forEach(function (g) {
-      ws.addRow([safeCell(g.kind === 'system' ? 'Admin' : g.name), (g.kind === 'admin' || g.kind === 'system') ? 'Owner' : safeCell(g.designation || 'Staff'), g.entries, g.paid, g.adjustment, g.due, g.byMode.cash, g.byMode.bank, g.byMode.upi, g.byMode.cheque + g.byMode.other, g.reversed]);
+      ws.addRow([safeCell(g.kind === 'system' ? 'Admin' : g.name), (g.kind === 'admin' || g.kind === 'system') ? 'Auto rule' : safeCell(g.designation || 'Staff'), g.entries, g.paid, g.adjustment, g.due, g.byMode.cash, g.byMode.bank, g.byMode.upi, g.byMode.cheque + g.byMode.other, g.reversed]);
     });
     boldHeader(ws, 6, [24, 18, 10, 14, 14, 14, 12, 12, 12, 14, 10]);
     label = 'cash-book';
   } else {
-    headerRows(ws, 'Spend by head', periodText());
-    ws.addRow(['Head', 'Due entered', 'Paid', 'Adjusted', 'Paid + adjusted']);
-    d.forEach(function (r) { ws.addRow([safeCell(r.name), r.due, r.paid, r.adjustment, r.paid + r.adjustment]); });
-    boldHeader(ws, 6, [28, 14, 14, 14, 18]);
+    headerRows(ws, 'Spend & balance by head', periodText());
+    ws.addRow(['Head', 'Due entered', 'Paid', 'Adjusted', 'Total spent', 'Period net']);
+    (Array.isArray(d) ? d : []).forEach(function (r) { ws.addRow([safeCell(r.name), r.due, r.paid, r.adjustment, r.spent, r.balance]); });
+    boldHeader(ws, 6, [28, 14, 14, 14, 16, 16]);
     label = 'by-head';
   }
   saveWorkbook(wb, 'Expense-' + label + '-' + todayYmd() + '.xlsx');
 }
 
-/* ---- reports for Expenses Paid (the entries list) and Expenses Due ---- */
 function fetchAllEntries(params) {
   var all = [];
   function next(page) {
@@ -1461,20 +1365,20 @@ function exportEntriesReport() {
     headerRows(ws, 'Expense entries', entPeriodText());
     if (res.scope === 'mine') ws.addRow(['Note', 'Only entries made by ' + whoAmI()]);
     if (res.truncated) ws.addRow(['Note', 'Only the newest 5,000 entries are included. Narrow the dates for the rest.']);
-    var hdr = ws.addRow(['Sr. No.', 'Date', 'Time', 'Head', 'Paid to', 'Description', 'Type', 'Amount', 'Advised by', 'Entered by', 'Mode', 'Bill / Txn no.', 'Remarks', 'Status']);
+    var hdr = ws.addRow(['Sr. No.', 'Date', 'Time', 'Head', 'Description', 'Type', 'Amount', 'Advised by', 'Entered by', 'Mode', 'Bill / Txn no.', 'Remarks', 'Status']);
     hdr.font = { bold: true };
     var tot = { paid: 0, adjustment: 0, due: 0 };
     res.rows.forEach(function (e) {
       var rev = e.status === 'reversed';
       if (!rev) tot[e.type] = Math.round((tot[e.type] + e.amount) * 100) / 100;
-      ws.addRow([e.voucherNo, fmtD(e.entryDate), fmtT(e.entryDate), safeCell(e.headName), safeCell(e.partyName || e.payeeName || ''), safeCell(descOf(e)), typeLabel(e.type), e.amount,
+      ws.addRow([e.voucherNo, fmtD(e.entryDate), fmtT(e.entryDate), safeCell(e.headName), safeCell(descOf(e)), typeLabel(e.type), e.amount,
         safeCell(e.advisedByName || ''), safeCell(e.enteredBy.kind === 'system' ? 'Admin' : e.enteredBy.name), e.mode ? e.mode.toUpperCase() : '', safeCell(e.reference || ''), safeCell(e.remark || ''), rev ? 'Reversed' : 'Active']);
     });
     ws.addRow([]);
-    ws.addRow(['', '', '', '', '', 'Total paid', '', tot.paid]);
-    ws.addRow(['', '', '', '', '', 'Total adjusted', '', tot.adjustment]);
-    ws.addRow(['', '', '', '', '', 'Total dues entered', '', tot.due]);
-    [14, 14, 11, 22, 22, 34, 12, 12, 18, 20, 9, 16, 28, 10].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
+    ws.addRow(['', '', '', '', 'Total paid', '', tot.paid]);
+    ws.addRow(['', '', '', '', 'Total adjusted', '', tot.adjustment]);
+    ws.addRow(['', '', '', '', 'Total dues entered', '', tot.due]);
+    [14, 14, 11, 22, 36, 12, 12, 18, 20, 9, 16, 28, 10].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
     return saveWorkbook(wb, 'Expenses-' + (entFilters().from || 'all') + '-to-' + (entFilters().to || 'all') + '.xlsx');
   }).catch(function (e) { toast(errMsg(e), 'error'); })
     .then(function () { setBtnLoading(btn, false); });
@@ -1482,38 +1386,35 @@ function exportEntriesReport() {
 
 function exportDueReport() {
   if (!needExcel()) return;
-  var only = $('due-party').value;
+  var only = $('due-head').value;
   var dq = ($('due-q') ? $('due-q').value : '').trim().toLowerCase();
   var rows = S.dueRows.filter(function (r) {
-    if (only && String(r.partyId) !== only) return false;
-    if (dq && (r.name + ' ' + (r.head || '') + ' ' + (r.role || '') + ' ' + (r.autoDueRemark || '')).toLowerCase().indexOf(dq) < 0) return false;
+    if (only && String(r.headId) !== only) return false;
+    if (dq) {
+      var itemsTxt = (r.dueItems || []).map(function (it) { return it.description; }).join(' ');
+      if ((r.name + ' ' + itemsTxt).toLowerCase().indexOf(dq) < 0) return false;
+    }
     return true;
   });
   if (!rows.length) { toast('There is nothing to export for this month', 'error'); return; }
 
   var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Expenses due');
   headerRows(ws, 'Expenses due · ' + monthLabel(S.dueMonth), monthLabel(S.dueMonth));
+  ws.addRow(['Head', 'Month Due Items', 'Previous balance', 'Due', 'Paid', 'Balance', 'Status']).font = { bold: true };
 
-  ws.addRow(['Payee', 'Role', 'Head', 'Installment Date', 'Schedule', 'Previous balance', 'Due', 'Paid', 'Balance', 'Status', 'Recurring Remark']).font = { bold: true };
-
-  var t = { due: 0, paid: 0, bal: 0 };
-  var monShort = monthLabel(S.dueMonth).split(' ')[0].slice(0, 3);
+  var t = { prev: 0, due: 0, paid: 0, bal: 0 };
   rows.forEach(function (r) {
-    var dateStr = r.dueDay ? r.dueDay + ' ' + monShort : '';
-    var schedStr = r.monthlyAmount > 0 ? (r.autoDueEnabled === false ? 'Paused' : 'Active') : '';
-
-    ws.addRow([safeCell(r.name), safeCell(r.role), safeCell(r.head || ''), dateStr, schedStr, r.previous, r.monthDue, r.monthPaid, r.closing, STATUS_TXT[r.status] || r.status, safeCell(r.autoDueRemark || '')]);
-
+    var itemsSummary = (r.dueItems || []).map(function (it) { return it.description + ' (' + num(it.amount) + ')'; }).join('; ');
+    ws.addRow([safeCell(r.name), safeCell(itemsSummary), r.previous, r.monthDue, r.monthPaid, r.closing, STATUS_TXT[r.status] || r.status]);
+    t.prev = Math.round((t.prev + r.previous) * 100) / 100;
     t.due = Math.round((t.due + r.monthDue) * 100) / 100;
     t.paid = Math.round((t.paid + r.monthPaid) * 100) / 100;
     t.bal = Math.round((t.bal + r.closing) * 100) / 100;
   });
 
   ws.addRow([]);
-  ws.addRow(['Total', '', '', '', '', '', t.due, t.paid, t.bal]).font = { bold: true };
-
-  [26, 18, 22, 16, 12, 16, 12, 12, 14, 14, 28].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
-
+  ws.addRow(['Total', '', t.prev, t.due, t.paid, t.bal, '']).font = { bold: true };
+  [24, 42, 16, 14, 14, 14, 16].forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
   saveWorkbook(wb, 'Expenses-Due-' + S.dueMonth + '.xlsx');
 }
 
@@ -1553,7 +1454,7 @@ function setDueMonth(which) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   EVENTS
+   RECEIPT MODAL
 ═══════════════════════════════════════════════════════════════ */
 var ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
 var TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
@@ -1598,21 +1499,23 @@ function showReceipt(id) {
 function renderReceipt(d) {
   closeReceipt();
   var e = d.entry, inst = d.institution, adj = e.type === 'adjustment', rev = e.status === 'reversed';
-  var to = e.partyName || e.payeeName || '–';
   var balLine = '';
   if (d.balanceAfter !== null && d.balanceAfter !== undefined) {
-    balLine = d.balanceAfter > 0 ? inr(d.balanceAfter) + ' still owed to ' + to : d.balanceAfter < 0 ? inr(Math.abs(d.balanceAfter)) + ' advance given to ' + to : 'Account settled';
+    balLine = d.balanceAfter > 0
+      ? inr(d.balanceAfter) + ' still due under ' + e.headName
+      : d.balanceAfter < 0
+        ? inr(Math.abs(d.balanceAfter)) + ' advance paid under ' + e.headName
+        : e.headName + ' account settled';
   }
   function row(k, v) { return v ? '<tr><td>' + esc(k) + '</td><td>' + v + '</td></tr>' : ''; }
   var html = '<div class="rc-ov"><div class="rc-wrap" role="dialog" aria-modal="true" aria-label="Receipt">' +
     '<div class="rc-actions"><button class="btn ghost" type="button" id="rc-close">Close</button><button class="btn" type="button" id="rc-print">Print receipt</button></div>' +
     '<div class="rc-sheet">' +
       '<div class="rc-head"><h2>' + esc(inst.name) + '</h2>' + (inst.address ? '<small>' + esc(inst.address) + '</small>' : '') + (inst.mobile ? '<small>Phone: ' + esc(inst.mobile) + '</small>' : '') + '</div>' +
-      '<div class="rc-title">' + (adj ? 'Non-cash adjustment voucher' : 'Payment receipt') + '<span>No. ' + esc(e.voucherNo) + '<br>' + esc(fmtDT(e.entryDate)) + '</span></div>' +
+      '<div class="rc-title">' + (adj ? 'Non-cash adjustment voucher' : 'Payment voucher / receipt') + '<span>No. ' + esc(e.voucherNo) + '<br>' + esc(fmtDT(e.entryDate)) + '</span></div>' +
       (rev ? '<div class="rc-void">REVERSED, NOT VALID' + (e.reversedReason ? '. Reason: ' + esc(e.reversedReason) : '') + '</div>' : '') +
       '<table class="rc-table">' +
-        row(adj ? 'Adjusted for' : 'Paid to', '<b>' + esc(to) + '</b>') +
-        row('Head', esc(e.headName)) +
+        row('Head', '<b>' + esc(e.headName) + '</b>') +
         row('Description', esc(descOf(e))) +
         row('Amount', '<span class="rc-amt">' + esc(inr(e.amount)) + '</span>') +
         row('Amount in words', esc(amountInWords(e.amount))) +
@@ -1621,9 +1524,9 @@ function renderReceipt(d) {
         row('Advised by', esc(e.advisedByName || '')) +
         row('Entered by', esc(e.enteredBy.name) + (e.enteredBy.kind === 'admin' ? ' (Owner)' : (e.enteredBy.designation ? ' (' + esc(e.enteredBy.designation) + ')' : ''))) +
         row('Remarks', esc(e.remark || '')) +
-        row('Balance after this', esc(balLine)) +
+        row('Head balance after this', esc(balLine)) +
       '</table>' +
-      '<div class="rc-sign"><div>Received by<small>' + esc(to) + '</small></div><div>Paid by<small>' + esc(e.enteredBy.name) + '</small></div><div>Approved by<small>' + esc(e.advisedByName || '') + '</small></div></div>' +
+      '<div class="rc-sign"><div>Entered / Paid by<small>' + esc(e.enteredBy.name) + '</small></div><div>Approved / Advised by<small>' + esc(e.advisedByName || '') + '</small></div></div>' +
       '<div class="rc-foot">Computer generated on ' + esc(fmtDT(new Date())) + ' by ' + esc(whoAmI()) + '</div>' +
     '</div></div></div>';
   var holder = document.createElement('div');
@@ -1641,35 +1544,31 @@ function renderReceipt(d) {
    GUIDED TOUR
 ═══════════════════════════════════════════════════════════════ */
 var TOUR_STEPS = [
-  { tab: 0, title: 'Welcome to Expense Management', text: 'This 1-minute tour shows how everything fits together. The whole idea in 3 lines:\n• Due = money you owe someone.\n• Paid = money you have paid.\n• Balance = Due − Paid. Whatever is left moves to next month by itself.' },
+  { tab: 0, title: 'Welcome to Expense Management', text: 'This quick tour shows how everything works in 3 simple rules:\n• Due = scheduled or one-time bills under an Expense Head.\n• Paid = money you have paid out.\n• Balance = Due − Paid. Any remaining balance carries forward automatically.' },
   { tab: -1, target: '#tabs', title: 'Your tabs, left to right', text: function () {
-    var names = { 1: 'Expense Heads (set things up once)', 2: 'Expenses Due (who you owe this month)', 3: 'Expenses Paid (record every payment)', 4: 'Ledger (the full account of any person)' };
-    return allowedTabs().map(function (i) { return '• ' + names[i]; }).join('\n') + '\nYou only see the tabs you have access to.'; } },
+    var names = { 1: 'Expense Heads (set up Heads & Advised by)', 2: 'Expenses Due (track monthly bills & auto schedules)', 3: 'Expenses Paid (record every payment & receipt)', 4: 'Ledger (head statements & cash book)' };
+    return allowedTabs().map(function (i) { return '• ' + names[i]; }).join('\n'); } },
 
-  { tab: 1, sub: 'heads', target: '#head-form', title: 'Heads: what you spend on', text: 'Heads are labels for your spending, like Salary, Electricity or Repairs. Create each one once.\nEvery head links to a person or vendor so every payment builds their ledger.\nTip: 5 to 10 heads are plenty.' },
-  { tab: 1, sub: 'payees', target: '#party-mode', title: 'Payees: who you pay', text: 'Payees are the people and shops you pay. Pick teachers from your staff list, or add helpers, drivers and vendors by hand.\nOnce added here, set their one-time or recurring dues in the Expenses Due tab.' },
-  { tab: 1, sub: 'adv', target: '#t1-adv', title: 'Advised by: who approved', text: 'List the people who approve payments, for example Principal, Manager and Director.\nOnce you add a name, choosing one becomes required on every payment, so you always know who said yes.' },
+  { tab: 1, sub: 'heads', target: '#head-form', title: 'Expense Heads: what you spend on', text: 'Heads are your expense categories, such as Salary, Installment, Diesel, Electricity, or Rent. Create each head once and track all dues and payments directly under it.' },
+  { tab: 1, sub: 'adv', target: '#t1-adv', title: 'Advised by: who approved', text: 'List the people who approve payments, such as Principal, Manager, or Director.\nOnce added, selecting one is required when recording payments so you always know who approved it.' },
 
-  { tab: 2, target: '#due-add', title: 'One-time or Automatic dues', text: 'Press “Add due (One-time / Automatic)” to record a single due/bill for the month, or set an automatic monthly schedule (amount, installment date 1st–31st, and saved remark) for a payee.' },
-  { tab: 2, target: '#due-stats', title: 'The month at a glance', text: 'These four boxes sum up the month: what became due, what you paid, what is still left to pay, and anything paid in advance.' },
-  { tab: 2, target: '#due-table', title: 'One row per person', text: 'Previous balance + Due − Paid = Balance. Whatever is left carries into next month by itself.\nPress Pay to record a payment, or Schedule to edit installment dates, amounts, remarks, or pause auto-dues.' },
-  { tab: 2, target: '#due-generate', title: 'Generate scheduled dues now', text: 'Creates this month’s active recurring dues right away instead of waiting for each installment date. Paused payees or duplicates are skipped.' },
+  { tab: 2, target: '#due-add-onetime', title: 'One-time vs Automatic dues', text: 'Use “+ Add due (One-time)” for single bills, or “+ Add due (Automatic)” to set recurring monthly rules (for example, 4 separate bus installments under the Installment head).' },
+  { tab: 2, target: '#due-stats', title: 'The month at a glance', text: 'These four cards show total dues for the month, total paid, remaining balance to pay, and any advance paid.' },
+  { tab: 2, target: '#due-table', title: 'Month position by head', text: 'Previous balance + Due − Paid = Balance. Each row shows the itemized dues for the month—click Pay on any item or head to record a payment immediately.' },
+  { tab: 2, target: '#t2-schedules-card', title: 'Automatic monthly schedules', text: 'All your active recurring rules appear here. Dues are generated automatically on their scheduled date every month, and you can edit, pause, or remove rules anytime.' },
 
-  { tab: 3, sub: 'add', target: '#pay-type', title: 'Two kinds of entry', text: 'Use “Cash / bank payment” when money really goes out.\nUse “Non-cash adjustment” when no cash moves but the balance should go down, for example books given to a staff member’s child.' },
-  { tab: 3, sub: 'add', target: '#p-party', title: 'Pick who you paid', text: 'Choose the payee. The head and a description such as “To Ramesh Kumar” fill in by themselves. You can change them.' },
-  { tab: 3, sub: 'add', target: '#p-amount', title: 'Type the amount', text: 'The line below the form shows the balance after this payment. It turns orange if you are paying more than is due.' },
-  { tab: 3, sub: 'add', target: '.autobox', title: 'Date, time and your name: automatic', text: 'These are added for you and nobody can type them. That is how every entry shows who made it.' },
-  { tab: 3, sub: 'list', target: '#e-presets', title: 'Payment list: find any entry', text: 'Use Today, Yesterday, Last 7 days, This month or All time. “Get Report” downloads the list to Excel.' },
-  { tab: 3, sub: 'list', target: '#ent-table', prep: 'showSomeEntries', title: 'Receipt, History, Reverse', text: 'Receipt prints a slip with the amount in words. History shows who entered or changed an entry. Reverse cancels a wrong entry: it stays visible but stops counting, so nothing is ever deleted and the books stay honest.\n(Edit and Reverse are for the owner.)' },
+  { tab: 3, sub: 'add', target: '#pay-type', title: 'Two kinds of entry', text: 'Use “Cash / bank payment” when money goes out.\nUse “Non-cash adjustment” when reducing a due balance without cash moving (e.g., fee concessions or adjustments).' },
+  { tab: 3, sub: 'add', target: '#p-head', title: 'Select Head, Amount & Description', text: 'Pick the Head, enter the amount and description (e.g. “Bus 0899 installment”), and choose who advised it. You can also attach a bill photo under More options.' },
+  { tab: 3, sub: 'add', target: '.autobox', title: 'Date, time and your name: automatic', text: 'Date, time, and your login name are stamped automatically on every entry for complete accountability.' },
+  { tab: 3, sub: 'list', target: '#e-presets', title: 'Payment list & filters', text: 'Filter entries by date presets, Head, type, or staff member, or export everything to Excel.' },
+  { tab: 3, sub: 'list', target: '#ent-table', prep: 'showSomeEntries', title: 'Receipt, Bill photo, History & Reverse', text: 'Print vouchers, view attached bill photos, check edit history, or reverse mistaken entries without ever losing the audit trail.' },
 
-  { tab: 4, target: '#led-view', title: 'The full account', text: 'By payee: one person’s account, newest first, with the opening and closing balance on every row.\nCash book: who entered what.\nBy head: where the money went.' },
-  { tab: 4, target: '#l-export', title: 'Print or export', text: 'Pick the dates, then print the page or export it to Excel.' },
-
-  { tab: 0, title: 'You are all set', text: 'If anything is confusing later, press “? Tour” at the top, or “? How this works” at the top of any tab.' }
+  { tab: 4, target: '#led-view', title: 'Head Ledger & Cash Book', text: 'By head: view spending across all heads or open a full running-balance statement for any specific head.\nCash book: see totals grouped by who entered them.' },
+  { tab: 4, target: '#l-export', title: 'Print or export to Excel', text: 'Select any date range and print or download clean Excel reports.' }
 ];
 
 var T = null;
-function tourKey() { return 'expenseTourSeen:' + (S.me ? S.me.userKey : 'x'); }
+function tourKey() { return 'expenseTourSeenV2:' + (S.me ? S.me.userKey : 'x'); }
 function tourMarkSeen() { try { localStorage.setItem(tourKey(), '1'); } catch (e) {} }
 function currentTab() { for (var i = 1; i <= 4; i++) { var el = $('tab' + i); if (el && !el.hidden) return i; } return 0; }
 function tourStepsFor(scope) {
@@ -1727,7 +1626,7 @@ function tourShow() {
   var tip = document.getElementById('tour-tip');
   tip.innerHTML = '<div class="tour-step">Step ' + (T.i + 1) + ' of ' + T.steps.length + '</div>' +
     '<h3 id="tour-title">' + esc(st.title) + '</h3><p>' + esc(text).replace(/\n/g, '<br>') + '</p>' +
-    '<div class="tour-acts"><button class="linkbtn" type="button" id="tour-skip">' + (last ? 'Close' : 'Skip tour') + '</button>' +
+    '<div class="tour-acts"><button class="btn ghost sm" type="button" id="tour-skip">' + (last ? 'Close' : 'Skip tour') + '</button>' +
     '<span class="grp">' + (T.i > 0 ? '<button class="btn ghost sm" type="button" id="tour-back">Back</button>' : '') +
     '<button class="btn sm" type="button" id="tour-next">' + (last ? 'Done' : 'Next') + '</button></span></div>';
   document.getElementById('tour-skip').onclick = function () { tourEnd(true); };
@@ -1774,16 +1673,15 @@ function maybeOfferTour() {
   var seen = null;
   try { seen = localStorage.getItem(tourKey()); } catch (e) {}
   if (!S.me || seen) return;
-  askConfirm('Welcome to Expense Management', 'New here? Take a quick 1-minute tour that shows what each tab is for. You can open it again any time with the “? Tour” button at the top.', 'Start the tour', 'Not now')
+  askConfirm('Welcome to Expense Management', 'New here? Take a quick 1-minute tour that shows how each tab works. You can open it again any time with the “? Tour” button at the top.', 'Start the tour', 'Not now')
     .then(function (yes) { tourMarkSeen(); if (yes) tourStart('all'); });
 }
 
 /* ---- delete ---- */
 function deleteItem(kind, id) {
   var cfg = {
-    head:  { list: S.headsAll,    path: '/heads/',    word: 'head' },
-    party: { list: S.partiesAll,  path: '/parties/',  word: 'payee' },
-    adv:   { list: S.advisorsAll, path: '/advisors/', word: 'name' }
+    head: { list: S.headsAll,    path: '/heads/',    word: 'head' },
+    adv:  { list: S.advisorsAll, path: '/advisors/', word: 'name' }
   }[kind];
   var item = byId(cfg.list, id); if (!item) return;
   askConfirm('Delete this ' + cfg.word + '?', '“' + item.name + '” will be removed for good. You can only delete it because nothing has been recorded against it.', 'Delete')
@@ -1795,7 +1693,7 @@ function deleteItem(kind, id) {
 
 /* ---- sub-tabs inside Tab 1 and Tab 3 ---- */
 var SUBS = {
-  t1: { heads: 't1-heads', payees: 't1-payees', adv: 't1-adv' },
+  t1: { heads: 't1-heads', adv: 't1-adv' },
   t3: { add: 't3-add', list: 't3-list' }
 };
 function setSub(group, name) {
@@ -1807,27 +1705,49 @@ function setSub(group, name) {
 
 var ACTIONS = {
   'receipt': function (el) { showReceipt(el.dataset.id); },
-  'tour-tab': function (el) { tourStart(Number(el.dataset.tab)); },
+  'view-bill': function (el) { showBillImage(el.dataset.id); },
+  'clear-att': function () { clearAttachment(); },
   'delete-head': function (el) { deleteItem('head', el.dataset.id); },
-  'delete-party': function (el) { deleteItem('party', el.dataset.id); },
   'delete-adv': function (el) { deleteItem('adv', el.dataset.id); },
   'edit-head': function (el) { editHead(el.dataset.id); },
   'toggle-head': function (el) { toggleHead(el.dataset.id); },
-  'suggest-head': function (el) { createHead(el.dataset.name, el.dataset.type).catch(function (e) { toast(errMsg(e), 'error'); }); },
-  'edit-party': function (el) { editParty(el.dataset.id); },
-  'toggle-party': function (el) { toggleParty(el.dataset.id); },
+  'suggest-head': function (el) { createHead(el.dataset.name).catch(function (e) { toast(errMsg(e), 'error'); }); },
   'edit-schedule': function (el) { editSchedule(el.dataset.id); },
+  'toggle-schedule': function (el) { toggleSchedule(el.dataset.id); },
+  'delete-schedule': function (el) { deleteSchedule(el.dataset.id); },
   'edit-adv': function (el) { editAdvisor(el.dataset.id); },
   'toggle-adv': function (el) { toggleAdvisor(el.dataset.id); },
-  'pay-party': function (el) {
+  'quick-due-head': function (el) { openOneTimeDueModal(el.dataset.id); },
+  'pay-head': function (el) {
     setPayType('paid'); switchTab(3); setSub('t3', 'add');
     setTimeout(function () {
-      $('p-party').value = el.dataset.id;
-      var p = byId(S.parties, el.dataset.id);
-      if (p && p.defaultHeadId && byId(S.heads, p.defaultHeadId)) $('p-head').value = p.defaultHeadId;
-      else $('p-head').value = '';
-      autoDescribe(); syncPayForm(); $('p-amount').focus();
-    }, 250);
+      $('p-head').value = el.dataset.id;
+      if (el.dataset.bal) $('p-amount').value = el.dataset.bal;
+      syncPayForm();
+      ($('p-amount').value ? $('p-desc') : $('p-amount')).focus();
+    }, 200);
+  },
+  'pay-item': function (el) {
+    setPayType('paid'); switchTab(3); setSub('t3', 'add');
+    setTimeout(function () {
+      $('p-head').value = el.dataset.head;
+      $('p-amount').value = el.dataset.amt || '';
+      $('p-desc').value = el.dataset.desc || '';
+      syncPayForm();
+      ($('p-adv').disabled ? $('p-remark') : $('p-adv')).focus();
+    }, 200);
+  },
+  'open-head-ledger': function (el) {
+    switchTab(4);
+    setTimeout(function () {
+      S.ledView = 'head';
+      $('l-head').value = el.dataset.id;
+      setLedView('head');
+    }, 150);
+  },
+  'ledger-all-heads': function () {
+    $('l-head').value = '';
+    loadLedger();
   },
   'audit': function (el) { showAudit(el.dataset.id); },
   'edit-entry': function (el) { editEntry(el.dataset.id); },
@@ -1840,7 +1760,9 @@ var ACTIONS = {
 function debounce(fn, ms) { var t; return function () { var a = arguments, c = this; clearTimeout(t); t = setTimeout(function () { fn.apply(c, a); }, ms); }; }
 
 function wireEvents() {
-  [].forEach.call(document.querySelectorAll('.xtab'), function (b) { b.addEventListener('click', function () { switchTab(Number(b.dataset.tab)); }); });
+  [].forEach.call(document.querySelectorAll('.xtab'), function (b) {
+    b.addEventListener('click', function () { switchTab(Number(b.dataset.tab)); });
+  });
   document.addEventListener('click', function (e) {
     var el = e.target.closest ? e.target.closest('[data-act]') : null;
     if (el && ACTIONS[el.dataset.act]) ACTIONS[el.dataset.act](el);
@@ -1849,21 +1771,16 @@ function wireEvents() {
   $('btn-tour').addEventListener('click', function () { tourStart('all'); });
 
   ['t1', 't3'].forEach(function (g) {
-    $(g + '-subtabs').addEventListener('click', function (e) { var b = e.target.closest('button[data-sub]'); if (b) setSub(g, b.dataset.sub); });
+    $(g + '-subtabs').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-sub]');
+      if (b) setSub(g, b.dataset.sub);
+    });
   });
 
   // tab 1
   $('head-form').addEventListener('submit', submitHead);
   if ($('head-search')) $('head-search').addEventListener('input', renderHeads);
   $('head-inactive').addEventListener('change', renderHeads);
-  $('party-mode').addEventListener('click', function (e) { var b = e.target.closest('button[data-mode]'); if (b) setPartyMode(b.dataset.mode); });
-  $('staff-search').addEventListener('input', renderStaffList);
-  $('staff-search').addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
-  $('party-staff-form').addEventListener('submit', submitStaffParties);
-  $('ps-all').addEventListener('click', function () { [].forEach.call(document.querySelectorAll('.staff-ck'), function (c) { c.checked = true; }); });
-  $('party-manual-form').addEventListener('submit', submitManualParty);
-  if ($('party-search')) $('party-search').addEventListener('input', renderParties);
-  $('party-inactive').addEventListener('change', renderParties);
   $('adv-form').addEventListener('submit', submitAdvisor);
 
   // tab 2
@@ -1871,25 +1788,20 @@ function wireEvents() {
   $('due-presets').addEventListener('click', function (e) { var b = e.target.closest('button[data-preset]'); if (b) setDueMonth(b.dataset.preset); });
   $('due-report').addEventListener('click', exportDueReport);
   if ($('due-print')) $('due-print').addEventListener('click', printDue);
-  $('due-party').addEventListener('change', renderDue);
-  if ($('due-q')) $('due-q').addEventListener('input', renderDue);
-  $('due-generate').addEventListener('click', generateDues);
-  $('due-add').addEventListener('click', addDue);
+  $('due-head').addEventListener('change', function () { renderDue(); renderSchedulesTable(); });
+  if ($('due-q')) $('due-q').addEventListener('input', function () { renderDue(); renderSchedulesTable(); });
+  $('due-add-onetime').addEventListener('click', function () { openOneTimeDueModal(); });
+  $('due-add-auto').addEventListener('click', function () { openAutoDueModal(); });
 
   // tab 3
   $('pay-type').addEventListener('click', function (e) { var b = e.target.closest('button[data-type]'); if (b) setPayType(b.dataset.type); });
-  $('p-party').addEventListener('change', function () {
-    var p = byId(S.parties, $('p-party').value);
-    if (p && p.defaultHeadId && byId(S.heads, p.defaultHeadId)) $('p-head').value = p.defaultHeadId;
-    else $('p-head').value = '';
-    autoDescribe();
-    syncPayForm();
-  });
   $('p-head').addEventListener('change', syncPayForm);
   $('p-amount').addEventListener('input', syncPayForm);
+  if ($('p-att')) $('p-att').addEventListener('change', handleAttachmentChange);
   $('pay-form').addEventListener('submit', submitPayment);
   $('e-presets').addEventListener('click', function (e) { var b = e.target.closest('button[data-preset]'); if (b) applyPreset(b.dataset.preset); });
   ['e-from', 'e-to'].forEach(function (id) { $(id).addEventListener('change', function () { markPreset(''); loadEntries(1); }); });
+  if ($('e-head')) $('e-head').addEventListener('change', function () { loadEntries(1); });
   $('e-type').addEventListener('change', function () { loadEntries(1); });
   if ($('e-by')) $('e-by').addEventListener('change', function () { loadEntries(1); });
   $('e-report').addEventListener('click', exportEntriesReport);
@@ -1898,7 +1810,7 @@ function wireEvents() {
 
   // tab 4
   $('led-view').addEventListener('click', function (e) { var b = e.target.closest('button[data-view]'); if (b && !b.disabled) setLedView(b.dataset.view); });
-  ['l-party', 'l-from', 'l-to'].forEach(function (id) { $(id).addEventListener('change', loadLedger); });
+  ['l-head', 'l-from', 'l-to'].forEach(function (id) { $(id).addEventListener('change', loadLedger); });
   $('l-print').addEventListener('click', printLedger);
   $('l-export').addEventListener('click', exportExcel);
 }
