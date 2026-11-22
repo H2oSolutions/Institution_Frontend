@@ -627,12 +627,27 @@ function openAutoDueModal(presetHeadId) {
     var dd = parseDueDayInput(v.dueDay);
     if (!dd) throw new Error('Enter a due date between 1 and 31');
 
+    var startMonth = targetMonth;
+    if (v.createNow !== 'yes') {
+      var yr = Number(targetMonth.slice(0, 4)), mo = Number(targetMonth.slice(5, 7));
+      var maxD = new Date(Date.UTC(yr, mo, 0)).getUTCDate();
+      var effD = Math.min(Math.max(1, dd), maxD);
+      var targetDueYmd = targetMonth + '-' + (effD < 10 ? '0' : '') + effD;
+      var horizonYmd = ymd(new Date(Date.now() + 3 * 86400000));
+      if (targetDueYmd <= horizonYmd) {
+        mo += 1;
+        if (mo === 13) { yr += 1; mo = 1; }
+        startMonth = yr + '-' + (mo < 10 ? '0' : '') + mo;
+      }
+    }
+
     return aPost('/schedules', {
       headId: v.headId,
       description: desc,
       amount: amt,
       dueDay: dd,
       autoDueEnabled: true,
+      startMonth: startMonth,
       createForMonth: v.createNow === 'yes' ? targetMonth : undefined,
       remark: v.remark.trim() || undefined
     }).then(function () {
