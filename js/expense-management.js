@@ -90,9 +90,19 @@ function qs(params) {
   return out.length ? '?' + out.join('&') : '';
 }
 function aGet(path, params) { return apiGet(EXP + path + qs(params), true); }
-function aPost(path, body) { return apiPost(EXP + path, body || {}, true); }
-function aPut(path, body) { return apiPut(EXP + path, body || {}, true); }
-function aDel(path) { return apiDelete(EXP + path, true); }
+function aPost(path, body, code) {
+  var payload = Object.assign({}, body || {});
+  if (code) payload.deleteCode = code;
+  return apiPost(EXP + path, payload, true);
+}
+function aPut(path, body, code) {
+  var payload = Object.assign({}, body || {});
+  if (code) payload.deleteCode = code;
+  return apiPut(EXP + path, payload, true);
+}
+function aDel(path, code) {
+  return apiDelete(EXP + path + (code ? qs({ deleteCode: code }) : ''), true);
+}
 
 /* ──────────────────── delete-code (shared with Fee) ──────────────────── */
 var _code = undefined, _codeAt = 0, CODE_MS = 15 * 60 * 1000;
@@ -120,7 +130,13 @@ function getDeleteCode() {
   });
 }
 function codeFailed(e) {
-  if (e && (e.message === 'Incorrect code' || e.message === 'DELETE_CODE_REQUIRED')) _code = undefined;
+  var m = (e && e.message) ? String(e.message) : '';
+  if (
+    /incorrect code|delete_code_required|protection code|too many incorrect/i.test(m) ||
+    (e && (e.status === 428 || e.status === 429 || e.code === 'DELETE_CODE_REQUIRED'))
+  ) {
+    _code = undefined;
+  }
 }
 
 /* ───────────────────────── generic form modal ───────────────────────── */
@@ -182,7 +198,11 @@ function openForm(title, sub, fields, saveLabel, onSave) {
       setBtnLoading(ok, true, 'Saving…');
       er.textContent = '';
       Promise.resolve().then(function () { return onSave(vals); }).then(function () { close(); resolve(true); })
-        .catch(function (err) { er.textContent = errMsg(err); setModalBusy(false); setBtnLoading(ok, false); });
+        .catch(function (err) {
+          er.textContent = (err && err.message === 'Cancelled') ? '' : errMsg(err);
+          setModalBusy(false);
+          setBtnLoading(ok, false);
+        });
     });
   });
 }
@@ -391,14 +411,21 @@ function submitHead(e) {
 function editHead(id) {
   var h = byId(S.headsAll, id); if (!h) return;
   openForm('Edit head', null, [{ key: 'name', label: 'Head name', value: h.name }], 'Save changes', function (v) {
-    return aPut('/heads/' + id, { name: v.name }).then(function () { toast('Head updated'); return reloadTab1(); });
+    if (!String(v.name || '').trim()) throw new Error('Head name cannot be empty');
+    return getDeleteCode().then(function (code) {
+      return aPut('/heads/' + id, { name: v.name }, code);
+    }).catch(function (err) { codeFailed(err); throw err; })
+      .then(function () { toast('Head updated'); return reloadTab1(); });
   });
 }
 
 function toggleHead(id) {
   var h = byId(S.headsAll, id); if (!h) return;
-  aPut('/heads/' + id, { isActive: !h.isActive }).then(function () { toast(h.isActive ? 'Head deactivated' : 'Head activated'); return reloadTab1(); })
-    .catch(function (err) { toast(errMsg(err), 'error'); });
+  getDeleteCode().then(function (code) {
+    return aPut('/heads/' + id, { isActive: !h.isActive }, code);
+  }).catch(function (err) { codeFailed(err); throw err; })
+    .then(function () { toast(h.isActive ? 'Head deactivated' : 'Head activated'); return reloadTab1(); })
+    .catch(function (err) { if (err && err.message !== 'Cancelled') toast(errMsg(err), 'error'); });
 }
 
 function submitAdvisor(e) {
@@ -414,14 +441,21 @@ function submitAdvisor(e) {
 function editAdvisor(id) {
   var a = byId(S.advisorsAll, id); if (!a) return;
   openForm('Rename', null, [{ key: 'name', label: 'Name', value: a.name }], 'Save', function (v) {
-    return aPut('/advisors/' + id, { name: v.name }).then(function () { toast('Renamed'); return reloadTab1(); });
+    if (!String(v.name || '').trim()) throw new Error('Name cannot be empty');
+    return getDeleteCode().then(function (code) {
+      return aPut('/advisors/' + id, { name: v.name }, code);
+    }).catch(function (err) { codeFailed(err); throw err; })
+      .then(function () { toast('Renamed'); return reloadTab1(); });
   });
 }
 
 function toggleAdvisor(id) {
   var a = byId(S.advisorsAll, id); if (!a) return;
-  aPut('/advisors/' + id, { isActive: !a.isActive }).then(function () { return reloadTab1(); })
-    .catch(function (err) { toast(errMsg(err), 'error'); });
+  getDeleteCode().then(function (code) {
+    return aPut('/advisors/' + id, { isActive: !a.isActive }, code);
+  }).catch(function (err) { codeFailed(err); throw err; })
+    .then(function () { toast(a.isActive ? 'Deactivated' : 'Activated'); return reloadTab1(); })
+    .catch(function (err) { if (err && err.message !== 'Cancelled') toast(errMsg(err), 'error'); });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -687,19 +721,22 @@ function editSchedule(id) {
     if (!dd) throw new Error('Due date must be between 1 and 31');
     var enabled = v.autoDueEnabled === 'true';
 
-    return aPut('/schedules/' + id, {
-      headId: v.headId,
-      description: desc,
-      amount: amt,
-      dueDay: dd,
-      autoDueEnabled: enabled,
-      remark: v.remark.trim() || null
-    }).then(function () {
-      if (enabled) return aPost('/auto-dues/check').catch(function () {});
-    }).then(function () {
-      toast('Schedule updated');
-      loadDue();
-    });
+    return getDeleteCode().then(function (code) {
+      return aPut('/schedules/' + id, {
+        headId: v.headId,
+        description: desc,
+        amount: amt,
+        dueDay: dd,
+        autoDueEnabled: enabled,
+        remark: v.remark.trim() || null
+      }, code);
+    }).catch(function (err) { codeFailed(err); throw err; })
+      .then(function () {
+        if (enabled) return aPost('/auto-dues/check').catch(function () {});
+      }).then(function () {
+        toast('Schedule updated');
+        loadDue();
+      });
   });
 }
 
@@ -707,12 +744,15 @@ function toggleSchedule(id) {
   var s = byId(S.dueSchedules || [], id);
   if (!s) return;
   var next = s.autoDueEnabled === false;
-  aPut('/schedules/' + id, { autoDueEnabled: next }).then(function () {
-    if (next) return aPost('/auto-dues/check').catch(function () {});
-  }).then(function () {
-    toast(next ? 'Schedule resumed' : 'Schedule paused');
-    loadDue();
-  }).catch(function (e) { toast(errMsg(e), 'error'); });
+  getDeleteCode().then(function (code) {
+    return aPut('/schedules/' + id, { autoDueEnabled: next }, code);
+  }).catch(function (err) { codeFailed(err); throw err; })
+    .then(function () {
+      if (next) return aPost('/auto-dues/check').catch(function () {});
+    }).then(function () {
+      toast(next ? 'Schedule resumed' : 'Schedule paused');
+      loadDue();
+    }).catch(function (e) { if (e && e.message !== 'Cancelled') toast(errMsg(e), 'error'); });
 }
 
 function deleteSchedule(id) {
@@ -721,8 +761,11 @@ function deleteSchedule(id) {
   askConfirm('Remove automatic schedule?', '“' + s.headName + ' — ' + s.description + '” will stop generating future dues. Existing dues already created remain intact.', 'Remove')
     .then(function (yes) {
       if (!yes) return;
-      return aDel('/schedules/' + id).then(function () { toast('Automatic schedule removed'); loadDue(); });
-    }).catch(function (e) { toast(errMsg(e), 'error'); });
+      return getDeleteCode().then(function (code) {
+        return aDel('/schedules/' + id, code);
+      }).catch(function (err) { codeFailed(err); throw err; })
+        .then(function () { toast('Automatic schedule removed'); loadDue(); });
+    }).catch(function (e) { if (e && e.message !== 'Cancelled') toast(errMsg(e), 'error'); });
 }
 
 function checkAutoDues() {
@@ -1031,7 +1074,7 @@ function renderEntries(r) {
       if (hasBill) acts += '<button class="btn ghost sm" type="button" data-act="view-bill" data-id="' + esc(e._id) + '">📎 Bill</button> ';
       if (e.type !== 'due') acts += '<button class="btn ghost sm" type="button" data-act="receipt" data-id="' + esc(e._id) + '">Receipt</button> ';
       acts += '<button class="btn ghost sm" type="button" data-act="audit" data-id="' + esc(e._id) + '">History</button>';
-      if (isOwner() && !rev) acts += ' <button class="btn ghost sm" type="button" data-act="edit-entry" data-id="' + esc(e._id) + '">Edit</button> <button class="btn danger sm" type="button" data-act="reverse-entry" data-id="' + esc(e._id) + '">Reverse</button>';
+      if (can(3) && !rev) acts += ' <button class="btn ghost sm" type="button" data-act="edit-entry" data-id="' + esc(e._id) + '">Edit</button> <button class="btn danger sm" type="button" data-act="reverse-entry" data-id="' + esc(e._id) + '">Reverse</button>';
       return '<tr' + (rev ? ' class="rev"' : '') + '><td class="keep"><b>' + esc(e.voucherNo) + '</b></td>' +
         '<td>' + esc(fmtD(e.entryDate)) + '<span class="sm-t">' + esc(fmtT(e.entryDate)) + '</span></td>' +
         '<td><b>' + esc(e.headName) + '</b>' + (e.forMonth ? '<span class="sm-t">' + esc(monthLabel(e.forMonth)) + '</span>' : '') + '</td>' +
@@ -1723,8 +1766,11 @@ function deleteItem(kind, id) {
   askConfirm('Delete this ' + cfg.word + '?', '“' + item.name + '” will be removed for good. You can only delete it because nothing has been recorded against it.', 'Delete')
     .then(function (yes) {
       if (!yes) return;
-      return aDel(cfg.path + id).then(function () { toast('Deleted'); return reloadTab1(); });
-    }).catch(function (e) { toast(errMsg(e), 'error'); });
+      return getDeleteCode().then(function (code) {
+        return aDel(cfg.path + id, code);
+      }).catch(function (err) { codeFailed(err); throw err; })
+        .then(function () { toast('Deleted'); return reloadTab1(); });
+    }).catch(function (e) { if (e && e.message !== 'Cancelled') toast(errMsg(e), 'error'); });
 }
 
 /* ---- sub-tabs inside Tab 1 and Tab 3 ---- */
