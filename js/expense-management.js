@@ -352,7 +352,8 @@ function renderHeads() {
   var showOff = $('head-inactive').checked;
   var q = ($('head-search') ? $('head-search').value : '').trim().toLowerCase();
   var list = S.headsAll.filter(function (h) {
-    return (showOff || h.isActive) && (!q || h.name.toLowerCase().indexOf(q) >= 0);
+    var matchesState = showOff ? !h.isActive : !!h.isActive;
+    return matchesState && (!q || h.name.toLowerCase().indexOf(q) >= 0);
   });
   $('head-list').innerHTML = list.length ? list.map(function (h) {
     var meta = [
@@ -360,14 +361,19 @@ function renderHeads() {
       h.scheduleCount ? h.scheduleCount + ' auto rule' + (h.scheduleCount === 1 ? '' : 's') : '',
       h.isActive ? '' : 'inactive'
     ].filter(Boolean).join(' · ');
-    var canDel = h.entryCount === 0 && (!h.scheduleCount || h.scheduleCount === 0);
     return '<div class="li' + (h.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(h.name) + '</b><small>' + esc(meta) + '</small></div>' +
       '<div class="acts-row">' +
       '<button class="btn ghost sm" type="button" data-act="edit-head" data-id="' + esc(h._id) + '">Edit</button>' +
       '<button class="btn ' + (h.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-head" data-id="' + esc(h._id) + '">' + (h.isActive ? 'Deactivate' : 'Activate') + '</button>' +
-      (canDel ? '<button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' : '') +
+      '<button class="btn danger sm" type="button" data-act="delete-head" data-id="' + esc(h._id) + '">Delete</button>' +
       '</div></div>';
-  }).join('') : (q ? emptyBox('No matching heads', 'No head matched “' + q + '”.') : emptyBox('No heads yet', 'Add your first head above, or tap a suggestion.'));
+  }).join('') : (
+    q
+      ? emptyBox('No matching heads', 'No head matched “' + q + '”.')
+      : (showOff
+          ? emptyBox('No inactive heads', 'Deactivated heads will appear here.')
+          : emptyBox('No heads yet', 'Add your first head above, or tap a suggestion.'))
+  );
 
   var have = {};
   S.headsAll.forEach(function (h) { have[h.name.toLowerCase()] = 1; });
@@ -377,13 +383,49 @@ function renderHeads() {
   }).join('') : '';
 }
 
+function ensureAdvFilters() {
+  var listEl = $('adv-list');
+  if (!listEl || $('adv-search')) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'adv-filters';
+  wrap.style.marginTop = '14px';
+  wrap.innerHTML =
+    '<input class="in" id="adv-search" type="search" placeholder="Search names by name..." aria-label="Search advised-by names">' +
+    '<label style="display:inline-flex;align-items:center;gap:8px;margin:10px 0 12px;font-size:13.5px;color:var(--text2);cursor:pointer">' +
+      '<input id="adv-inactive" type="checkbox" style="width:16px;height:16px;margin:0">' +
+      '<span>Show inactive</span>' +
+    '</label>';
+  listEl.parentNode.insertBefore(wrap, listEl);
+}
+
 function renderAdvisors() {
-  $('adv-list').innerHTML = S.advisorsAll.length ? S.advisorsAll.map(function (a) {
-    return '<div class="li' + (a.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(a.name) + '</b>' + (a.isActive ? '' : '<small>inactive</small>') + '</div>' +
+  ensureAdvFilters();
+  var showOff = $('adv-inactive') ? $('adv-inactive').checked : false;
+  var q = ($('adv-search') ? $('adv-search').value : '').trim().toLowerCase();
+  var list = S.advisorsAll.filter(function (a) {
+    var matchesState = showOff ? !a.isActive : !!a.isActive;
+    return matchesState && (!q || a.name.toLowerCase().indexOf(q) >= 0);
+  });
+
+  $('adv-list').innerHTML = list.length ? list.map(function (a) {
+    var count = Number(a.entryCount || 0);
+    var meta = [
+      count ? count + ' entr' + (count === 1 ? 'y' : 'ies') : '',
+      a.isActive ? '' : 'inactive'
+    ].filter(Boolean).join(' · ');
+    return '<div class="li' + (a.isActive ? '' : ' off') + '"><div class="meta"><b>' + esc(a.name) + '</b>' + (meta ? '<small>' + esc(meta) + '</small>' : '') + '</div>' +
       '<div class="acts-row"><button class="btn ghost sm" type="button" data-act="edit-adv" data-id="' + esc(a._id) + '">Rename</button>' +
       '<button class="btn ' + (a.isActive ? 'danger' : 'ghost') + ' sm" type="button" data-act="toggle-adv" data-id="' + esc(a._id) + '">' + (a.isActive ? 'Deactivate' : 'Activate') + '</button>' +
-      (a.entryCount === 0 ? '<button class="btn danger sm" type="button" data-act="delete-adv" data-id="' + esc(a._id) + '">Delete</button>' : '') + '</div></div>';
-  }).join('') : emptyBox('No names yet', 'Optional. Add Principal, Manager, Director and so on.');
+      '<button class="btn danger sm" type="button" data-act="delete-adv" data-id="' + esc(a._id) + '">Delete</button></div></div>';
+  }).join('') : (
+    q
+      ? emptyBox('No matching names', 'No name matched “' + q + '”.')
+      : (showOff
+          ? emptyBox('No inactive names', 'Deactivated names will appear here.')
+          : (S.advisorsAll.length
+              ? emptyBox('No active names', 'All names are currently inactive. Check “Show inactive” above to view them.')
+              : emptyBox('No names yet', 'Optional. Add Principal, Manager, Director and so on.')))
+  );
 }
 
 function renderTab1() { renderHeads(); renderAdvisors(); }
@@ -1763,13 +1805,40 @@ function deleteItem(kind, id) {
     adv:  { list: S.advisorsAll, path: '/advisors/', word: 'name' }
   }[kind];
   var item = byId(cfg.list, id); if (!item) return;
-  askConfirm('Delete this ' + cfg.word + '?', '“' + item.name + '” will be removed for good. You can only delete it because nothing has been recorded against it.', 'Delete')
+
+  var title = 'Delete this ' + cfg.word + '?';
+  var msg = '“' + item.name + '” will be removed for good. You can only delete it because nothing has been recorded against it.';
+
+  if (kind === 'head') {
+    var entries = Number(item.entryCount || item.entriesCount || 0);
+    var rules = Number(item.scheduleCount || item.schedulesCount || 0);
+    if (entries > 0 || rules > 0) {
+      title = 'Delete “' + item.name + '” and wipe all its data?';
+      msg = 'Warning: This will permanently delete the “' + item.name + '” head along with all ' +
+        entries + ' recorded entr' + (entries === 1 ? 'y' : 'ies') +
+        (rules > 0 ? ' and ' + rules + ' auto rule' + (rules === 1 ? '' : 's') : '') +
+        ' under it from Expenses Due, Expenses Paid, and Ledger. This action cannot be undone.';
+    } else {
+      msg = '“' + item.name + '” will be permanently deleted.';
+    }
+  } else if (kind === 'adv') {
+    var advEntries = Number(item.entryCount || item.entriesCount || 0);
+    if (advEntries > 0) {
+      title = 'Delete “' + item.name + '” from Advised by?';
+      msg = 'Warning: “' + item.name + '” is linked to ' + advEntries + ' recorded entr' + (advEntries === 1 ? 'y' : 'ies') +
+        '. Deleting it will permanently remove this name from the Advised-by list, while existing payment entries and balances will remain intact. This action cannot be undone.';
+    } else {
+      msg = '“' + item.name + '” will be permanently deleted from the Advised-by list.';
+    }
+  }
+
+  askConfirm(title, msg, kind === 'head' ? 'Delete & Wipe Data' : 'Delete')
     .then(function (yes) {
       if (!yes) return;
       return getDeleteCode().then(function (code) {
         return aDel(cfg.path + id, code);
       }).catch(function (err) { codeFailed(err); throw err; })
-        .then(function () { toast('Deleted'); return reloadTab1(); });
+        .then(function () { toast(kind === 'head' ? 'Head and all related data deleted' : 'Deleted'); return reloadTab1(); });
     }).catch(function (e) { if (e && e.message !== 'Cancelled') toast(errMsg(e), 'error'); });
 }
 
@@ -1864,6 +1933,9 @@ function wireEvents() {
   if ($('head-search')) $('head-search').addEventListener('input', renderHeads);
   $('head-inactive').addEventListener('change', renderHeads);
   $('adv-form').addEventListener('submit', submitAdvisor);
+  ensureAdvFilters();
+  if ($('adv-search')) $('adv-search').addEventListener('input', renderAdvisors);
+  if ($('adv-inactive')) $('adv-inactive').addEventListener('change', renderAdvisors);
 
   // tab 2
   $('due-month').addEventListener('change', function () { S.dueMonth = $('due-month').value || thisMonth(); syncDuePresets(); loadDue(); });
