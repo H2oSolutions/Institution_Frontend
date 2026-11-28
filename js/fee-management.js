@@ -306,7 +306,12 @@ function switchTab(n) {
   });
   
   if (n === 3) initFeeSetupTab();
-  if (n === 2) { loadFleetOverview(); loadBusDirectory(); loadClassTransportSummary(); }
+  if (n === 2) {
+    loadFleetOverview();
+    loadBusDirectory();
+    loadClassTransportSummary();
+    setTimeout(filterTab2Transport, 400);
+  }
   if (n === 4) {
     populateClassDropdowns();
     if (feeStatusDirty && feeStatusData.length > 0) {
@@ -399,10 +404,179 @@ function addRoute() {
       toast('Route added');
       feeStatusDirty = true;
       ['rt-name', 'rt-from', 'rt-to', 'rt-amount'].forEach(function(id) { document.getElementById(id).value = ''; });
+      toggleAddRouteBox(false);
       return loadTransportRoutes();
     })
     .catch(function(e) { toast(e.message, 'error'); })
     .finally(function() { setLoading(btn, false); btn.innerHTML = 'Add Route'; });
+}
+
+var t2CtsStatus = 'all';
+
+function toggleAddRouteBox(forceState) {
+  var box = document.getElementById('t2-add-route-wrap');
+  var btn = document.getElementById('t2-toggle-add-btn');
+  if (!box) return;
+  var shouldShow = typeof forceState === 'boolean' ? forceState : (box.style.display === 'none');
+  box.style.display = shouldShow ? 'block' : 'none';
+  if (btn) btn.textContent = shouldShow ? 'Close Form' : '+ Add Route';
+  if (shouldShow) {
+    var inp = document.getElementById('rt-name');
+    if (inp) setTimeout(function() { inp.focus(); }, 40);
+  }
+}
+
+function jumpToTab2Section(sectionId) {
+  var el = document.getElementById(sectionId);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function clearTab2Search() {
+  var inp = document.getElementById('t2-search');
+  if (inp) inp.value = '';
+  filterTab2Transport();
+}
+
+function setCtsStatusFilter(status, btnEl) {
+  t2CtsStatus = status;
+  document.querySelectorAll('#t2-cts-pills .t2-status-pill').forEach(function(b) {
+    b.classList.toggle('active', b === btnEl);
+  });
+  filterTab2Transport();
+}
+
+function filterTab2Transport() {
+  var inp = document.getElementById('t2-search');
+  var q = inp ? inp.value.toLowerCase().trim() : '';
+  var clearBtn = document.getElementById('t2-search-clear');
+  var statusEl = document.getElementById('t2-search-status');
+  if (clearBtn) clearBtn.classList.toggle('show', q.length > 0);
+
+  var routeMatches = 0;
+  var busMatches = 0;
+  var studentMatches = 0;
+
+  // 1. Filter Routes List
+  document.querySelectorAll('#routes-list .route-card').forEach(function(card) {
+    var rid = card.id.replace('rc-', '');
+    var headerText = ((card.querySelector('.route-header') || card).textContent || '').toLowerCase();
+    var cachedStus = (routeStuCache[rid] || []).map(function(a) {
+      return ((a.student && a.student.name) || '') + ' ' + (a.busNumber || '');
+    }).join(' ').toLowerCase();
+    var cachedBuses = (routeBusCache[rid] || []).map(function(b) {
+      return (b.busNumber || '') + ' ' + (b.driverName || '');
+    }).join(' ').toLowerCase();
+
+    var chips = card.querySelectorAll('.stu-chip-sm');
+    var anyChipMatch = false;
+    chips.forEach(function(chip) {
+      var hit = q && chip.textContent.toLowerCase().indexOf(q) > -1;
+      chip.classList.toggle('t2-match', hit);
+      if (hit) anyChipMatch = true;
+    });
+
+    var visible = !q || headerText.indexOf(q) > -1 || cachedStus.indexOf(q) > -1 || cachedBuses.indexOf(q) > -1 || anyChipMatch;
+    card.style.display = visible ? '' : 'none';
+    if (visible && q) routeMatches++;
+  });
+
+  // 2. Filter Fleet Overview
+  document.querySelectorAll('#fleet-overview-container .fov2-item').forEach(function(item) {
+    var routeText = ((item.querySelector('.fov2-route-info') || {}).textContent || '').toLowerCase();
+    var routeHit = q && routeText.indexOf(q) > -1;
+    var tiles = item.querySelectorAll('.fov2-bus-tile');
+    var visibleTiles = 0;
+
+    tiles.forEach(function(tile) {
+      var tileHit = !q || routeHit || tile.textContent.toLowerCase().indexOf(q) > -1;
+      tile.style.display = tileHit ? '' : 'none';
+      if (tileHit) {
+        visibleTiles++;
+        if (q) busMatches++;
+      }
+    });
+
+    var showItem = !q || routeHit || visibleTiles > 0;
+    item.style.display = showItem ? '' : 'none';
+    var body = item.querySelector('.fov2-body');
+    if (q && showItem) {
+      if (!item.classList.contains('fov2-open')) {
+        item.classList.add('fov2-open');
+        item.setAttribute('data-search-opened', '1');
+        if (body) body.style.display = 'block';
+      }
+    } else if (!q && item.getAttribute('data-search-opened') === '1') {
+      item.classList.remove('fov2-open');
+      item.removeAttribute('data-search-opened');
+      if (body) body.style.display = 'none';
+    }
+  });
+
+  // 3. Filter Bus Directory
+  var dirContainer = document.getElementById('bus-directory-container');
+  if (dirContainer) {
+    var dirCards = dirContainer.querySelectorAll('.fleet-card, .fov2-bus-tile, .bus-card');
+    if (!dirCards.length && dirContainer.firstElementChild && dirContainer.firstElementChild.children.length > 1) {
+      dirCards = dirContainer.firstElementChild.children;
+    }
+    Array.prototype.forEach.call(dirCards, function(card) {
+      var hit = !q || card.textContent.toLowerCase().indexOf(q) > -1;
+      card.style.display = hit ? '' : 'none';
+    });
+  }
+
+  // 4. Filter Students by Class
+  document.querySelectorAll('#class-transport-summary-container .cts-item').forEach(function(item) {
+    var clsHeaderText = ((item.querySelector('.cts-header') || {}).textContent || '').toLowerCase();
+    var clsHit = q && clsHeaderText.indexOf(q) > -1;
+    var rows = item.querySelectorAll('.cts-stu-row');
+    var visibleRows = 0;
+
+    rows.forEach(function(row) {
+      var rowText = row.textContent.toLowerCase();
+      var isUnassigned = rowText.indexOf('unassigned') > -1 || rowText.indexOf('not assigned') > -1 || rowText.indexOf('no route') > -1;
+      var statusOk = t2CtsStatus === 'all' ||
+        (t2CtsStatus === 'unassigned' && isUnassigned) ||
+        (t2CtsStatus === 'assigned' && !isUnassigned);
+      var textOk = !q || clsHit || rowText.indexOf(q) > -1;
+
+      var showRow = statusOk && textOk;
+      row.style.display = showRow ? '' : 'none';
+      if (showRow) {
+        visibleRows++;
+        if (q) studentMatches++;
+      }
+    });
+
+    var showClass = visibleRows > 0 || (!rows.length && (!q || clsHit));
+    item.style.display = showClass ? '' : 'none';
+    var body = item.querySelector('.cts-body');
+    var shouldAutoOpen = (q.length > 0 || t2CtsStatus !== 'all') && showClass;
+
+    if (shouldAutoOpen) {
+      if (!item.classList.contains('cts-open')) {
+        item.classList.add('cts-open');
+        item.setAttribute('data-search-opened', '1');
+        if (body) body.style.display = 'block';
+      }
+    } else if (!shouldAutoOpen && item.getAttribute('data-search-opened') === '1') {
+      item.classList.remove('cts-open');
+      item.removeAttribute('data-search-opened');
+      if (body) body.style.display = 'none';
+    }
+  });
+
+  if (statusEl) {
+    if (!q) {
+      statusEl.classList.remove('show');
+    } else {
+      var totalHits = routeMatches + busMatches + studentMatches;
+      statusEl.textContent = totalHits > 0
+        ? (routeMatches + ' route' + (routeMatches !== 1 ? 's' : '') + ' · ' + busMatches + ' bus' + (busMatches !== 1 ? 'es' : '') + ' · ' + studentMatches + ' student' + (studentMatches !== 1 ? 's' : ''))
+        : 'No matches found';
+      statusEl.classList.add('show');
+    }
+  }
 }
 
 function renderRoutesList() {
@@ -566,6 +740,7 @@ function loadFleetOverview() {
       });
  
       el.innerHTML = html;
+      filterTab2Transport();
     })
     .catch(function(e) {
       el.innerHTML = '<div class="fm-empty">Failed to load fleet: ' + escH(e.message) + '</div>';

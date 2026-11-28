@@ -763,11 +763,38 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 
   <!-- TAB 2: TRANSPORT -->
   <div id="tab2" style="display:none">
-    <div class="add-route-box">
-      <div style="font-size:12px;font-weight:900;color:var(--brand);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Add New Route</div>
+
+    <!-- Sticky Global Search + Quick Jump -->
+    <div class="t2-toolbar">
+      <div class="t2-toolbar-top">
+        <div class="t2-search-box">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="t2-search" class="fm-input" placeholder="Search route, bus no., driver, class, or student..." oninput="filterTab2Transport()">
+          <button type="button" class="t2-clear-btn" id="t2-search-clear" onclick="clearTab2Search()" title="Clear search">&#10005;</button>
+        </div>
+        <button type="button" class="btn-primary" id="t2-toggle-add-btn" onclick="toggleAddRouteBox()">+ Add Route</button>
+      </div>
+      <div class="t2-jump-row">
+        <div class="t2-jump-pills">
+          <span style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Jump:</span>
+          <button type="button" class="t2-jump-pill" onclick="jumpToTab2Section('t2-sec-routes')">&#128739; Routes</button>
+          <button type="button" class="t2-jump-pill" onclick="jumpToTab2Section('t2-sec-fleet')">&#128652; Fleet Overview</button>
+          <button type="button" class="t2-jump-pill" onclick="jumpToTab2Section('t2-sec-directory')">&#128203; Bus Directory</button>
+          <button type="button" class="t2-jump-pill" onclick="jumpToTab2Section('t2-sec-class')">&#128101; By Class</button>
+        </div>
+        <span class="t2-search-status" id="t2-search-status"></span>
+      </div>
+    </div>
+
+    <!-- Collapsible Add New Route Form -->
+    <div class="add-route-box" id="t2-add-route-wrap" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:900;color:var(--brand);text-transform:uppercase;letter-spacing:.08em">Add New Route</div>
+        <button type="button" class="btn-secondary" style="padding:4px 10px;font-size:11px" onclick="toggleAddRouteBox(false)">Hide</button>
+      </div>
       <div class="fm-grid-2" style="margin-bottom:11px">
         <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Route Name *</label><input type="text" id="rt-name" class="fm-input" placeholder="e.g. City Centre Route"></div>
-        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (Rs.) *</label><input type="number" id="rt-amount" class="fm-input" placeholder="e.g. 1500" min=""></div>
+        <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">Monthly Amount (Rs.) *</label><input type="number" id="rt-amount" class="fm-input" placeholder="e.g. 1500" min="0"></div>
       </div>
       <div class="fm-grid-2" style="margin-bottom:12px">
         <div class="fm-form-group" style="margin-bottom:0"><label class="fm-label">From *</label><input type="text" id="rt-from" class="fm-input" placeholder="e.g. Bus Stand"></div>
@@ -775,34 +802,48 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
       </div>
       <button class="btn-primary" id="add-route-btn" onclick="addRoute()">Add Route</button>
     </div>
-   
 
-    <div id="routes-list"><div class="fm-card"><div class="fm-empty"><div class="ei">&#9203;</div>Loading...</div></div></div>
+    <!-- ROUTES LIST -->
+    <div id="t2-sec-routes" class="t2-sec-anchor">
+      <div id="routes-list"><div class="fm-card"><div class="fm-empty"><div class="ei">&#9203;</div>Loading...</div></div></div>
+    </div>
 
-   <!-- FLEET OVERVIEW -->
-  <div class="fm-card" style="margin-bottom:16px">
-  <div class="fm-card-title">&#128652; Fleet Overview</div>
-  <div class="fm-card-sub">All buses across all routes. Tap a bus card to view the full student roster.</div>
-  <div id="fleet-overview-container">
-    <div class="fm-empty" style="padding:14px 0">Switch to this tab to load fleet.</div>
-  </div>
-</div>
-<div class="fm-card" style="margin-bottom:16px">
-  <div class="fm-card-title">&#128652; Bus Directory</div>
-  <div class="fm-card-sub">All buses at a glance. Tap any bus card to view and print the student roster with route and fee details.</div>
-  <div id="bus-directory-container">
-    <div class="fm-empty" style="padding:14px 0">Switch to this tab to load.</div>
-  </div>
-</div>
-<div class="fm-card" style="margin-bottom:16px">
-  
-  <div class="fm-card-title">&#128101; Students by Class — Transport Assignment</div>
-  
-  <div class="fm-card-sub">Tap a class to see who's assigned to which route and who's still unassigned.</div>
-  <div id="class-transport-summary-container">
-    <div class="fm-empty" style="padding:14px 0">Switch to this tab to load summary.</div>
-  </div>
-</div>
+    <!-- FLEET OVERVIEW -->
+    <div class="fm-card t2-sec-anchor" id="t2-sec-fleet" style="margin-bottom:16px">
+      <div class="fm-card-title">&#128652; Fleet Overview</div>
+      <div class="fm-card-sub">All buses across all routes. Tap a bus card to view the full student roster.</div>
+      <div id="fleet-overview-container">
+        <div class="fm-empty" style="padding:14px 0">Switch to this tab to load fleet.</div>
+      </div>
+    </div>
+
+    <!-- BUS DIRECTORY -->
+    <div class="fm-card t2-sec-anchor" id="t2-sec-directory" style="margin-bottom:16px">
+      <div class="fm-card-title">&#128652; Bus Directory</div>
+      <div class="fm-card-sub">All buses at a glance. Tap any bus card to view and print the student roster with route and fee details.</div>
+      <div id="bus-directory-container">
+        <div class="fm-empty" style="padding:14px 0">Switch to this tab to load.</div>
+      </div>
+    </div>
+
+    <!-- STUDENTS BY CLASS -->
+    <div class="fm-card t2-sec-anchor" id="t2-sec-class" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <div class="fm-card-title">&#128101; Students by Class — Transport Assignment</div>
+          <div class="fm-card-sub" style="margin-bottom:0">Tap a class to see who's assigned to which route and who's still unassigned.</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap" id="t2-cts-pills">
+          <button type="button" class="t2-status-pill active" data-status="all" onclick="setCtsStatusFilter('all',this)">All</button>
+          <button type="button" class="t2-status-pill" data-status="assigned" onclick="setCtsStatusFilter('assigned',this)">Assigned</button>
+          <button type="button" class="t2-status-pill" data-status="unassigned" onclick="setCtsStatusFilter('unassigned',this)">Unassigned</button>
+        </div>
+      </div>
+      <div id="class-transport-summary-container">
+        <div class="fm-empty" style="padding:14px 0">Switch to this tab to load summary.</div>
+      </div>
+    </div>
+
   </div>
 
   <!-- TAB 3: FEE SETUP -->
@@ -1179,6 +1220,25 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f1f5f9;color:var(--t
 .cts-body{display:none;padding:12px 14px 14px;border-top:1.5px solid var(--border);background:#fafbff}
 .cts-open .cts-body{display:block}
 .cts-stu-row{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;margin-bottom:5px}
+
+/* ── Tab 2 Sticky Search & Quick-Jump Toolbar ── */
+.t2-toolbar{position:sticky;top:64px;z-index:90;background:#fff;border:1.5px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:14px;box-shadow:0 6px 20px rgba(15,23,42,.07)}
+.t2-toolbar-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.t2-search-box{position:relative;flex:1;min-width:210px}
+.t2-search-box .fm-input{padding-left:34px;padding-right:32px;background:var(--surface2)}
+.t2-clear-btn{position:absolute;right:9px;top:50%;transform:translateY(-50%) !important;background:#e2e8f0;border:none;color:var(--text2);width:22px !important;height:22px !important;min-width:0 !important;min-height:0 !important;padding:0 !important;margin:0 !important;border-radius:50% !important;font-size:11px;font-weight:900;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:none !important}
+.t2-clear-btn:hover,.t2-clear-btn:focus,.t2-clear-btn:active{transform:translateY(-50%) !important;background:#cbd5e1 !important;color:var(--text1) !important;padding:0 !important;width:22px !important;height:22px !important;box-shadow:none !important}
+.t2-clear-btn.show{display:flex}
+.t2-jump-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid #f1f5f9}
+.t2-jump-pills{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.t2-jump-pill{font-size:11px;font-weight:800;color:var(--text2);background:var(--surface2);border:1.5px solid var(--border);border-radius:999px;padding:4px 11px;cursor:pointer;font-family:inherit;transition:.15s}
+.t2-jump-pill:hover{border-color:var(--brand);color:var(--brand);background:#eef2ff}
+.t2-status-pill{font-size:11px;font-weight:800;color:var(--text2);background:#fff;border:1.5px solid var(--border);border-radius:7px;padding:4px 10px;cursor:pointer;font-family:inherit;transition:.15s}
+.t2-status-pill.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.t2-search-status{font-size:11px;font-weight:800;color:var(--brand);background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:3px 9px;display:none}
+.t2-search-status.show{display:inline-block}
+.t2-sec-anchor{scroll-margin-top:165px}
+.stu-chip-sm.t2-match{background:#eef2ff;border-color:var(--brand);color:#3730a3;box-shadow:0 0 0 2px rgba(99,102,241,.15)}
 
   </style>
  
