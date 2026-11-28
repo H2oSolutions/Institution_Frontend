@@ -398,6 +398,8 @@ function ensureAdvFilters() {
   listEl.parentNode.insertBefore(wrap, listEl);
 }
 
+//
+
 function renderAdvisors() {
   ensureAdvFilters();
   var showOff = $('adv-inactive') ? $('adv-inactive').checked : false;
